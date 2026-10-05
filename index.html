@@ -1337,6 +1337,24 @@ async function boot(){
     S.settings=snap.exists?snap.data():null;S.loaded.settings=true;refresh();
   },function(err){S.err=err;refresh()});
 }
+/* ---------- greeting on open ---------- */
+function greet(){
+  var b=document.createElement("div");
+  b.textContent="صلِّ على النبي ﷺ";
+  b.style.cssText="position:fixed;top:calc(env(safe-area-inset-top,0px) + 14px);left:50%;transform:translateX(-50%);z-index:9999;background:linear-gradient(135deg,#e6c15a,#a67f1f);color:#17110a;font-weight:800;font-size:18px;padding:12px 22px;border-radius:999px;box-shadow:0 4px 20px rgba(0,0,0,.6);transition:opacity .6s;pointer-events:none";
+  document.body.appendChild(b);
+  setTimeout(function(){b.style.opacity="0";setTimeout(function(){b.remove()},700)},4500);
+  var started=false;
+  function say(){
+    if(started||!window.speechSynthesis)return;
+    try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance("صَلِّ عَلَى النَّبِي");u.lang="ar-EG";u.rate=.85;
+      var v=speechSynthesis.getVoices().filter(function(x){return /^ar/i.test(x.lang)})[0];if(v)u.voice=v;
+      u.onstart=function(){started=true};speechSynthesis.speak(u)}catch(e){}
+  }
+  say();
+  ["pointerdown","touchstart","keydown"].forEach(function(t){document.addEventListener(t,function h(){say();document.removeEventListener(t,h,true)},true)});
+}
+greet();
 boot();
 })();
 </script>
