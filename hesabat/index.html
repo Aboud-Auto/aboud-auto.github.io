@@ -105,6 +105,8 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--text
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:#1b160a;color:#f3ecda;border:1px solid #d4af37;padding:11px 18px;border-radius:14px;z-index:60;font-weight:600;max-width:90%;text-align:center;display:none}
 .toast.show{display:block}
 .login{max-width:380px;margin:8vh auto 0;text-align:center}.login img{width:120px;height:120px;border-radius:26px;box-shadow:var(--shadow);margin-bottom:10px}.login h2{color:var(--primary);margin:6px 0 2px;font-size:26px}.login form{text-align:right;margin-top:18px}.login .err{color:var(--bad);font-size:14px;min-height:20px;margin:4px 0 10px}
+.banner.demo{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:14px}.banner.demo .btn{flex:none;white-space:nowrap}
+.demo-or{display:flex;align-items:center;gap:10px;margin:18px 0 12px;color:var(--muted,#888);font-size:13px}.demo-or:before,.demo-or:after{content:"";flex:1;height:1px;background:var(--line)}
 .banner{background:var(--warn-bg);color:var(--warn);border-radius:14px;padding:14px;margin-bottom:12px;font-weight:600}
 .daynav{display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .daynav input{flex:1;border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--card);text-align:center}
@@ -472,7 +474,7 @@ function renderSet(){
     '<div class="row" style="justify-content:flex-start;margin-bottom:12px"><img src="'+esc(brandLogo())+'" alt="" style="width:64px;height:64px;border-radius:14px;object-fit:cover;border:1px solid var(--line)"><div style="flex:1"><button class="btn sec small" data-act="brandLogo">📷 اختار لوجو</button>'+((S.brand&&S.brand.logo)?' <button class="btn sec small" data-act="brandLogoDel">شيل اللوجو</button>':'')+'</div></div>'+
     '<label class="fld"><span>اسم المعرض</span><input id="brandName" maxlength="40" value="'+esc((S.brand&&S.brand.name)||"")+'" placeholder="حسابات المعرض"></label>'+
     '<button class="btn" data-act="brandSave">حفظ الاسم</button></div>'+
-    '<div class="card"><div class="kv"><span>الحساب</span><b>'+esc(lsGet("hb_user")||"")+'</b></div><button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>'+
+    '<div class="card"><div class="kv"><span>الحساب</span><b>'+(DEMO?"حساب تجريبي":esc(lsGet("hb_user")||""))+'</b></div>'+(DEMO?'<button class="btn" style="margin-top:12px" data-act="demoSignup">اعمل حسابك دلوقتي</button>':'')+'<button class="btn danger" style="margin-top:12px" data-act="logout">'+(DEMO?"خروج من التجربة":"تسجيل خروج")+'</button></div>'+
     '<div class="card sub">الربح الصافي = سعر البيع − (سعر الشراء + كل المصاريف). في الشراكة: المصاريف بتتخصم من الربح الأول، وبعدين الباقي بيتقسم على حسب مبلغ كل واحد من سعر الشراء.</div>';
 }
 
@@ -496,13 +498,16 @@ function renderLogin(){
     '<label class="fld"><span>الباسورد</span><input type="password" name="password" autocomplete="current-password" dir="ltr" required></label>'+
     '<label class="fld" id="pw2" style="display:none"><span>أكد الباسورد</span><input type="password" name="password2" autocomplete="new-password" dir="ltr"></label>'+
     '<div class="err" id="loginErr"></div><button class="btn" type="submit">دخول</button>'+
-    '<button class="btn sec" type="button" id="modeBtn" style="margin-top:10px">أول مرة؟ اعمل حساب جديد</button></form></div>';
+    '<button class="btn sec" type="button" id="modeBtn" style="margin-top:10px">أول مرة؟ اعمل حساب جديد</button></form>'+
+    '<div class="demo-or"><span>أو</span></div><button class="btn sec" type="button" id="demoBtn">👀 جرّب البرنامج الأول من غير تسجيل</button><div class="sub" style="margin-top:8px">هتشوف البرنامج ببيانات تجريبية، ومفيش حاجة هتتحفظ</div></div>';
   var signup=false;
   function lbl(){return signup?"إنشاء الحساب":"دخول"}
   $("#modeBtn").onclick=function(){signup=!signup;$("#pw2").style.display=signup?"block":"none";
     $("#loginForm button[type=submit]").textContent=lbl();
     $("#loginSub").textContent=signup?"اختار اسم مستخدم وباسورد ليك":"ادخل باسم المستخدم والباسورد";
     this.textContent=signup?"عندي حساب، رجوع للدخول":"أول مرة؟ اعمل حساب جديد";$("#loginErr").textContent=""};
+  $("#demoBtn").onclick=startDemo;
+  try{if(sessionStorage.getItem("hb_signup")){sessionStorage.removeItem("hb_signup");$("#modeBtn").click()}}catch(e){}
   $("#loginForm").onsubmit=function(e){
     e.preventDefault();var f=e.target,btn=f.querySelector("button[type=submit]"),u=f.user.value.trim(),p=f.password.value;
     function fail(m){btn.disabled=false;btn.textContent=lbl();$("#loginErr").textContent=m}
@@ -529,7 +534,7 @@ function render(){
   else if(S.tab==="cap")h=renderCap();
   else if(S.tab==="led")h=renderLed();
   else h=renderSet();
-  app.innerHTML=h;
+  app.innerHTML=(DEMO?demoBar():"")+h;
   renderNav();
 }
 function refresh(){
@@ -1197,6 +1202,7 @@ async function exportBackup(){
   try{await dlShim().save({filename:"نسخة_احتياطية_حسابات_المعرض_"+todayStr()+".json",data:JSON.stringify(out)});}catch(e){toast("تعذر حفظ النسخة")}
 }
 function importBackup(){
+  if(DEMO)return toast("الاسترجاع مش متاح في النسخة التجريبية");
   var inp=document.createElement("input");inp.type="file";inp.accept=".json,application/json";
   inp.onchange=async function(){
     var f=inp.files&&inp.files[0];if(!f)return;
@@ -1223,7 +1229,7 @@ function pickLogo(){
     im.onerror=function(){toast("الصورة دي مش مدعومة")};im.src=u};
   inp.click();
 }
-function logout(){if(confirm("تسجيل خروج من التطبيق؟")){lsSet("hb_name");lsSet("hb_logo");lsSet("hb_user")}else return;FBA.auth().signOut().then(function(){location.reload()})}
+function logout(){if(DEMO){if(confirm("تخرج من النسخة التجريبية؟"))exitDemo(false);return}if(confirm("تسجيل خروج من التطبيق؟")){lsSet("hb_name");lsSet("hb_logo");lsSet("hb_user")}else return;FBA.auth().signOut().then(function(){location.reload()})}
 /* ---------- export ---------- */
 async function exportCsv(){
   var dl=dlShim();
@@ -1300,6 +1306,7 @@ document.addEventListener("click",async function(e){
   else if(a==="backup")exportBackup();
   else if(a==="restore")importBackup();
   else if(a==="logout")logout();
+  else if(a==="demoSignup")exitDemo(true);
   else if(a==="brandSave")saveBrand({name:($("#brandName").value||"").trim()});
   else if(a==="brandLogo")pickLogo();
   else if(a==="brandLogoDel")saveBrand({logo:""});
@@ -1344,6 +1351,54 @@ document.addEventListener("change",function(e){
   }
   if(liveKind())updatePreview();
 });
+
+/* ---------- demo (تجربة) ---------- */
+var DEMO=false;
+var DEMO_RK={cars:"cars",expenses:"expenses",collections:"cols",capital:"cap",payouts:"pay",transfers:"transfers",ledger:"ledger"};
+function demoId(){return "d"+Math.random().toString(36).slice(2,11)}
+function demoRef(path){
+  var p=path.split("/"),c=p[0],id=p[1];
+  function after(){setTimeout(refresh,0);return Promise.resolve()}
+  function arr(){return S[DEMO_RK[c]]}
+  return {id:id,
+    set:function(data,opt){
+      if(c==="settings"){var key=id==="brand"?"brand":"settings";S[key]=opt&&opt.merge?Object.assign({},S[key]||{},data):Object.assign({},data);if(key==="brand")applyBrand();return after()}
+      var a=arr(),i=a.findIndex(function(x){return x.id===id}),o=Object.assign({id:id},data);if(i>=0)a[i]=o;else a.push(o);return after()},
+    update:function(data){var a=arr(),x=a&&a.find(function(q){return q.id===id});if(!x)return Promise.reject(new Error("missing"));Object.assign(x,data);return after()},
+    delete:function(){var a=arr();if(a)S[DEMO_RK[c]]=a.filter(function(x){return x.id!==id});return after()}
+  };
+}
+var demoDb={collection:function(c){return {doc:function(){return demoRef(c+"/"+demoId())}}},doc:demoRef};
+function demoData(){
+  var t=todayStr(),d=function(n){return addDays(t,-n)},now=Date.now(),h=3600e3;
+  S.settings={capital:1500000,fund:50000};
+  S.brand={name:"معرض تجريبي"};
+  S.cars=[
+    {id:"c1",name:"هيونداي إلنترا ٢٠١٩",buyPrice:520000,buyPaid:null,buyDate:d(25),buySrc:"cash",reimbursed:true,partners:[],sellPrice:575000,sellDate:d(10),createdAt:now-25*24*h},
+    {id:"c2",name:"تويوتا كورولا ٢٠٢٠",buyPrice:690000,buyPaid:null,buyDate:d(18),buySrc:"cash",reimbursed:false,partners:[{id:"p1",name:"محمد",amount:345000,pct:50}],sellPrice:760000,sellDate:d(2),createdAt:now-18*24*h},
+    {id:"c3",name:"كيا سيراتو ٢٠٢١",buyPrice:780000,buyPaid:700000,buyDate:d(6),buySrc:"cash",reimbursed:false,partners:[],createdAt:now-6*24*h},
+    {id:"c4",name:"نيسان صني ٢٠١٨",buyPrice:330000,buyPaid:null,buyDate:d(1),buySrc:"cash",reimbursed:false,partners:[],createdAt:now-1*24*h}
+  ];
+  S.expenses=[
+    {id:"e1",carId:"c1",amount:6500,date:d(23),type:"صيانة",src:"cash",note:"تغيير زيت وفرامل"},
+    {id:"e2",carId:"c1",amount:2500,date:d(20),type:"نقل",src:"cash",note:""},
+    {id:"e3",carId:"c2",amount:8000,date:d(15),type:"دوكو",src:"cash",note:"رش رفرف"},
+    {id:"e4",carId:"c2",amount:1500,date:d(12),type:"غسيل وتلميع",src:"cash",note:""},
+    {id:"e5",carId:"c3",amount:4000,date:d(4),type:"صيانة",src:"cash",note:"كاوتش"},
+    {id:"e6",carId:"c4",amount:1200,date:t,type:"نقل",src:"cash",note:""}
+  ];
+  S.cols=[
+    {id:"k1",carId:"c1",date:d(10),cash:400000,insta:175000,note:"عند البيع"},
+    {id:"k2",carId:"c2",date:d(2),cash:500000,insta:200000,note:"عند البيع"}
+  ];
+  S.cap=[{id:"a1",kind:"pwithdraw",amount:20000,date:d(8),src:"cash",note:"سحب أرباح"}];
+  S.pay=[];S.transfers=[{id:"t1",dir:"toSafe",amount:150000,date:d(9),note:"تحويل من إنستاباي للخزنة"}];
+  S.ledger=[{id:"l1",kind:"loan",person:"أحمد",dir:"out",amount:50000,date:d(5),src:"cash",note:"هيرجعهم آخر الشهر"},{id:"l2",kind:"pay",loanId:"l1",amount:20000,date:d(1),src:"cash",note:""}];
+  ["cars","expenses","cols","cap","pay","transfers","ledger","settings"].forEach(function(k){S.loaded[k]=true});
+}
+function startDemo(){DEMO=true;db=demoDb;demoData();S.auth="in";S.tab="home";S.err=null;S.noDb=false;applyBrand();render();window.scrollTo(0,0)}
+function demoBar(){return '<div class="banner demo">👀 دي نسخة تجريبية ببيانات وهمية، جرّب براحتك واعمل أي حاجة، ومفيش حاجة هتتحفظ.<button class="btn small" data-act="demoSignup">اعمل حسابك دلوقتي</button></div>'}
+function exitDemo(signup){try{if(signup)sessionStorage.setItem("hb_signup","1")}catch(e){}location.reload()}
 
 /* ---------- boot ---------- */
 async function boot(){
