@@ -468,33 +468,51 @@ function renderSet(){
     '<div class="kv"><span>مستحق للشركاء</span><b>'+m(T.pOwed)+'</b></div>'+
     '<div class="kv"><span>مصاريف لسه ما اتردّتش للعهدة</span><b>'+m(T.unre)+'</b></div>'+
     '<div class="kv"><span>مراجعة الحسابات</span><b>'+(T.check?'<span class="ok">✔ متطابقة</span>':'<span class="bad">راجع الأرقام</span>')+'</b></div></div>'+
-    '<div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">تصدير العربيات (ملف CSV)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">خد نسخة من بياناتك كل فترة واحفظها في الملفات أو ابعتها لنفسك على واتساب.</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="kv"><span>الدخول</span><b>بالباسورد</b></div><button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>'+
+    '<div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">تصدير العربيات (ملف CSV)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">خد نسخة من بياناتك كل فترة واحفظها في الملفات أو ابعتها لنفسك على واتساب.</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="sect" style="margin-top:0">شكل التطبيق</div><div class="sub" style="margin-bottom:12px">اكتب اسم المعرض بتاعك وحط اللوجو، وهيظهروا في التطبيق والتقارير.</div>'+
+    '<div class="row" style="justify-content:flex-start;margin-bottom:12px"><img src="'+esc(brandLogo())+'" alt="" style="width:64px;height:64px;border-radius:14px;object-fit:cover;border:1px solid var(--line)"><div style="flex:1"><button class="btn sec small" data-act="brandLogo">📷 اختار لوجو</button>'+((S.brand&&S.brand.logo)?' <button class="btn sec small" data-act="brandLogoDel">شيل اللوجو</button>':'')+'</div></div>'+
+    '<label class="fld"><span>اسم المعرض</span><input id="brandName" maxlength="40" value="'+esc((S.brand&&S.brand.name)||"")+'" placeholder="حسابات المعرض"></label>'+
+    '<button class="btn" data-act="brandSave">حفظ الاسم</button></div>'+
+    '<div class="card"><div class="kv"><span>الحساب</span><b>'+esc(lsGet("hb_user")||"")+'</b></div><button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>'+
     '<div class="card sub">الربح الصافي = سعر البيع − (سعر الشراء + كل المصاريف). في الشراكة: المصاريف بتتخصم من الربح الأول، وبعدين الباقي بيتقسم على حسب مبلغ كل واحد من سعر الشراء.</div>';
 }
 
 
-async function pwEmail(p){var h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("hesabat|"+p));return Array.from(new Uint8Array(h)).slice(0,16).map(function(b){return b.toString(16).padStart(2,"0")}).join("")+"@hesabat.app"}
+async function userEmail(u){var h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("hesabat-user|"+u.trim().toLowerCase()));return Array.from(new Uint8Array(h)).slice(0,16).map(function(b){return b.toString(16).padStart(2,"0")}).join("")+"@hesabat.app"}
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{if(v)localStorage.setItem(k,v);else localStorage.removeItem(k)}catch(e){}}
+function brandName(){return (S.brand&&S.brand.name)||lsGet("hb_name")||"حسابات المعرض"}
+function brandLogo(){return (S.brand&&S.brand.logo)||lsGet("hb_logo")||"icon-180.png"}
+function applyBrand(){
+  document.title=brandName();
+  var l=document.querySelector('link[rel="apple-touch-icon"]');if(l)l.href=brandLogo();
+  var t=document.querySelector('meta[name="apple-mobile-web-app-title"]');if(t)t.content=brandName();
+}
 function renderLogin(){
-  var app=$("#app");$("#nav").innerHTML="";
-  if(S.auth==="checking"){app.innerHTML='<div class="login"><img src="icon-180.png" alt=""><h2>حسابات المعرض</h2><div class="sub">جاري التحميل…</div></div>';return}
-  app.innerHTML='<div class="login"><img src="icon-180.png" alt=""><h2>حسابات المعرض</h2><div class="sub">اكتب الباسورد بتاعك</div>'+
-    '<form id="loginForm" autocomplete="on"><input type="hidden" name="email" value="hesabat" autocomplete="username">'+
+  var app=$("#app");$("#nav").innerHTML="";applyBrand();
+  var head='<div class="login"><img src="'+esc(brandLogo())+'" alt=""><h2>'+esc(brandName())+'</h2>';
+  if(S.auth==="checking"){app.innerHTML=head+'<div class="sub">جاري التحميل…</div></div>';return}
+  app.innerHTML=head+'<div class="sub" id="loginSub">ادخل باسم المستخدم والباسورد</div>'+
+    '<form id="loginForm" autocomplete="on"><label class="fld"><span>اسم المستخدم</span><input type="text" name="user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>'+
     '<label class="fld"><span>الباسورد</span><input type="password" name="password" autocomplete="current-password" dir="ltr" required></label>'+
     '<label class="fld" id="pw2" style="display:none"><span>أكد الباسورد</span><input type="password" name="password2" autocomplete="new-password" dir="ltr"></label>'+
     '<div class="err" id="loginErr"></div><button class="btn" type="submit">دخول</button>'+
-    '<button class="btn sec" type="button" id="modeBtn" style="margin-top:10px">أول مرة؟ اعمل باسورد جديد</button></form></div>';
+    '<button class="btn sec" type="button" id="modeBtn" style="margin-top:10px">أول مرة؟ اعمل حساب جديد</button></form></div>';
   var signup=false;
+  function lbl(){return signup?"إنشاء الحساب":"دخول"}
   $("#modeBtn").onclick=function(){signup=!signup;$("#pw2").style.display=signup?"block":"none";
-    $("#loginForm button[type=submit]").textContent=signup?"حفظ الباسورد والدخول":"دخول";
-    this.textContent=signup?"عندي باسورد، رجوع للدخول":"أول مرة؟ اعمل باسورد جديد";$("#loginErr").textContent=""};
+    $("#loginForm button[type=submit]").textContent=lbl();
+    $("#loginSub").textContent=signup?"اختار اسم مستخدم وباسورد ليك":"ادخل باسم المستخدم والباسورد";
+    this.textContent=signup?"عندي حساب، رجوع للدخول":"أول مرة؟ اعمل حساب جديد";$("#loginErr").textContent=""};
   $("#loginForm").onsubmit=function(e){
-    e.preventDefault();var f=e.target,btn=f.querySelector("button");btn.disabled=true;btn.textContent="جاري الدخول…";$("#loginErr").textContent="";
-    if(signup&&f.password.value!==f.password2.value){btn.disabled=false;btn.textContent="حفظ الباسورد والدخول";$("#loginErr").textContent="الباسوردين مش زي بعض";return}
-    if(signup&&!(f.password.value.length>=8&&/[0-9]/.test(f.password.value)&&/[^0-9]/.test(f.password.value))){btn.disabled=false;btn.textContent="حفظ الباسورد والدخول";$("#loginErr").textContent="الباسورد لازم 8 على الأقل، فيه حروف وأرقام";return}
-    pwEmail(f.password.value).then(function(em){return signup?FBA.auth().createUserWithEmailAndPassword(em,f.password.value):FBA.auth().signInWithEmailAndPassword(em,f.password.value)}).catch(function(err){
-      btn.disabled=false;btn.textContent=signup?"حفظ الباسورد والدخول":"دخول";
+    e.preventDefault();var f=e.target,btn=f.querySelector("button[type=submit]"),u=f.user.value.trim(),p=f.password.value;
+    function fail(m){btn.disabled=false;btn.textContent=lbl();$("#loginErr").textContent=m}
+    btn.disabled=true;btn.textContent=signup?"جاري الإنشاء…":"جاري الدخول…";$("#loginErr").textContent="";
+    if(u.length<3)return fail("اسم المستخدم لازم 3 حروف على الأقل");
+    if(signup&&p!==f.password2.value)return fail("الباسوردين مش زي بعض");
+    if(signup&&!(p.length>=8&&/[0-9]/.test(p)&&/[^0-9]/.test(p)))return fail("الباسورد لازم 8 على الأقل، فيه حروف وأرقام");
+    lsSet("hb_user",u);userEmail(u).then(function(em){return signup?FBA.auth().createUserWithEmailAndPassword(em,p):FBA.auth().signInWithEmailAndPassword(em,p)}).catch(function(err){
       var c=err&&err.code||"";
-      $("#loginErr").textContent=/network/.test(c)?"مفيش نت، اتأكد من الاتصال":/too-many/.test(c)?"محاولات كتير، استنى شوية وجرّب":/email-already/.test(c)?"الباسورد ده متسجل قبل كده، دوس رجوع وادخل بيه":/weak-password/.test(c)?"الباسورد ضعيف":"الباسورد غلط";
+      fail(/network/.test(c)?"مفيش نت، اتأكد من الاتصال":/too-many/.test(c)?"محاولات كتير، استنى شوية وجرّب":/email-already/.test(c)?"اسم المستخدم ده محجوز، اختار اسم تاني":/weak-password/.test(c)?"الباسورد ضعيف":"اسم المستخدم أو الباسورد غلط");
     });
   };
 }
@@ -505,7 +523,7 @@ function render(){
   if(S.err&&!allLoaded()){app.innerHTML='<div class="banner">حصلت مشكلة في تحميل البيانات. اقفل التطبيق وافتحه تاني.</div>';return}
   if(!allLoaded()){app.innerHTML='<div class="empty">جاري تحميل بياناتك…</div>';return}
   var h="";
-  if(S.tab==="home")h='<div class="brand"><img src="icon-180.png" alt=""><div><h1>حسابات المعرض</h1><div class="sub">'+fdate(todayStr())+'</div></div></div>'+renderHome();
+  if(S.tab==="home")h='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div><h1>'+esc(brandName())+'</h1><div class="sub">'+fdate(todayStr())+'</div></div></div>'+renderHome();
   else if(S.tab==="cars")h=renderCars();
   else if(S.tab==="day")h=renderDay();
   else if(S.tab==="cap")h=renderCap();
@@ -908,7 +926,7 @@ function rlayout(ctx,spec,imgs,draw){
   if(draw){
     ctx.save();rrect(ctx,R-eS,y,eS,eS,28);ctx.clip();if(imgs.emb)ctx.drawImage(imgs.emb,R-eS,y,eS,eS);ctx.restore();
     rrect(ctx,R-eS,y,eS,eS,28,null,RK.line);
-    rtxt(ctx,"حسابات المعرض",R-eS-30,y+84,rf(54,800),RK.gold,"right","rtl");
+    rtxt(ctx,brandName(),R-eS-30,y+84,rf(54,800),RK.gold,"right","rtl");
     rtxt(ctx,"كشف حساب",R-eS-30,y+134,rf(29,600),RK.silver,"right","rtl");
   }
   y+=eS+34;
@@ -982,15 +1000,15 @@ function rlayout(ctx,spec,imgs,draw){
   y+=30;
   if(draw){
     ctx.fillStyle=RK.line;ctx.fillRect(RP,y,R-RP,2);
-    rtxt(ctx,"حسابات المعرض",W/2,y+48,rf(24,600),RK.silver,"center","rtl");
+    rtxt(ctx,brandName(),W/2,y+48,rf(24,600),RK.silver,"center","rtl");
     rtxt(ctx,"تاريخ الإصدار "+rfd(todayStr()),W/2,y+88,rf(22,400),RK.muted,"center","rtl");
   }
   return y+120;
 }
 
 async function renderReport(spec){
-  try{await Promise.all([document.fonts.load("400 24px Cairo",ARTXT),document.fonts.load("600 24px Cairo",ARTXT),document.fonts.load("700 30px Cairo",ARTXT),document.fonts.load("800 30px Cairo",ARTXT),document.fonts.load("800 54px Cairo","حسابات المعرض")])}catch(e){}
-  var imgs={emb:await loadImg(IMG_EMB),full:await loadImg(IMG_FULL)};
+  try{await Promise.all([document.fonts.load("400 24px Cairo",ARTXT),document.fonts.load("600 24px Cairo",ARTXT),document.fonts.load("700 30px Cairo",ARTXT),document.fonts.load("800 30px Cairo",ARTXT),document.fonts.load("800 54px Cairo",brandName())])}catch(e){}
+  var imgs={emb:(await loadImg(brandLogo()))||(await loadImg(IMG_EMB)),full:await loadImg(IMG_FULL)};
   var mc=document.createElement("canvas");mc.width=RW;mc.height=10;
   var H=Math.ceil(rlayout(mc.getContext("2d"),spec,imgs,false));
   var cv=document.createElement("canvas");cv.width=RW;cv.height=H;
@@ -1174,7 +1192,7 @@ function dlShim(){return {save:async function(o){
 
 var COLLS={cars:"cars",expenses:"expenses",cols:"collections",cap:"capital",pay:"payouts",transfers:"transfers",ledger:"ledger"};
 async function exportBackup(){
-  var out={app:"aboud-auto",version:1,at:new Date().toISOString(),settings:S.settings||null,data:{}};
+  var out={app:"aboud-auto",version:1,at:new Date().toISOString(),settings:S.settings||null,brand:S.brand||null,data:{}};
   Object.keys(COLLS).forEach(function(k){out.data[COLLS[k]]=S[k]});
   try{await dlShim().save({filename:"نسخة_احتياطية_حسابات_المعرض_"+todayStr()+".json",data:JSON.stringify(out)});}catch(e){toast("تعذر حفظ النسخة")}
 }
@@ -1188,14 +1206,24 @@ function importBackup(){
     try{
       var ops=[];
       Object.keys(j.data).forEach(function(c){(j.data[c]||[]).forEach(function(d){var o=Object.assign({},d),id=o.id;delete o.id;if(id)ops.push([c+"/"+id,o])})});
-      if(j.settings)ops.push(["settings/main",j.settings]);
+      if(j.settings)ops.push(["settings/main",j.settings]);if(j.brand)ops.push(["settings/brand",j.brand]);
       for(var i=0;i<ops.length;i+=400){var b=FS.batch();ops.slice(i,i+400).forEach(function(x){b.set(db.doc(x[0]),x[1])});await b.commit()}
       toast("اترجعت البيانات ✔");
     }catch(e){toast("تعذر الاسترجاع، جرّب تاني")}
   };
   inp.click();
 }
-function logout(){if(confirm("تسجيل خروج من التطبيق؟"))FBA.auth().signOut().then(function(){location.reload()})}
+async function saveBrand(o){try{await db.doc("settings/brand").set(o,{merge:true});toast("اتحفظ ✔")}catch(e){toast("تعذر الحفظ، جرّب تاني")}}
+function pickLogo(){
+  var inp=document.createElement("input");inp.type="file";inp.accept="image/*";
+  inp.onchange=function(){var f=inp.files&&inp.files[0];if(!f)return;var u=URL.createObjectURL(f),im=new Image();
+    im.onload=function(){var N=256,c=document.createElement("canvas");c.width=c.height=N;var x=c.getContext("2d");x.fillStyle="#0a0a0a";x.fillRect(0,0,N,N);
+      var k=Math.max(N/im.width,N/im.height),w=im.width*k,h=im.height*k;x.drawImage(im,(N-w)/2,(N-h)/2,w,h);URL.revokeObjectURL(u);
+      saveBrand({logo:c.toDataURL("image/jpeg",.85)})};
+    im.onerror=function(){toast("الصورة دي مش مدعومة")};im.src=u};
+  inp.click();
+}
+function logout(){if(confirm("تسجيل خروج من التطبيق؟")){lsSet("hb_name");lsSet("hb_logo");lsSet("hb_user")}else return;FBA.auth().signOut().then(function(){location.reload()})}
 /* ---------- export ---------- */
 async function exportCsv(){
   var dl=dlShim();
@@ -1272,6 +1300,9 @@ document.addEventListener("click",async function(e){
   else if(a==="backup")exportBackup();
   else if(a==="restore")importBackup();
   else if(a==="logout")logout();
+  else if(a==="brandSave")saveBrand({name:($("#brandName").value||"").trim()});
+  else if(a==="brandLogo")pickLogo();
+  else if(a==="brandLogoDel")saveBrand({logo:""});
   else if(a==="cno")closeConfirm();
   else if(a==="cyes"){var fn=confirmBox.fn;closeConfirm();if(fn)await fn()}
   else if(a==="unsell"){var id=t.dataset.id;confirmBox("إلغاء البيع هيرجّع العربية للمعرض. التحصيلات والتسليمات المسجّلة هتفضل موجودة، امسحها لو مش عايزها.",async function(){if(await patch("cars/"+id,{sellPrice:null,sellDate:null}))toast("اتلغى البيع")})}
@@ -1342,6 +1373,9 @@ async function boot(){
     },function(err){S.err=err;refresh()});
   }
   sub("cars","cars");sub("expenses","expenses");sub("collections","cols");sub("capital","cap");sub("payouts","pay");sub("transfers","transfers");sub("ledger","ledger");
+  db.doc("settings/brand").onSnapshot(function(snap){
+    S.brand=snap.exists?snap.data():null;lsSet("hb_name",S.brand&&S.brand.name);lsSet("hb_logo",S.brand&&S.brand.logo);applyBrand();refresh();
+  },function(){});
   db.doc("settings/main").onSnapshot(function(snap){
     S.settings=snap.exists?snap.data():null;S.loaded.settings=true;refresh();
   },function(err){S.err=err;refresh()});
