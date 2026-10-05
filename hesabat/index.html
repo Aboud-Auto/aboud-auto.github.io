@@ -107,6 +107,8 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--text
 .login{max-width:380px;margin:8vh auto 0;text-align:center}.login img{width:120px;height:120px;border-radius:26px;box-shadow:var(--shadow);margin-bottom:10px}.login h2{color:var(--primary);margin:6px 0 2px;font-size:26px}.login form{text-align:right;margin-top:18px}.login .err{color:var(--bad);font-size:14px;min-height:20px;margin:4px 0 10px}
 .banner.demo{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:14px}.banner.demo .btn{flex:none;white-space:nowrap}
 .demo-or{display:flex;align-items:center;gap:10px;margin:18px 0 12px;color:var(--muted,#888);font-size:13px}.demo-or:before,.demo-or:after{content:"";flex:1;height:1px;background:var(--line)}
+.linkbtn{background:none;border:0;color:var(--primary);font:inherit;font-weight:700;font-size:14px;margin:12px auto 0;display:block;cursor:pointer;text-decoration:underline}
+.linkc{border:1px solid var(--primary)}.bkrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;margin-bottom:8px}.ok{color:var(--good)}
 .banner{background:var(--warn-bg);color:var(--warn);border-radius:14px;padding:14px;margin-bottom:12px;font-weight:600}
 .daynav{display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .daynav input{flex:1;border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--card);text-align:center}
@@ -298,6 +300,7 @@ function renderNav(){
 
 function renderHome(){
   var T=calc(),D=dayCalc(todayStr()),h="";
+  if(!DEMO&&S.user&&!isLinked())h+=linkCard();
   if(!S.settings)h+='<div class="card"><div class="sect" style="margin-top:0">ابدأ من هنا 👋</div><div class="sub" style="margin-bottom:12px">حدّد رأس المال والعهدة الأول عشان الحسابات تظبط.</div><button class="btn" data-act="form" data-kind="settings">تحديد رأس المال والعهدة</button></div>';
   h+='<div class="hero"><div class="l">السيولة الحالية (كاش + إنستاباي)</div><div class="v">'+m(T.cashNow)+'</div><div class="s">إجمالي قيمة البيزنس: '+m(T.value)+'</div>'+
      (Math.abs(T.pOwed)>=0.5?'<div class="s">منها مستحق للشركاء: '+m(T.pOwed)+'</div>':'')+
@@ -470,16 +473,16 @@ function renderSet(){
     '<div class="kv"><span>مستحق للشركاء</span><b>'+m(T.pOwed)+'</b></div>'+
     '<div class="kv"><span>مصاريف لسه ما اتردّتش للعهدة</span><b>'+m(T.unre)+'</b></div>'+
     '<div class="kv"><span>مراجعة الحسابات</span><b>'+(T.check?'<span class="ok">✔ متطابقة</span>':'<span class="bad">راجع الأرقام</span>')+'</b></div></div>'+
-    '<div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">تصدير العربيات (ملف CSV)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">خد نسخة من بياناتك كل فترة واحفظها في الملفات أو ابعتها لنفسك على واتساب.</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="sect" style="margin-top:0">شكل التطبيق</div><div class="sub" style="margin-bottom:12px">اكتب اسم المعرض بتاعك وحط اللوجو، وهيظهروا في التطبيق والتقارير.</div>'+
+    '<div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">تصدير العربيات (ملف CSV)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">بياناتك محفوظة على السيرفر، وبتتعمل منها نسخة لوحدها كل ما تفتح البرنامج وتقفله. تقدر ترجع لأي نسخة من هنا.</div><button class="btn" data-act="cloudList" style="margin-bottom:10px">☁️ النسخ المحفوظة والاسترجاع</button><div class="sub" style="margin:4px 0 10px">وكمان تقدر تحفظ نسخة على موبايلك أو تبعتها لنفسك واتساب:</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="sect" style="margin-top:0">شكل التطبيق</div><div class="sub" style="margin-bottom:12px">اكتب اسم المعرض بتاعك وحط اللوجو، وهيظهروا في التطبيق والتقارير.</div>'+
     '<div class="row" style="justify-content:flex-start;margin-bottom:12px"><img src="'+esc(brandLogo())+'" alt="" style="width:64px;height:64px;border-radius:14px;object-fit:cover;border:1px solid var(--line)"><div style="flex:1"><button class="btn sec small" data-act="brandLogo">📷 اختار لوجو</button>'+((S.brand&&S.brand.logo)?' <button class="btn sec small" data-act="brandLogoDel">شيل اللوجو</button>':'')+'</div></div>'+
     '<label class="fld"><span>اسم المعرض</span><input id="brandName" maxlength="40" value="'+esc((S.brand&&S.brand.name)||"")+'" placeholder="حسابات المعرض"></label>'+
     '<button class="btn" data-act="brandSave">حفظ الاسم</button></div>'+
-    '<div class="card"><div class="kv"><span>الحساب</span><b>'+(DEMO?"حساب تجريبي":esc(lsGet("hb_user")||""))+'</b></div>'+(DEMO?'<button class="btn" style="margin-top:12px" data-act="demoSignup">اعمل حسابك دلوقتي</button>':'')+'<button class="btn danger" style="margin-top:12px" data-act="logout">'+(DEMO?"خروج من التجربة":"تسجيل خروج")+'</button></div>'+
+    '<div class="card"><div class="kv"><span>الحساب</span><b dir="ltr">'+(DEMO?"حساب تجريبي":esc(isLinked()?S.user.email:(lsGet("hb_user")||"")))+'</b></div>'+(!DEMO&&!isLinked()?'<div class="sub" style="margin-top:8px">الحساب ده مش مربوط بجيميل، فلو نسيت الباسورد مش هتعرف ترجعه.</div><button class="btn" style="margin-top:10px" data-act="linkMail">🔐 اربط حسابك بالجيميل</button>':'')+(DEMO?'<button class="btn" style="margin-top:12px" data-act="demoSignup">اعمل حسابك دلوقتي</button>':'')+'<button class="btn danger" style="margin-top:12px" data-act="logout">'+(DEMO?"خروج من التجربة":"تسجيل خروج")+'</button></div>'+
     '<div class="card sub">الربح الصافي = سعر البيع − (سعر الشراء + كل المصاريف). في الشراكة: المصاريف بتتخصم من الربح الأول، وبعدين الباقي بيتقسم على حسب مبلغ كل واحد من سعر الشراء.</div>';
 }
 
 
-async function userEmail(u){var h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("hesabat-user|"+u.trim().toLowerCase()));return Array.from(new Uint8Array(h)).slice(0,16).map(function(b){return b.toString(16).padStart(2,"0")}).join("")+"@hesabat.app"}
+async function userEmail(u){if(u.indexOf("@")>=0)return u.trim().toLowerCase();var h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("hesabat-user|"+u.trim().toLowerCase()));return Array.from(new Uint8Array(h)).slice(0,16).map(function(b){return b.toString(16).padStart(2,"0")}).join("")+"@hesabat.app"}
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{if(v)localStorage.setItem(k,v);else localStorage.removeItem(k)}catch(e){}}
 function brandName(){return (S.brand&&S.brand.name)||lsGet("hb_name")||"حسابات المعرض"}
@@ -493,31 +496,42 @@ function renderLogin(){
   var app=$("#app");$("#nav").innerHTML="";applyBrand();
   var head='<div class="login"><img src="'+esc(brandLogo())+'" alt=""><h2>'+esc(brandName())+'</h2>';
   if(S.auth==="checking"){app.innerHTML=head+'<div class="sub">جاري التحميل…</div></div>';return}
-  app.innerHTML=head+'<div class="sub" id="loginSub">ادخل باسم المستخدم والباسورد</div>'+
-    '<form id="loginForm" autocomplete="on"><label class="fld"><span>اسم المستخدم</span><input type="text" name="user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>'+
+  app.innerHTML=head+'<div class="sub" id="loginSub">ادخل بالجيميل والباسورد</div>'+
+    '<form id="loginForm" autocomplete="on"><label class="fld"><span id="userLbl">الجيميل (أو اسم المستخدم القديم)</span><input type="text" name="user" inputmode="email" dir="ltr" placeholder="example@gmail.com" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>'+
     '<label class="fld"><span>الباسورد</span><input type="password" name="password" autocomplete="current-password" dir="ltr" required></label>'+
     '<label class="fld" id="pw2" style="display:none"><span>أكد الباسورد</span><input type="password" name="password2" autocomplete="new-password" dir="ltr"></label>'+
     '<div class="err" id="loginErr"></div><button class="btn" type="submit">دخول</button>'+
+    '<button class="linkbtn" type="button" id="fpBtn">نسيت الباسورد؟</button>'+
     '<button class="btn sec" type="button" id="modeBtn" style="margin-top:10px">أول مرة؟ اعمل حساب جديد</button></form>'+
     '<div class="demo-or"><span>أو</span></div><button class="btn sec" type="button" id="demoBtn">👀 جرّب البرنامج الأول من غير تسجيل</button><div class="sub" style="margin-top:8px">هتشوف البرنامج ببيانات تجريبية، ومفيش حاجة هتتحفظ</div></div>';
   var signup=false;
   function lbl(){return signup?"إنشاء الحساب":"دخول"}
   $("#modeBtn").onclick=function(){signup=!signup;$("#pw2").style.display=signup?"block":"none";
     $("#loginForm button[type=submit]").textContent=lbl();
-    $("#loginSub").textContent=signup?"اختار اسم مستخدم وباسورد ليك":"ادخل باسم المستخدم والباسورد";
+    $("#loginSub").textContent=signup?"اعمل حسابك بالجيميل بتاعك، عشان لو نسيت الباسورد تقدر ترجعه":"ادخل بالجيميل والباسورد";
+    $("#userLbl").textContent=signup?"الجيميل بتاعك":"الجيميل (أو اسم المستخدم القديم)";$("#fpBtn").style.display=signup?"none":"block";
     this.textContent=signup?"عندي حساب، رجوع للدخول":"أول مرة؟ اعمل حساب جديد";$("#loginErr").textContent=""};
   $("#demoBtn").onclick=startDemo;
+  $("#fpBtn").onclick=function(){
+    var u=$("#loginForm").user.value.trim().toLowerCase(),er=$("#loginErr");
+    if(u.indexOf("@")<0){er.textContent=u?"الحساب ده باسم مستخدم مش مربوط بجيميل، فمينفعش نرجّع الباسورد بالإيميل":"اكتب الجيميل بتاعك فوق، وبعدين اضغط «نسيت الباسورد»";return}
+    var b=this;b.disabled=true;FBA.auth().languageCode="ar";
+    FBA.auth().sendPasswordResetEmail(u).then(function(){er.innerHTML='<span class="ok">بعتنالك رسالة على '+esc(u)+'، افتحها واختار باسورد جديد. لو مش لاقيها، بص في الـ Spam.</span>'})
+      .catch(function(err){var c=err&&err.code||"";er.textContent=/invalid-email/.test(c)?"الإيميل مكتوب غلط":/network/.test(c)?"مفيش نت، اتأكد من الاتصال":"مقدرناش نبعت الرسالة، اتأكد من الإيميل وجرّب تاني"})
+      .then(function(){b.disabled=false});
+  };
   try{if(sessionStorage.getItem("hb_signup")){sessionStorage.removeItem("hb_signup");$("#modeBtn").click()}}catch(e){}
   $("#loginForm").onsubmit=function(e){
     e.preventDefault();var f=e.target,btn=f.querySelector("button[type=submit]"),u=f.user.value.trim(),p=f.password.value;
     function fail(m){btn.disabled=false;btn.textContent=lbl();$("#loginErr").textContent=m}
     btn.disabled=true;btn.textContent=signup?"جاري الإنشاء…":"جاري الدخول…";$("#loginErr").textContent="";
-    if(u.length<3)return fail("اسم المستخدم لازم 3 حروف على الأقل");
+    if(u.length<3)return fail("اكتب الجيميل بتاعك");
+    if(signup&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(u))return fail("اكتب إيميل صحيح، زي name@gmail.com");
     if(signup&&p!==f.password2.value)return fail("الباسوردين مش زي بعض");
     if(signup&&!(p.length>=8&&/[0-9]/.test(p)&&/[^0-9]/.test(p)))return fail("الباسورد لازم 8 على الأقل، فيه حروف وأرقام");
     lsSet("hb_user",u);userEmail(u).then(function(em){return signup?FBA.auth().createUserWithEmailAndPassword(em,p):FBA.auth().signInWithEmailAndPassword(em,p)}).catch(function(err){
       var c=err&&err.code||"";
-      fail(/network/.test(c)?"مفيش نت، اتأكد من الاتصال":/too-many/.test(c)?"محاولات كتير، استنى شوية وجرّب":/email-already/.test(c)?"اسم المستخدم ده محجوز، اختار اسم تاني":/weak-password/.test(c)?"الباسورد ضعيف":"اسم المستخدم أو الباسورد غلط");
+      fail(/network/.test(c)?"مفيش نت، اتأكد من الاتصال":/too-many/.test(c)?"محاولات كتير، استنى شوية وجرّب":/email-already/.test(c)?"اسم المستخدم ده محجوز، اختار اسم تاني":/weak-password/.test(c)?"الباسورد ضعيف":/invalid-email/.test(c)?"الإيميل مكتوب غلط":"الإيميل أو الباسورد غلط");
     });
   };
 }
@@ -538,6 +552,7 @@ function render(){
   renderNav();
 }
 function refresh(){
+  bkBoot();
   var act=document.activeElement;
   if(act&&(act.id==="q")){renderListOnly();return}
   render();
@@ -1307,6 +1322,11 @@ document.addEventListener("click",async function(e){
   else if(a==="restore")importBackup();
   else if(a==="logout")logout();
   else if(a==="demoSignup")exitDemo(true);
+  else if(a==="linkMail")openLinkMail();
+  else if(a==="linkSave")linkSave(t);
+  else if(a==="cloudList")openCloud();
+  else if(a==="cloudNow"){t.disabled=true;if(await cloudBackup("manual",true)){toast("اتعملت نسخة ✔");openCloud()}else t.disabled=false}
+  else if(a==="cloudRestore")cloudRestore(t.dataset.id);
   else if(a==="brandSave")saveBrand({name:($("#brandName").value||"").trim()});
   else if(a==="brandLogo")pickLogo();
   else if(a==="brandLogoDel")saveBrand({logo:""});
@@ -1351,6 +1371,89 @@ document.addEventListener("change",function(e){
   }
   if(liveKind())updatePreview();
 });
+
+/* ---------- gmail link ---------- */
+function isLinked(){return !!(S.user&&S.user.email&&!/@hesabat\.app$/.test(S.user.email))}
+function linkCard(){return '<div class="card linkc"><div class="sect" style="margin-top:0">🔐 اربط حسابك بالجيميل</div><div class="sub" style="margin-bottom:12px">عشان لو نسيت الباسورد أو غيّرت موبايلك، تقدر ترجع لحسابك وبياناتك بسهولة.</div><button class="btn" data-act="linkMail">ربط بالجيميل</button></div>'}
+function openLinkMail(){
+  modal={type:"link"};
+  openSheet(sheetHead("ربط الحساب بالجيميل")+'<div class="sub" style="margin-bottom:12px">هنبعتلك رسالة على الجيميل، افتحها واضغط على اللينك. بعدها هتدخل البرنامج بالجيميل بدل اسم المستخدم، وبنفس بياناتك.</div>'+
+    '<label class="fld"><span>الجيميل بتاعك</span><input name="lmail" inputmode="email" dir="ltr" autocapitalize="none" placeholder="example@gmail.com"></label>'+
+    '<label class="fld"><span>الباسورد الحالي</span><input name="lpw" type="password" dir="ltr" autocomplete="current-password"></label>'+
+    '<div class="err" id="linkErr" style="color:var(--bad);min-height:20px;margin:4px 0 10px;font-size:14px"></div><button class="btn" data-act="linkSave">ابعت رسالة التأكيد</button>');
+}
+async function linkSave(btn){
+  var em=val("lmail").trim().toLowerCase(),pw=val("lpw"),er=$("#linkErr");
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){er.textContent="اكتب إيميل صحيح";return}
+  if(!pw){er.textContent="اكتب الباسورد الحالي";return}
+  btn.disabled=true;er.textContent="";
+  try{
+    var u=FBA.auth().currentUser;FBA.auth().languageCode="ar";
+    await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email,pw));
+    await u.verifyBeforeUpdateEmail(em);
+    $("#sheet").innerHTML=sheetHead("خلاص، فاضل خطوة")+'<div class="card"><div style="font-weight:700;margin-bottom:6px">بعتنالك رسالة على:</div><div dir="ltr" style="text-align:right;color:var(--primary);font-weight:800">'+esc(em)+'</div><div class="sub" style="margin-top:10px">افتح الرسالة واضغط على اللينك اللي فيها (لو مش لاقيها بص في الـ Spam). بعد كده ادخل البرنامج بالجيميل ده ونفس الباسورد، وهتلاقي بياناتك زي ما هي.</div></div><button class="btn" data-act="close">تمام</button>';
+  }catch(e){
+    var c=e&&e.code||"";btn.disabled=false;
+    er.textContent=/wrong-password|invalid-credential|invalid-login/.test(c)?"الباسورد غلط":/email-already-in-use/.test(c)?"الجيميل ده متسجل بحساب تاني":/invalid-email/.test(c)?"الإيميل مكتوب غلط":/too-many/.test(c)?"محاولات كتير، استنى شوية":/network/.test(c)?"مفيش نت":"حصلت مشكلة، جرّب تاني";
+  }
+}
+
+/* ---------- cloud backups ---------- */
+var BK_KEEP=30,bkBusy=false,bkLastJson=null,bkBooted=false;
+function bkPayload(){var d={};Object.keys(COLLS).forEach(function(k){d[COLLS[k]]=S[k]});return {app:"hesabat",version:1,at:new Date().toISOString(),settings:S.settings||null,brand:S.brand||null,data:d}}
+async function cloudBackup(reason,force){
+  if(DEMO||!S.user||!allLoaded()||bkBusy)return false;
+  var j=bkPayload(),core=JSON.stringify({s:j.settings,b:j.brand,d:j.data});
+  var lk="hb_bk_"+S.user.uid,last=+lsGet(lk)||0,now=Date.now();
+  if(!force){
+    if(reason==="open"&&now-last<6*3600e3)return false;
+    if(reason==="close"&&(core===bkLastJson||now-last<20*60e3))return false;
+  }
+  var str=JSON.stringify(j);if(str.length>900000){if(force)toast("البيانات كبيرة على النسخة السحابية، خد نسخة على الموبايل");return false}
+  bkBusy=true;
+  try{
+    await db.collection("backups").doc().set({at:now,reason:reason,cars:S.cars.length,size:str.length,json:str});
+    lsSet(lk,String(now));bkLastJson=core;
+    var snap=await db.collection("backups").orderBy("at","desc").get();
+    snap.docs.slice(BK_KEEP).forEach(function(d){d.ref.delete().catch(function(){})});
+    return true;
+  }catch(e){if(force)toast("تعذر عمل النسخة، اتأكد من النت");return false}
+  finally{bkBusy=false}
+}
+function bkBoot(){if(bkBooted||DEMO||!allLoaded())return;bkBooted=true;bkLastJson=null;cloudBackup("open")}
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")cloudBackup("close")});
+window.addEventListener("pagehide",function(){cloudBackup("close")});
+function bkWhen(t){var d=new Date(t);return '<bdi>'+String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear()+" — "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+'</bdi>'}
+var BK_LBL={open:"عند الفتح",close:"عند القفل",manual:"يدوي",prerestore:"قبل الاسترجاع"};
+async function openCloud(){
+  if(DEMO)return toast("النسخ السحابية مش متاحة في النسخة التجريبية");
+  modal={type:"cloud"};
+  openSheet(sheetHead("☁️ النسخ الاحتياطية")+'<div class="empty">جاري التحميل…</div>');
+  try{
+    var snap=await db.collection("backups").orderBy("at","desc").limit(BK_KEEP).get();
+    if(!modal||modal.type!=="cloud")return;
+    var rows=snap.docs.map(function(d){var x=d.data();return '<div class="card bkrow"><div><div style="font-weight:700">'+bkWhen(x.at)+'</div><div class="sub">'+(BK_LBL[x.reason]||"")+' · '+(x.cars||0)+' عربية</div></div><button class="btn sec small" data-act="cloudRestore" data-id="'+d.id+'">استرجاع</button></div>'}).join("");
+    $("#sheet").innerHTML=sheetHead("☁️ النسخ الاحتياطية")+'<div class="sub" style="margin-bottom:12px">النسخ دي محفوظة على السيرفر مش على موبايلك. بتتعمل لوحدها لما تفتح البرنامج وتقفله، وبنحتفظ بآخر '+BK_KEEP+' نسخة. لو موبايلك ضاع، ادخل بحسابك من أي موبايل وهتلاقي بياناتك.</div>'+
+      '<button class="btn" data-act="cloudNow" style="margin-bottom:14px">عمل نسخة دلوقتي</button>'+(rows||'<div class="empty">لسه مفيش نسخ</div>');
+  }catch(e){$("#sheet").innerHTML=sheetHead("☁️ النسخ الاحتياطية")+'<div class="banner">تعذر تحميل النسخ، اتأكد من النت.</div>'}
+}
+async function cloudRestore(id){
+  try{var d=await db.doc("backups/"+id).get();var j=JSON.parse(d.data().json)}catch(e){return toast("تعذر قراءة النسخة")}
+  confirmBox("هترجّع بياناتك لـ "+bkWhen(d.data().at)+". أي حاجة اتسجلت بعدها هتتشال (وهنعمل نسخة من الوضع الحالي قبل الاسترجاع عشان لو غيّرت رأيك). متأكد؟",async function(){
+    await cloudBackup("prerestore",true);
+    try{
+      var ops=[];
+      Object.keys(COLLS).forEach(function(k){
+        var c=COLLS[k],keep={};(j.data[c]||[]).forEach(function(x){keep[x.id]=1;var o=Object.assign({},x);delete o.id;ops.push(["set",c+"/"+x.id,o])});
+        (S[k]||[]).forEach(function(x){if(!keep[x.id])ops.push(["del",c+"/"+x.id])});
+      });
+      ops.push(j.settings?["set","settings/main",j.settings]:["del","settings/main"]);
+      ops.push(j.brand?["set","settings/brand",j.brand]:["del","settings/brand"]);
+      for(var i=0;i<ops.length;i+=400){var b=FS.batch();ops.slice(i,i+400).forEach(function(x){if(x[0]==="set")b.set(db.doc(x[1]),x[2]);else b.delete(db.doc(x[1]))});await b.commit()}
+      closeSheet();toast("اترجعت البيانات ✔");
+    }catch(e){toast("تعذر الاسترجاع، جرّب تاني")}
+  });
+}
 
 /* ---------- demo (تجربة) ---------- */
 var DEMO=false;
@@ -1417,7 +1520,7 @@ async function boot(){
   try{FS.enablePersistence({synchronizeTabs:true}).catch(function(){})}catch(e){}
   var user=await new Promise(function(res){var off=FBA.auth().onAuthStateChanged(function(u){off();res(u)})});
   if(!user){S.auth="out";render();FBA.auth().onAuthStateChanged(function(u){if(u)location.reload()});return}
-  S.auth="in";
+  S.auth="in";S.user=user;
   var base="users/"+user.uid+"/";
   db={collection:function(c){return FS.collection(base+c)},doc:function(p){return FS.doc(base+p)}};
   render();
