@@ -321,7 +321,7 @@ function renderHome(){
     tile("أرباحك من العربيات المباعة",m(T.profit,T.profit>=0?"good":"bad"),'<span class="num">'+T.soldN+'</span> عربية')+
     tile("مديونيات العملاء",m(T.debts,T.debts>0?"warn":""),"")+
     tile("عجز رأس المال",m(T.deficit,T.deficit>0?"bad":""),"رأس المال الحالي "+m(T.capNow)+(T.lossRem>0.5?"<br>منها خسائر عربيات "+m(T.lossRem):""))+
-    tile("رصيد العهدة",m(T.fundBal,T.fundBal<0?"bad":""),"من "+m(T.fund))+
+    tile("رصيد العهدة",m(T.fundBal,T.fundBal<0?"bad":""),"من "+m(T.fund)+" (جزء من رأس المال)")+
     tile("أرباح متاحة",m(T.undist),"للسحب أو لسداد العجز")+'</div>';
   return h;
 }
@@ -384,6 +384,17 @@ function renderDay(){
     '<div class="sect">حركة اليوم</div><div class="card" style="padding:6px 16px">'+list+'</div>';
 }
 
+function capSplit(T){
+  var cap=T.capNow,fund=Math.min(Math.max(T.fund,0),Math.max(cap,0)),rest=cap-fund,pf=cap>0?Math.round(fund/cap*100):0;
+  return '<div class="card"><div class="sect" style="margin-top:0">توزيع رأس المال</div>'+
+    '<div class="kv"><span>رأس المال الحالي</span><b>'+m(cap)+'</b></div>'+
+    '<div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin:8px 0 10px;background:var(--line)"><div style="width:'+(100-pf)+'%;background:var(--primary)"></div><div style="width:'+pf+'%;background:var(--silver)"></div></div>'+
+    '<div class="kv"><span>🚗 للشغل (شراء عربيات)</span><b>'+m(rest,rest<0?"bad":"")+'</b></div>'+
+    '<div class="kv"><span>🧾 منه عهدة للمصاريف</span><b>'+m(fund)+'</b></div>'+
+    '<div class="kv" style="padding-right:14px"><span class="sub">· اتصرف منها ولسه ما اترديش</span><b>'+m(T.unre)+'</b></div>'+
+    '<div class="kv" style="padding-right:14px"><span class="sub">· الباقي في العهدة</span><b>'+m(T.fundBal,T.fundBal<0?"bad":"")+'</b></div>'+
+    '<div class="sub" style="margin-top:8px">العهدة جزء من رأس المال مش خصم منه — الفلوس لسه بتاعتك، بس متخصصة للمصاريف.</div></div>';
+}
 function renderCap(){
   var T=calc();
   var list=S.cap.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0)});
@@ -397,6 +408,7 @@ function renderCap(){
   }).join("")+'</div>':"";
   return '<div class="top"><h1>رأس المال</h1></div>'+
     '<div class="hero"><div class="l">عجز رأس المال</div><div class="v">'+m(T.deficit)+'</div><div class="s">رأس المال الأصلي '+m(T.capital)+' · الحالي '+m(T.capNow)+'</div></div>'+
+    capSplit(T)+
     '<div class="grid2">'+tile("سحب من رأس المال",m(T.withdraw),"سددت منه "+m(T.repay))+tile("خسائر عربيات متبقية",m(T.lossRem,T.lossRem>0.5?"warn":""),"اتسدد "+m(T.lossPaid)+" من "+m(T.lossDef))+'</div>'+
     '<div class="grid2">'+tile("أرباح متاحة (حصتك بس)",m(T.undist),"للسحب أو لسداد العجز")+tile("أرباح اتسحبت",m(T.pw),"")+'</div>'+
     '<div class="actions">'+
@@ -466,7 +478,7 @@ function renderLoan(){
 function renderSet(){
   var T=calc();
   return '<div class="top"><h1>الإعدادات</h1></div>'+subInfo()+
-    '<div class="card"><div class="kv"><span>رأس المال الأصلي</span><b>'+m(T.capital)+'</b></div><div class="kv"><span>حجم العهدة</span><b>'+m(T.fund)+'</b></div>'+
+    '<div class="card"><div class="kv"><span>رأس المال الأصلي</span><b>'+m(T.capital)+'</b></div><div class="kv"><span>منه عهدة للمصاريف</span><b>'+m(T.fund)+'</b></div><div class="kv"><span>والباقي للشغل</span><b>'+m(T.capital-T.fund)+'</b></div>'+
     '<button class="btn sec" style="margin-top:12px" data-act="form" data-kind="settings">تعديل</button></div>'+
     '<div class="card"><div class="kv"><span>إجمالي المحصّل كاش</span><b>'+m(T.cashTot)+'</b></div><div class="kv"><span>إجمالي المحصّل إنستاباي</span><b>'+m(T.instaTot)+'</b></div>'+
     '<div class="kv"><span>إجمالي أرباح اتسحبت</span><b>'+m(T.pw)+'</b></div>'+
@@ -818,7 +830,7 @@ function openForm(kind,o){
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+
       '<div class="preview" id="pv"></div><button class="btn" data-act="submit">حفظ التحويل</button>';
   }else if(kind==="settings"){
-    h=sheetHead("رأس المال والعهدة")+fld("رأس المال الأصلي",minp("capital",T.capital||""))+fld("حجم العهدة (مبلغ المصاريف)",minp("fund",T.fund||""))+
+    h=sheetHead("رأس المال والعهدة")+fld("رأس المال الأصلي",minp("capital",T.capital||""))+fld("منه عهدة للمصاريف (جزء من رأس المال)",minp("fund",T.fund||""))+
       '<button class="btn" data-act="submit">حفظ</button>';
   }
   openSheet(h);
