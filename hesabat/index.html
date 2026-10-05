@@ -303,6 +303,7 @@ function renderHome(){
   if(!DEMO&&S.user&&!isLinked())h+=linkCard();
   if(!S.settings)h+='<div class="card"><div class="sect" style="margin-top:0">ابدأ من هنا 👋</div><div class="sub" style="margin-bottom:12px">حدّد رأس المال والعهدة الأول عشان الحسابات تظبط.</div><button class="btn" data-act="form" data-kind="settings">تحديد رأس المال والعهدة</button></div>';
   h+='<div class="hero"><div class="l">السيولة الحالية (كاش + إنستاباي)</div><div class="v">'+m(T.cashNow)+'</div><div class="s">إجمالي قيمة البيزنس: '+m(T.value)+'</div>'+
+     '<div class="s">رأس المال: '+m(T.capNow)+' · منه عهدة '+m(T.fund)+' · للشغل '+m(T.capNow-T.fund)+'</div>'+
      (Math.abs(T.pOwed)>=0.5?'<div class="s">منها مستحق للشركاء: '+m(T.pOwed)+'</div>':'')+
      (T.recv>0.5?'<div class="s">ليك عند الناس (سلف): '+m(T.recv)+'</div>':'')+(T.owe>0.5?'<div class="s">عليك للناس: '+m(T.owe)+'</div>':'')+(T.sOwe>0.5?'<div class="s">منها باقي لبايعي عربيات: '+m(T.sOwe)+'</div>':'')+'</div>';
   h+='<div class="grid2" style="margin-bottom:10px">'+
