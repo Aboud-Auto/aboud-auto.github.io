@@ -499,27 +499,47 @@ async function unameGet(u){try{var d=await FS.doc("usernames/"+(await unameKey(u
 async function unameSet(u,email,uid){try{await FS.doc("usernames/"+(await unameKey(u))).set({email:email,uid:uid});return true}catch(e){return false}}
 function maskMail(m){var p=m.split("@");return (p[0].length<=2?p[0][0]+"*":p[0].slice(0,2)+"***")+"@"+p[1]}
 function isMail(u){return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(u)}
+/* ---------- invites & membership ---------- */
+var INV_KEY="hb_inv";
+function normCode(c){return String(c||"").toUpperCase().replace(/[^A-Z0-9]/g,"")}
+var INV=(function(){var q="";try{q=normCode(new URLSearchParams(location.search).get("inv"))}catch(e){}if(q){lsSet(INV_KEY,q);try{sessionStorage.setItem("hb_signup","1")}catch(e){}}return q||lsGet(INV_KEY)||""})();
+async function inviteGet(c){c=normCode(c);if(c.length<6)return null;try{var d=await FS.doc("invites/"+c).get({source:"server"});return d.exists?Object.assign({code:c},d.data()):null}catch(e){return {err:e}}}
+function devName(){var u=navigator.userAgent||"";return /iPhone|iPad|iPod/.test(u)?"آيفون":/Android/.test(u)?"أندرويد":/Macintosh/.test(u)?"ماك":/Windows/.test(u)?"ويندوز":"جهاز تاني"}
+function isStandalone(){try{return !!(navigator.standalone||matchMedia("(display-mode: standalone)").matches)}catch(e){return false}}
+async function claimInvite(code,username){
+  var u=FBA.auth().currentUser,now=Date.now(),b=FS.batch();code=normCode(code);
+  b.update(FS.doc("invites/"+code),{used:true,usedBy:u.uid,usedAt:now,username:username||""});
+  b.set(FS.doc("members/"+u.uid),{active:true,invite:code,username:username||"",email:u.email||"",joinedAt:now,lastSeen:now,opens:1,standalone:isStandalone(),device:devName()});
+  await b.commit();lsSet(INV_KEY);
+}
+function inviteErr(iv){return !iv?"كود الدعوة غلط، اتأكد منه":iv.err?(/network|unavailable/.test(iv.err.code||"")?"مفيش نت، اتأكد من الاتصال":"مقدرناش نتأكد من الكود، جرّب تاني"):iv.used?"كود الدعوة ده اتستخدم قبل كده، اطلب كود جديد":""}
+async function pubCfg(){if(pubCfg.v!==undefined)return pubCfg.v;try{var d=await FS.doc("config/public").get();pubCfg.v=d.exists?d.data():null}catch(e){pubCfg.v=null}return pubCfg.v}
+async function contactBtn(el,txt){var c=await pubCfg(),n=c&&String(c.whatsapp||"").replace(/\D/g,"");if(!n||!el)return;el.innerHTML='<a class="btn sec" style="display:block;text-decoration:none;text-align:center;margin-top:10px" target="_blank" rel="noopener" href="https://wa.me/'+n+'?text='+encodeURIComponent(txt)+'">💬 كلّمنا على واتساب'+(c.name?" ("+esc(c.name)+")":"")+'</a>'}
 function renderLogin(){
   var app=$("#app");$("#nav").innerHTML="";applyBrand();
   var head='<div class="login"><img src="'+esc(brandLogo())+'" alt=""><h2>'+esc(brandName())+'</h2>';
   if(S.auth==="checking"){app.innerHTML=head+'<div class="sub">جاري التحميل…</div></div>';return}
   app.innerHTML=head+'<div class="sub" id="loginSub">ادخل باسم المستخدم والباسورد</div>'+
-    '<form id="loginForm" autocomplete="on"><label class="fld"><span id="userLbl">اسم المستخدم</span><input type="text" name="user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>'+
+    '<form id="loginForm" autocomplete="on"><label class="fld" id="invF" style="display:none"><span>كود الدعوة</span><input type="text" name="inv" dir="ltr" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="مثلاً AB12CD34" value="'+esc(INV)+'" style="letter-spacing:2px;font-weight:700"><div class="sub" id="invInfo" style="margin-top:5px"></div></label><label class="fld"><span id="userLbl">اسم المستخدم</span><input type="text" name="user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>'+
     '<label class="fld" id="mailF" style="display:none"><span>الجيميل (عشان لو نسيت الباسورد)</span><input type="text" name="mail" inputmode="email" dir="ltr" placeholder="example@gmail.com" autocapitalize="none" autocorrect="off" spellcheck="false"></label>'+
     '<label class="fld"><span>الباسورد</span><input type="password" name="password" autocomplete="current-password" dir="ltr" required></label>'+
     '<label class="fld" id="pw2" style="display:none"><span>أكد الباسورد</span><input type="password" name="password2" autocomplete="new-password" dir="ltr"></label>'+
     '<div class="err" id="loginErr"></div><button class="btn" type="submit">دخول</button>'+
     '<button class="linkbtn" type="button" id="fpBtn">نسيت الباسورد؟</button>'+
-    '<button class="btn sec" type="button" id="modeBtn" style="margin-top:10px">أول مرة؟ اعمل حساب جديد</button></form>'+
+    '<button class="btn sec" type="button" id="modeBtn" style="margin-top:10px">أول مرة؟ معاك كود دعوة؟ اعمل حسابك</button><div id="askInv"></div></form>'+
     '<div class="demo-or"><span>أو</span></div><button class="btn sec" type="button" id="demoBtn">👀 جرّب البرنامج الأول من غير تسجيل</button><div class="sub" style="margin-top:8px">هتشوف البرنامج ببيانات تجريبية، ومفيش حاجة هتتحفظ</div></div>';
   var signup=false;
   function lbl(){return signup?"إنشاء الحساب":"دخول"}
-  $("#modeBtn").onclick=function(){signup=!signup;$("#pw2").style.display=$("#mailF").style.display=signup?"block":"none";
+  $("#modeBtn").onclick=function(){signup=!signup;$("#pw2").style.display=$("#mailF").style.display=$("#invF").style.display=signup?"block":"none";if(signup){checkInv();contactBtn($("#askInv"),"السلام عليكم، عايز كود دعوة لبرنامج حسابات المعرض")}else $("#askInv").innerHTML="";
     $("#loginForm button[type=submit]").textContent=lbl();
-    $("#loginSub").textContent=signup?"اختار اسم مستخدم وباسورد تدخلوا بيهم انت واللي شغالين معاك، وحط الجيميل بتاعك عشان لو نسيت الباسورد":"ادخل باسم المستخدم والباسورد";
+    $("#loginSub").textContent=signup?"التسجيل بكود دعوة بس. اكتب الكود اللي وصلك، واختار اسم مستخدم وباسورد تدخلوا بيهم انت واللي شغالين معاك":"ادخل باسم المستخدم والباسورد";
     $("#fpBtn").style.display=signup?"none":"block";
-    this.textContent=signup?"عندي حساب، رجوع للدخول":"أول مرة؟ اعمل حساب جديد";$("#loginErr").textContent=""};
+    this.textContent=signup?"عندي حساب، رجوع للدخول":"أول مرة؟ معاك كود دعوة؟ اعمل حسابك";$("#loginErr").textContent=""};
   $("#demoBtn").onclick=startDemo;
+  async function checkInv(){var c=normCode($("#loginForm").inv.value),el=$("#invInfo");if(!c){el.textContent="";return}if(c.length<6){el.textContent="";return}
+    el.textContent="جاري التأكد من الكود…";var iv=await inviteGet(c);if(normCode($("#loginForm").inv.value)!==c)return;var m=inviteErr(iv);
+    el.innerHTML=m?'<span style="color:var(--bad)">'+esc(m)+'</span>':'<span class="ok">✔ كود صحيح'+(iv.name?" — دعوة باسم "+esc(iv.name):"")+'</span>'}
+  $("#loginForm").inv.onchange=checkInv;
   $("#fpBtn").onclick=async function(){
     var u=$("#loginForm").user.value.trim(),er=$("#loginErr");
     if(!u){er.textContent="اكتب اسم المستخدم فوق، وبعدين اضغط «نسيت الباسورد»";return}
@@ -545,10 +565,14 @@ function renderLogin(){
       if(!isMail(mail))return fail("اكتب الجيميل صح، زي name@gmail.com");
       if(p!==f.password2.value)return fail("الباسوردين مش زي بعض");
       if(!(p.length>=8&&/[0-9]/.test(p)&&/[^0-9]/.test(p)))return fail("الباسورد لازم 8 على الأقل، فيه حروف وأرقام");
+      var code=normCode(f.inv.value);
+      if(!code)return fail("التسجيل بكود دعوة بس، اطلب الكود من صاحب البرنامج");
+      var iv=await inviteGet(code),ie=inviteErr(iv);if(ie)return fail(ie);
       if(await unameGet(u))return fail("اسم المستخدم ده محجوز، اختار اسم تاني");
       hbHold=true;
       try{var cr=await FBA.auth().createUserWithEmailAndPassword(mail,p)}catch(err){return fail(msg(err))}
       if(!(await unameSet(u,mail,cr.user.uid)))alert("الحساب اتعمل ✔ بس مؤقتًا ادخل بالجيميل بدل اسم المستخدم، وكلّم الدعم");
+      try{await claimInvite(code,u)}catch(e){alert("الحساب اتعمل ✔ بس التفعيل مكملش. ادخل تاني واكتب كود الدعوة")}
       try{await FS.doc("users/"+cr.user.uid+"/settings/account").set({username:u,email:mail})}catch(e){}
       lsSet("hb_user",u);location.reload();return;
     }
@@ -564,7 +588,26 @@ function renderLogin(){
     }catch(err){fail(msg(err))}
   };
 }
+function renderGate(){
+  var app=$("#app");$("#nav").innerHTML="";applyBrand();
+  var stopped=S.gate==="stopped",un=lsGet("hb_user")||"";
+  var h='<div class="login"><img src="'+esc(brandLogo())+'" alt=""><h2>'+esc(brandName())+'</h2>';
+  if(stopped)h+='<div class="card" style="text-align:right;margin-top:16px"><div class="sect" style="margin-top:0">⛔ الحساب ده متوقف</div><div class="sub">الحساب اتوقف من صاحب البرنامج. بياناتك محفوظة زي ما هي، وأول ما يتفعّل تاني هتلاقيها كلها.</div></div>';
+  else h+='<div class="card" style="text-align:right;margin-top:16px"><div class="sect" style="margin-top:0">🔑 حسابك محتاج تفعيل</div><div class="sub" style="margin-bottom:12px">البرنامج بقى بالدعوة بس. اكتب كود الدعوة اللي وصلك من صاحب البرنامج، وبياناتك كلها هتفضل زي ما هي.</div>'+
+    '<label class="fld"><span>كود الدعوة</span><input id="gInv" dir="ltr" autocapitalize="characters" autocorrect="off" spellcheck="false" value="'+esc(INV)+'" style="letter-spacing:2px;font-weight:700"></label><div class="err" id="gErr" style="color:var(--bad);font-size:14px;min-height:20px;margin:0 0 8px"></div><button class="btn" id="gBtn">تفعيل الحساب</button></div>';
+  h+='<div id="gContact"></div><button class="btn danger" style="margin-top:12px" id="gOut">تسجيل خروج</button></div>';
+  app.innerHTML=h;
+  contactBtn($("#gContact"),stopped?"السلام عليكم، حسابي في برنامج الحسابات متوقف"+(un?" (اسم المستخدم: "+un+")":""):"السلام عليكم، عايز كود تفعيل لحسابي في برنامج الحسابات"+(un?" (اسم المستخدم: "+un+")":""));
+  $("#gOut").onclick=function(){FBA.auth().signOut().then(function(){location.reload()})};
+  if(stopped)return;
+  $("#gBtn").onclick=async function(){
+    var b=this,er=$("#gErr"),c=normCode($("#gInv").value);if(!c){er.textContent="اكتب كود الدعوة";return}
+    b.disabled=true;er.textContent="";var iv=await inviteGet(c),ie=inviteErr(iv);if(ie){er.textContent=ie;b.disabled=false;return}
+    try{await claimInvite(c,un);location.reload()}catch(e){er.textContent="مقدرناش نفعّل الحساب، جرّب تاني";b.disabled=false}
+  };
+}
 function render(){
+  if(S.auth==="gate")return renderGate();
   if(S.auth!=="in")return renderLogin();
   var app=$("#app");
   if(S.noDb){app.innerHTML='<div class="banner">تعذر الاتصال بقاعدة البيانات. اتأكد من النت وافتح التطبيق تاني.</div>';$("#nav").innerHTML="";return}
@@ -1553,7 +1596,22 @@ async function boot(){
   try{FS.enablePersistence({synchronizeTabs:true}).catch(function(){})}catch(e){}
   var user=await new Promise(function(res){var off=FBA.auth().onAuthStateChanged(function(u){off();res(u)})});
   if(!user){S.auth="out";render();FBA.auth().onAuthStateChanged(function(u){if(u&&!hbHold)location.reload()});return}
-  S.auth="in";S.user=user;
+  S.user=user;
+  var memRef=FS.doc("members/"+user.uid),mem=null,memOk=false;
+  try{var md=await memRef.get();mem=md.exists?md.data():null;memOk=true}catch(e){}
+  if(memOk&&(!mem||mem.active!==true)){
+    S.auth="gate";S.gate=mem?"stopped":"pending";render();
+    memRef.onSnapshot(function(d){if(d.exists&&d.data().active===true)location.reload()},function(){});
+    return;
+  }
+  S.auth="in";
+  if(mem){
+    var up={lastSeen:Date.now(),opens:firebase.firestore.FieldValue.increment(1),standalone:isStandalone(),device:devName()};
+    if(user.email&&mem.email!==user.email)up.email=user.email;
+    var un0=lsGet("hb_user");if(un0&&mem.username!==un0)up.username=un0;
+    memRef.update(up).catch(function(){});
+    memRef.onSnapshot(function(d){if(d.exists&&d.data().active===false)location.reload()},function(){});
+  }
   var base="users/"+user.uid+"/";
   db={collection:function(c){return FS.collection(base+c)},doc:function(p){return FS.doc(base+p)}};
   render();
@@ -1565,7 +1623,8 @@ async function boot(){
   }
   sub("cars","cars");sub("expenses","expenses");sub("collections","cols");sub("capital","cap");sub("payouts","pay");sub("transfers","transfers");sub("ledger","ledger");
   db.doc("settings/brand").onSnapshot(function(snap){
-    S.brand=snap.exists?snap.data():null;lsSet("hb_name",S.brand&&S.brand.name);lsSet("hb_logo",S.brand&&S.brand.logo);applyBrand();refresh();
+    S.brand=snap.exists?snap.data():null;lsSet("hb_name",S.brand&&S.brand.name);
+    if(mem&&S.brand&&S.brand.name&&mem.shop!==S.brand.name){mem.shop=S.brand.name;memRef.update({shop:S.brand.name}).catch(function(){})}lsSet("hb_logo",S.brand&&S.brand.logo);applyBrand();refresh();
   },function(){});
   db.doc("settings/account").get().then(function(d){S.account=d.exists?d.data():null;refresh()}).catch(function(){});
   db.doc("settings/main").onSnapshot(function(snap){

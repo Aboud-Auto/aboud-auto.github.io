@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>إدارة العملاء</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#050505">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="إدارة العملاء">
+<link rel="manifest" href="admin-manifest.json">
+<link rel="apple-touch-icon" href="../icon-180.png">
+<link rel="icon" href="../icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<style>
+:root{
+  --bg:#050505;--card:#121110;--text:#f3ecda;--muted:#a89f8a;--line:#2b2517;
+  --primary:#d4af37;--primary-ink:#0a0804;--soft:#201a09;--silver:#b9bdc4;
+  --good:#3ddc84;--good-bg:#10291a;--bad:#ff6b60;--bad-bg:#341816;--warn:#ffb74d;--warn-bg:#33260d;
+  --shadow:0 2px 14px rgba(0,0,0,.6);color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Cairo",Tahoma,Arial,sans-serif;font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
+button,input,textarea{font-family:inherit;font-size:16px;color:var(--text)}
+#app{max-width:640px;margin:0 auto;padding:14px 16px calc(100px + env(safe-area-inset-bottom,0px))}
+.brand{display:flex;align-items:center;gap:12px;margin:4px 2px 16px}
+.brand img{width:56px;height:56px;border-radius:14px;border:1px solid var(--line);flex:none}
+.brand h1{font-size:21px;margin:0;color:var(--primary);font-weight:800;line-height:1.2}
+.sub{color:var(--muted);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+.sect{font-weight:800;margin:16px 2px 8px}
+.btn{display:block;width:100%;border:0;border-radius:14px;padding:14px 16px;background:var(--primary);color:var(--primary-ink);font-weight:700;cursor:pointer;text-align:center;text-decoration:none}
+.btn.sec{background:var(--soft);color:var(--primary)}
+.btn.danger{background:var(--bad-bg);color:var(--bad)}
+.btn.good{background:var(--good-bg);color:var(--good)}
+.btn.small{display:inline-block;width:auto;padding:9px 12px;font-size:14px;border-radius:12px}
+.btn:disabled{opacity:.5}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.row .btn.small{flex:1;min-width:0}
+.fld{display:block;margin-bottom:12px}
+.fld>span{display:block;font-size:14px;color:var(--muted);margin-bottom:5px;font-weight:600}
+.fld input,.fld textarea{width:100%;border:1px solid var(--line);border-radius:14px;padding:13px 14px;background:var(--bg)}
+.fld input:focus,.fld textarea:focus{outline:2px solid var(--primary);outline-offset:0}
+.err{color:var(--bad);font-size:14px;min-height:20px;margin:4px 0 10px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+.tile .tl{font-size:13px;color:var(--muted)}.tile .tv{font-size:24px;font-weight:800;color:var(--primary)}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.kv:last-of-type{border-bottom:0}.kv span{color:var(--muted)}.kv b{font-weight:700;text-align:left;overflow-wrap:anywhere}
+.ch{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}
+.ch .nm{font-weight:800;font-size:17px}
+.badge{flex:none;font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px}
+.b-on{background:var(--good-bg);color:var(--good)}.b-off{background:var(--bad-bg);color:var(--bad)}.b-wait{background:var(--warn-bg);color:var(--warn)}
+.code{direction:ltr;font-family:ui-monospace,Menlo,monospace;letter-spacing:2px;font-weight:800;color:var(--primary)}
+.banner{background:var(--warn-bg);color:var(--warn);border-radius:14px;padding:14px;margin-bottom:12px;font-weight:600;font-size:14px}
+.empty{text-align:center;color:var(--muted);padding:26px 10px}
+.search{width:100%;border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--card);margin-bottom:12px}
+.nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0b0a08;border-top:1px solid #3a2f12;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));z-index:20}
+.nav button{flex:1;background:none;border:0;color:var(--muted);padding:6px 2px;font-size:12px;font-weight:700;cursor:pointer;position:relative}
+.nav button .i{display:block;font-size:20px}
+.nav button.on{color:var(--primary)}
+.nav .dot{position:absolute;top:2px;left:calc(50% - 22px);background:var(--bad);color:#fff;border-radius:99px;font-size:11px;min-width:18px;padding:0 5px}
+pre.rules{direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:11.5px;max-height:260px;overflow:auto;margin:10px 0}
+ol.steps{padding-inline-start:20px;margin:6px 0;font-size:14px}ol.steps li{margin-bottom:4px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:#1b160a;color:var(--text);border:1px solid var(--primary);padding:11px 18px;border-radius:14px;z-index:60;font-weight:600;max-width:90%;text-align:center;display:none}
+.toast.show{display:block}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:40}
+.ov.show{display:flex}
+.sheet{background:var(--card);border:1px solid var(--line);border-bottom:0;border-radius:22px 22px 0 0;width:100%;max-width:640px;max-height:92vh;overflow:auto;padding:18px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+.sh{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.sh h2{margin:0;font-size:19px}
+.x{background:var(--soft);border:0;color:var(--primary);width:36px;height:36px;border-radius:12px;font-size:16px;cursor:pointer}
+.login{max-width:380px;margin:8vh auto 0;text-align:center}.login img{width:110px;height:110px;border-radius:24px;margin-bottom:8px}.login h2{color:var(--primary);margin:4px 0 2px}.login form{text-align:right;margin-top:18px}
+</style>
+</head>
+<body>
+<div id="app"><div class="empty">جاري التحميل…</div></div>
+<nav class="nav" id="nav" style="display:none"></nav>
+<div class="ov" id="ov"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+<script>
+(function(){
+"use strict";
+var APP_URL="https://aboud-auto.github.io/hesabat/";
+var $=function(s){return document.querySelector(s)};
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function toast(t){var el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(function(){el.classList.remove("show")},2600)}
+function fdate(ms){if(!ms)return "—";var d=new Date(ms);return d.getDate()+"/"+(d.getMonth()+1)+"/"+d.getFullYear()}
+function ago(ms){if(!ms)return "—";var s=(Date.now()-ms)/1000;if(s<90)return "دلوقتي";var m=s/60;if(m<60)return "من "+Math.round(m)+" دقيقة";var h=m/60;if(h<24)return "من "+Math.round(h)+" ساعة";var d=h/24;if(d<2)return "امبارح";if(d<30)return "من "+Math.round(d)+" يوم";return fdate(ms)}
+function waNum(p){var d=String(p||"").replace(/\D/g,"");if(d.indexOf("00")===0)d=d.slice(2);if(/^01\d{9}$/.test(d))d="2"+d;return d}
+function waHref(phone,text){var n=waNum(phone);return "https://wa.me/"+(n||"")+"?text="+encodeURIComponent(text)}
+function newCode(){var A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",r=new Uint8Array(8),s="";crypto.getRandomValues(r);for(var i=0;i<8;i++)s+=A[r[i]%A.length];return s}
+function inviteLink(c){return APP_URL+"?inv="+c}
+function inviteMsg(iv){return "أهلاً "+(iv.name||"")+" 👋\nده لينك برنامج حسابات المعرض، إهداء من عبود أوتو:\n"+inviteLink(iv.code)+"\n\nكود الدعوة: "+iv.code+"\nالكود ده ليك انت بس، وبيشتغل مرة واحدة."}
+async function copy(t){try{await navigator.clipboard.writeText(t);toast("اتنسخ ✔")}catch(e){prompt("انسخ من هنا:",t)}}
+function openSheet(h){$("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=0}
+function closeSheet(){$("#ov").classList.remove("show")}
+function head(t){return '<div class="sh"><h2>'+t+'</h2><button class="x" data-act="close">✕</button></div>'}
+function code(err){return err&&err.code||""}
+
+var FBA,FS,ME=null;
+var S={tab:"mem",members:[],invites:[],pending:null,cfg:null,err:null,loaded:{},q:""};
+
+/* ---------- rules ---------- */
+function rulesText(uid){return [
+"rules_version = '2';",
+"service cloud.firestore {",
+"  match /databases/{database}/documents {",
+"    function signedIn() { return request.auth != null; }",
+"    function isAdmin() { return signedIn() && request.auth.uid == '"+uid+"'; }",
+"    function memberPath(uid) { return /databases/$(database)/documents/members/$(uid); }",
+"    function isActive() {",
+"      return exists(memberPath(request.auth.uid)) && get(memberPath(request.auth.uid)).data.active == true;",
+"    }",
+"",
+"    // بيانات كل حساب: لصاحبه بس، ولازم يكون متفعّل (أو الأدمن)",
+"    match /users/{uid}/{rest=**} {",
+"      allow read, write: if signedIn() && request.auth.uid == uid && (isAdmin() || isActive());",
+"    }",
+"    // الأدمن يشوف اسم المستخدم واسم المعرض بس",
+"    match /users/{uid}/settings/{d} {",
+"      allow read: if isAdmin() && d in ['account', 'brand'];",
+"    }",
+"    match /usernames/{k} {",
+"      allow get: if true;",
+"      allow list, delete: if isAdmin();",
+"      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;",
+"      allow update: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid);",
+"    }",
+"    match /invites/{code} {",
+"      allow get: if true;",
+"      allow list, create, delete: if isAdmin();",
+"      allow update: if isAdmin() || (signedIn()",
+"        && resource.data.used == false",
+"        && request.resource.data.used == true",
+"        && request.resource.data.usedBy == request.auth.uid",
+"        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used', 'usedBy', 'usedAt', 'username'])",
+"        && existsAfter(memberPath(request.auth.uid)));",
+"    }",
+"    match /members/{uid} {",
+"      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);",
+"      allow create: if isAdmin() || (signedIn() && request.auth.uid == uid",
+"        && request.resource.data.active == true",
+"        && request.resource.data.invite is string",
+"        && getAfter(/databases/$(database)/documents/invites/$(request.resource.data.invite)).data.usedBy == uid);",
+"      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid",
+"        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen', 'opens', 'standalone', 'device', 'shop', 'username', 'email']));",
+"      allow delete: if isAdmin();",
+"    }",
+"    match /config/{d} {",
+"      allow read: if true;",
+"      allow write: if isAdmin();",
+"    }",
+"  }",
+"}"].join("\n")}
+
+/* ---------- data ---------- */
+function invByUid(){var m={};S.invites.forEach(function(i){if(i.usedBy)m[i.usedBy]=i});return m}
+function memberName(m,im){var iv=im[m.id]||{};return iv.name||m.username||m.shop||"عميل"}
+async function loadPending(){
+  S.pending=null;render();
+  try{
+    var snap=await FS.collection("usernames").get(),have={},out=[],seen={};
+    S.members.forEach(function(m){have[m.id]=1});
+    snap.docs.forEach(function(d){var x=d.data();if(x.uid&&!have[x.uid]&&x.uid!==ME.uid&&!seen[x.uid]){seen[x.uid]=1;out.push({uid:x.uid,email:x.email||""})}});
+    await Promise.all(out.map(async function(p){
+      try{var a=await FS.doc("users/"+p.uid+"/settings/account").get();if(a.exists)p.username=a.data().username}catch(e){}
+      try{var b=await FS.doc("users/"+p.uid+"/settings/brand").get();if(b.exists)p.shop=b.data().name}catch(e){}
+    }));
+    S.pending=out;
+  }catch(e){S.pending=[];S.pendErr=e}
+  render();
+}
+
+/* ---------- views ---------- */
+function brandHead(t,s){return '<div class="brand"><img src="../icon-180.png" alt=""><div><h1>'+t+'</h1>'+(s?'<div class="sub">'+s+'</div>':'')+'</div></div>'}
+function tile(l,v){return '<div class="tile"><div class="tl">'+l+'</div><div class="tv">'+v+'</div></div>'}
+function kv(l,v){return '<div class="kv"><span>'+l+'</span><b>'+v+'</b></div>'}
+function rulesBanner(){
+  if(!S.err)return "";
+  return '<div class="banner">'+(/permission/.test(code(S.err))?"لسه القواعد الجديدة مش متركّبة في Firebase، أو الحساب ده مش حساب الأدمن. روح «الإعدادات» وركّب القواعد.":"مشكلة في تحميل البيانات، اتأكد من النت.")+'</div>';
+}
+function renderMembers(){
+  var im=invByUid(),wk=Date.now()-7*864e5,ms=S.members.slice().sort(function(a,b){return (b.lastSeen||0)-(a.lastSeen||0)});
+  var act=ms.filter(function(m){return m.active}).length,week=ms.filter(function(m){return m.active&&(m.lastSeen||0)>wk}).length,inst=ms.filter(function(m){return m.standalone}).length;
+  var h=brandHead("العملاء","مين سجّل، ومين بيفتح البرنامج")+rulesBanner()+
+    '<div class="tiles">'+tile("كل العملاء",ms.length)+tile("متفعّلين",act)+tile("فتحوا آخر 7 أيام",week)+tile("نزّلوه على الشاشة",inst)+'</div>'+
+    '<button class="btn" data-act="newInv">➕ دعوة عميل جديد</button>';
+  var q=S.q.trim().toLowerCase();
+  if(ms.length>4)h+='<input class="search" id="q" placeholder="🔎 دوّر بالاسم أو المعرض أو التليفون" value="'+esc(S.q)+'" style="margin-top:12px">';
+  if(q)ms=ms.filter(function(m){var iv=im[m.id]||{};return [memberName(m,im),m.username,m.shop,m.email,iv.phone].join(" ").toLowerCase().indexOf(q)>=0});
+  h+='<div class="sect">العملاء ('+ms.length+')</div>';
+  if(!S.loaded.members)h+='<div class="empty">جاري التحميل…</div>';
+  else if(!ms.length)h+='<div class="empty">'+(q?"مفيش نتايج":"لسه مفيش عملاء. ابعت أول دعوة من الزرار اللي فوق.")+'</div>';
+  ms.forEach(function(m){
+    var iv=im[m.id]||{},mail=m.email&&!/@hesabat\.app$/.test(m.email)?m.email:"مش مربوط بجيميل";
+    h+='<div class="card"><div class="ch"><div><div class="nm">'+esc(memberName(m,im))+'</div>'+(m.shop?'<div class="sub">🏪 '+esc(m.shop)+'</div>':'')+'</div><span class="badge '+(m.active?"b-on":"b-off")+'">'+(m.active?"شغّال":"متوقف")+'</span></div>'+
+      kv("اسم المستخدم",esc(m.username||"—"))+kv("الجيميل",'<span dir="ltr">'+esc(mail)+'</span>')+(iv.phone?kv("التليفون",'<span dir="ltr">'+esc(iv.phone)+'</span>'):"")+
+      kv("سجّل يوم",fdate(m.joinedAt))+kv("آخر مرة فتح",ago(m.lastSeen))+kv("فتح البرنامج",(m.opens||0)+" مرة")+
+      kv("نزّله على الشاشة",m.standalone?"✔ أيوه":"لأ (بيفتحه من المتصفح)")+(m.device?kv("الجهاز",esc(m.device)):"")+kv("دخل بكود",m.invite==="admin"?"اتفعّل يدوي":'<span class="code" style="letter-spacing:1px">'+esc(m.invite||"—")+'</span>')+
+      '<div class="row">'+(iv.phone?'<a class="btn small sec" target="_blank" rel="noopener" href="'+esc(waHref(iv.phone,"أهلاً "+(iv.name||"")))+'">💬 واتساب</a>':'')+
+      (m.active?'<button class="btn small danger" data-act="stop" data-id="'+m.id+'">⛔ إيقاف الحساب</button>':'<button class="btn small good" data-act="start" data-id="'+m.id+'">✔ تفعيل تاني</button>')+'</div></div>';
+  });
+  return h;
+}
+function invCard(iv){
+  if(iv.used){return '<div class="card"><div class="ch"><div class="nm">'+esc(iv.name||"—")+'</div><span class="badge b-on">اتستخدمت</span></div>'+kv("الكود",'<span class="code">'+esc(iv.code)+'</span>')+kv("سجّل باسم",esc(iv.username||"—"))+kv("يوم",fdate(iv.usedAt))+'</div>'}
+  return '<div class="card"><div class="ch"><div><div class="nm">'+esc(iv.name||"—")+'</div>'+(iv.phone?'<div class="sub" dir="ltr" style="text-align:right">'+esc(iv.phone)+'</div>':'')+'</div><span class="badge b-wait">مستنية</span></div>'+
+    kv("الكود",'<span class="code">'+esc(iv.code)+'</span>')+kv("اتعملت يوم",fdate(iv.createdAt))+
+    '<div class="row"><a class="btn small" target="_blank" rel="noopener" href="'+esc(waHref(iv.phone,inviteMsg(iv)))+'">💬 ابعتها واتساب</a><button class="btn small sec" data-act="copyInv" data-id="'+iv.code+'">📋 نسخ</button><button class="btn small danger" data-act="delInv" data-id="'+iv.code+'">إلغاء</button></div></div>';
+}
+function renderInvites(){
+  var open=S.invites.filter(function(i){return !i.used}).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)});
+  var used=S.invites.filter(function(i){return i.used}).sort(function(a,b){return (b.usedAt||0)-(a.usedAt||0)});
+  var h=brandHead("الدعوات","كل دعوة بكود، وبتشتغل لعميل واحد مرة واحدة")+rulesBanner()+'<button class="btn" data-act="newInv">➕ دعوة جديدة</button>';
+  h+='<div class="sect">مستنية العميل يسجّل ('+open.length+')</div>'+(open.length?open.map(invCard).join(""):'<div class="empty">مفيش دعوات مستنية</div>');
+  if(used.length)h+='<div class="sect">اتستخدمت ('+used.length+')</div>'+used.map(invCard).join("");
+  return h;
+}
+function renderPending(){
+  var h=brandHead("محتاجين تفعيل","حسابات اتعملت قبل نظام الدعوات، أو من غير كود")+rulesBanner();
+  h+='<button class="btn sec" style="margin-bottom:12px" data-act="reloadPend">🔄 تحديث القائمة</button>';
+  if(S.pending===null)return h+'<div class="empty">جاري التحميل…</div>';
+  if(S.pendErr&&!S.pending.length)return h+'<div class="empty">مقدرناش نجيب القائمة. لو لسه ماركبتش القواعد، ركّبها الأول من «الإعدادات».</div>';
+  if(!S.pending.length)return h+'<div class="empty">مفيش حد مستني تفعيل ✔</div>';
+  S.pending.forEach(function(p){
+    h+='<div class="card"><div class="ch"><div><div class="nm">'+esc(p.username||"بدون اسم مستخدم")+'</div>'+(p.shop?'<div class="sub">🏪 '+esc(p.shop)+'</div>':'')+'</div><span class="badge b-wait">مستني</span></div>'+
+      kv("الإيميل",'<span dir="ltr">'+esc(/@hesabat\.app$/.test(p.email)?"مش مربوط بجيميل":p.email)+'</span>')+
+      '<div class="row"><button class="btn small good" data-act="approve" data-id="'+p.uid+'">✔ تفعيل</button><button class="btn small danger" data-act="reject" data-id="'+p.uid+'">⛔ رفض</button></div></div>';
+  });
+  return h;
+}
+function renderSettings(){
+  var c=S.cfg||{};
+  return brandHead("الإعدادات","")+
+    '<div class="card"><div class="sect" style="margin-top:0">💬 رقم الواتساب بتاعك</div><div class="sub" style="margin-bottom:10px">بيظهر للناس في صفحة التسجيل عشان يطلبوا منك كود دعوة، وللعميل اللي حسابه متوقف.</div>'+
+    '<label class="fld"><span>الرقم</span><input id="cfgWa" inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" value="'+esc(c.whatsapp||"")+'"></label>'+
+    '<label class="fld"><span>الاسم اللي يظهر</span><input id="cfgName" placeholder="عبود أوتو" value="'+esc(c.name||"")+'"></label><button class="btn" data-act="saveCfg">حفظ</button></div>'+
+    '<div class="card"><div class="sect" style="margin-top:0">🔒 قفل التسجيل (قواعد Firebase)</div><div class="sub">دي اللي بتمنع أي حد يسجّل أو يفتح البرنامج من غير دعوة منك، حتى لو حد عنده اللينك. اعملها مرة واحدة بس:</div>'+
+    '<ol class="steps"><li>اضغط «نسخ القواعد» تحت.</li><li>افتح <a style="color:var(--primary)" target="_blank" rel="noopener" href="https://console.firebase.google.com/project/aboud-auto/firestore/rules">Firebase → Firestore → Rules</a>.</li><li>امسح كل اللي مكتوب والصق القواعد مكانه.</li><li>اضغط <b>Publish</b>.</li></ol>'+
+    '<button class="btn" data-act="copyRules">📋 نسخ القواعد</button><pre class="rules">'+esc(rulesText(ME.uid))+'</pre>'+
+    '<div class="sub">القواعد دي متظبطة على حسابك انت ('+esc(ME.email||"")+') كأدمن، وبرنامج عبود أوتو بتاعك هيفضل شغال عادي.</div></div>'+
+    '<div class="card">'+kv("داخل بـ",'<span dir="ltr">'+esc(ME.email||"")+'</span>')+'<button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>';
+}
+function renderNav(){
+  var pc=S.pending&&S.pending.length,items=[["mem","👥","العملاء"],["inv","✉️","الدعوات"],["pend","🔑","التفعيل"],["set","⚙️","الإعدادات"]];
+  $("#nav").style.display="flex";
+  $("#nav").innerHTML=items.map(function(x){return '<button data-tab="'+x[0]+'" class="'+(S.tab===x[0]?"on":"")+'"><span class="i">'+x[1]+'</span>'+x[2]+(x[0]==="pend"&&pc?'<span class="dot">'+pc+'</span>':'')+'</button>'}).join("");
+}
+function render(){
+  if(!ME)return renderLogin();
+  var a=document.activeElement,qf=a&&a.id==="q",pos=qf?a.selectionStart:0;
+  $("#app").innerHTML=S.tab==="inv"?renderInvites():S.tab==="pend"?renderPending():S.tab==="set"?renderSettings():renderMembers();
+  renderNav();
+  if(qf&&$("#q")){$("#q").focus();try{$("#q").setSelectionRange(pos,pos)}catch(e){}}
+}
+function renderLogin(){
+  $("#nav").style.display="none";
+  $("#app").innerHTML='<div class="login"><img src="../icon-180.png" alt=""><h2>إدارة العملاء</h2><div class="sub">ادخل بحساب عبود أوتو بتاعك</div>'+
+    '<form id="lf"><label class="fld"><span>الإيميل</span><input name="e" type="email" dir="ltr" autocomplete="username" autocapitalize="none" required></label>'+
+    '<label class="fld"><span>الباسورد</span><input name="p" type="password" dir="ltr" autocomplete="current-password" required></label><div class="err" id="le"></div><button class="btn">دخول</button></form></div>';
+  $("#lf").onsubmit=async function(e){
+    e.preventDefault();var f=e.target,b=f.querySelector("button");b.disabled=true;$("#le").textContent="";
+    try{await FBA.auth().signInWithEmailAndPassword(f.e.value.trim(),f.p.value)}
+    catch(err){b.disabled=false;var c=code(err);$("#le").textContent=/network/.test(c)?"مفيش نت":/too-many/.test(c)?"محاولات كتير، استنى شوية":"الإيميل أو الباسورد غلط"}
+  };
+}
+
+/* ---------- actions ---------- */
+function openNewInvite(){
+  openSheet(head("دعوة عميل جديد")+'<label class="fld"><span>اسم العميل</span><input id="nName" placeholder="مثلاً: معرض النور - أحمد"></label>'+
+    '<label class="fld"><span>رقم الواتساب بتاعه (اختياري)</span><input id="nPhone" inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx"></label>'+
+    '<div class="err" id="nErr"></div><button class="btn" data-act="createInv">اعمل الدعوة</button>');
+  setTimeout(function(){var i=$("#nName");if(i)i.focus()},150);
+}
+async function createInv(btn){
+  var name=$("#nName").value.trim(),phone=$("#nPhone").value.trim();
+  if(!name){$("#nErr").textContent="اكتب اسم العميل";return}
+  btn.disabled=true;
+  var iv={code:newCode(),name:name,phone:phone,createdAt:Date.now(),used:false};
+  try{await FS.doc("invites/"+iv.code).set({name:iv.name,phone:iv.phone,createdAt:iv.createdAt,used:false})}
+  catch(e){btn.disabled=false;$("#nErr").textContent=/permission/.test(code(e))?"مش مسموح، اتأكد إن القواعد متركّبة وإنك داخل بحساب الأدمن":"تعذر الحفظ، جرّب تاني";return}
+  openSheet(head("الدعوة جاهزة ✔")+'<div class="card" style="text-align:center"><div class="sub">كود الدعوة لـ '+esc(name)+'</div><div class="code" style="font-size:30px;margin:6px 0">'+iv.code+'</div><div class="sub" dir="ltr" style="overflow-wrap:anywhere">'+esc(inviteLink(iv.code))+'</div></div>'+
+    '<a class="btn" target="_blank" rel="noopener" href="'+esc(waHref(phone,inviteMsg(iv)))+'">💬 ابعتها على واتساب</a>'+
+    '<button class="btn sec" style="margin-top:10px" data-act="copyMsg" data-id="'+iv.code+'">📋 نسخ الرسالة</button>'+
+    '<div class="sub" style="margin-top:12px">العميل يفتح اللينك ويعمل حسابه، والكود بيتقفل بعد أول استخدام.</div>');
+  S.lastInv=iv;
+}
+async function setActive(uid,on){
+  try{await FS.doc("members/"+uid).update({active:on});toast(on?"اتفعّل ✔":"اتوقف")}catch(e){toast("تعذر الحفظ")}
+}
+async function approve(uid,on){
+  var p=(S.pending||[]).find(function(x){return x.uid===uid})||{};
+  try{
+    await FS.doc("members/"+uid).set({active:on,invite:"admin",username:p.username||"",email:p.email||"",shop:p.shop||"",joinedAt:Date.now(),opens:0});
+    S.pending=S.pending.filter(function(x){return x.uid!==uid});render();toast(on?"اتفعّل ✔":"اترفض");
+  }catch(e){toast("تعذر الحفظ")}
+}
+
+document.addEventListener("click",async function(e){
+  var tb=e.target.closest("[data-tab]");
+  if(tb){S.tab=tb.dataset.tab;if(S.tab==="pend"&&S.pending===null)loadPending();render();window.scrollTo(0,0);return}
+  if(e.target.id==="ov"){closeSheet();return}
+  var t=e.target.closest("[data-act]");if(!t)return;
+  var a=t.dataset.act,id=t.dataset.id;
+  if(a==="close")closeSheet();
+  else if(a==="newInv")openNewInvite();
+  else if(a==="createInv")createInv(t);
+  else if(a==="copyMsg")copy(inviteMsg(S.lastInv));
+  else if(a==="copyInv"){var iv=S.invites.find(function(x){return x.code===id});if(iv)copy(inviteMsg(iv))}
+  else if(a==="delInv"){if(confirm("تلغي الدعوة دي؟ الكود مش هيشتغل تاني."))try{await FS.doc("invites/"+id).delete();toast("اتلغت")}catch(err){toast("تعذر الإلغاء")}}
+  else if(a==="stop"){if(confirm("توقف الحساب ده؟ مش هيقدر يفتح البرنامج لحد ما تفعّله تاني، وبياناته هتفضل محفوظة."))setActive(id,false)}
+  else if(a==="start")setActive(id,true);
+  else if(a==="approve")approve(id,true);
+  else if(a==="reject"){if(confirm("ترفض الحساب ده؟ مش هيقدر يفتح البرنامج."))approve(id,false)}
+  else if(a==="reloadPend")loadPending();
+  else if(a==="copyRules")copy(rulesText(ME.uid));
+  else if(a==="saveCfg"){try{await FS.doc("config/public").set({whatsapp:$("#cfgWa").value.trim(),name:$("#cfgName").value.trim()});toast("اتحفظ ✔")}catch(err){toast(/permission/.test(code(err))?"ركّب القواعد الأول":"تعذر الحفظ")}}
+  else if(a==="logout"){if(confirm("تسجيل خروج؟"))FBA.auth().signOut().then(function(){location.reload()})}
+});
+document.addEventListener("input",function(e){if(e.target.id==="q"){S.q=e.target.value;render()}});
+
+/* ---------- boot ---------- */
+FBA=firebase.initializeApp({
+  apiKey:"AIzaSyBhedAxeakhHhVJc1GHMNd277is_VoIDL4",
+  authDomain:"aboud-auto.firebaseapp.com",
+  projectId:"aboud-auto",
+  storageBucket:"aboud-auto.firebasestorage.app",
+  messagingSenderId:"1075120993023",
+  appId:"1:1075120993023:web:5609b07289841a0bd3d2ca"
+},"admin");
+FS=FBA.firestore();
+FBA.auth().onAuthStateChanged(function(u){
+  if(!u){ME=null;render();return}
+  if(ME)return;ME=u;render();
+  function onErr(e){S.err=e;render()}
+  FS.collection("members").onSnapshot(function(s){S.err=null;S.members=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});S.loaded.members=true;
+    if(S.pending)S.pending=S.pending.filter(function(p){return !S.members.some(function(m){return m.id===p.uid})});render()},onErr);
+  FS.collection("invites").onSnapshot(function(s){S.invites=s.docs.map(function(d){return Object.assign({code:d.id},d.data())});render()},onErr);
+  FS.doc("config/public").get().then(function(d){S.cfg=d.exists?d.data():{};render()}).catch(function(){});
+  loadPending();
+});
+})();
+</script>
+</body>
+</html>
