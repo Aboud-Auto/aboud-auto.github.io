@@ -299,7 +299,7 @@ function renderNav(){
 }
 
 function renderHome(){
-  var T=calc(),D=dayCalc(todayStr()),h="";
+  var T=calc(),D=dayCalc(todayStr()),h=subCard();
   if(!DEMO&&S.user&&!isLinked())h+=linkCard();
   if(!S.settings)h+='<div class="card"><div class="sect" style="margin-top:0">ابدأ من هنا 👋</div><div class="sub" style="margin-bottom:12px">حدّد رأس المال والعهدة الأول عشان الحسابات تظبط.</div><button class="btn" data-act="form" data-kind="settings">تحديد رأس المال والعهدة</button></div>';
   h+='<div class="hero"><div class="l">السيولة الحالية (كاش + إنستاباي)</div><div class="v">'+m(T.cashNow)+'</div><div class="s">إجمالي قيمة البيزنس: '+m(T.value)+'</div>'+
@@ -465,7 +465,7 @@ function renderLoan(){
 
 function renderSet(){
   var T=calc();
-  return '<div class="top"><h1>الإعدادات</h1></div>'+
+  return '<div class="top"><h1>الإعدادات</h1></div>'+subInfo()+
     '<div class="card"><div class="kv"><span>رأس المال الأصلي</span><b>'+m(T.capital)+'</b></div><div class="kv"><span>حجم العهدة</span><b>'+m(T.fund)+'</b></div>'+
     '<button class="btn sec" style="margin-top:12px" data-act="form" data-kind="settings">تعديل</button></div>'+
     '<div class="card"><div class="kv"><span>إجمالي المحصّل كاش</span><b>'+m(T.cashTot)+'</b></div><div class="kv"><span>إجمالي المحصّل إنستاباي</span><b>'+m(T.instaTot)+'</b></div>'+
@@ -508,11 +508,52 @@ function devName(){var u=navigator.userAgent||"";return /iPhone|iPad|iPod/.test(
 function isStandalone(){try{return !!(navigator.standalone||matchMedia("(display-mode: standalone)").matches)}catch(e){return false}}
 async function claimInvite(code,username){
   var u=FBA.auth().currentUser,now=Date.now(),b=FS.batch();code=normCode(code);
+  var iv=await inviteGet(code);if(!iv||iv.err)throw (iv&&iv.err)||new Error("invite");
+  var mem={active:true,invite:code,username:username||"",email:u.email||"",joinedAt:now,lastSeen:now,opens:1,standalone:isStandalone(),device:devName()};
+  if(iv.serial)mem.serial=iv.serial;if(iv.plan)mem.plan=iv.plan;if(iv.days>0)mem.expiresAt=now+iv.days*864e5;
   b.update(FS.doc("invites/"+code),{used:true,usedBy:u.uid,usedAt:now,username:username||""});
-  b.set(FS.doc("members/"+u.uid),{active:true,invite:code,username:username||"",email:u.email||"",joinedAt:now,lastSeen:now,opens:1,standalone:isStandalone(),device:devName()});
+  b.set(FS.doc("members/"+u.uid),mem);
   await b.commit();lsSet(INV_KEY);
 }
 function inviteErr(iv){return !iv?"كود الدعوة غلط، اتأكد منه":iv.err?(/network|unavailable/.test(iv.err.code||"")?"مفيش نت، اتأكد من الاتصال":"مقدرناش نتأكد من الكود، جرّب تاني"):iv.used?"كود الدعوة ده اتستخدم قبل كده، اطلب كود جديد":""}
+/* ---------- subscription ---------- */
+var PLAN_NAMES={monthly:"شهري",yearly:"سنوي",lifetime:"مدى الحياة"};
+function serialStr(n){return n?"AA-"+String(n).padStart(4,"0"):""}
+function fdateS(ms){var d=new Date(ms);return d.getDate()+"/"+(d.getMonth()+1)+"/"+d.getFullYear()}
+function dayW(n){n=Math.abs(n);return n===1?"يوم واحد":n===2?"يومين":n<=10?n+" أيام":n+" يوم"}
+function subLeft(){var x=S.mem&&S.mem.expiresAt;return x?Math.ceil((x-Date.now())/864e5):null}
+function subExpired(){var x=S.mem&&S.mem.expiresAt;return !DEMO&&!!x&&x<=Date.now()}
+function subWa(txt){var c=pubCfg.v,n=c&&String(c.whatsapp||"").replace(/\D/g,"");return n?'<a class="btn sec" style="display:block;text-decoration:none;text-align:center;margin-top:10px" target="_blank" rel="noopener" href="https://wa.me/'+n+'?text='+encodeURIComponent(txt)+'">💬 كلّمنا نجدد'+(c.name?" ("+esc(c.name)+")":"")+'</a>':""}
+function subMsg(){var sr=serialStr(S.mem&&S.mem.serial),un=lsGet("hb_user")||"";return "السلام عليكم، عايز أجدد اشتراك برنامج الحسابات"+(sr?" (السيريال: "+sr+")":un?" (اسم المستخدم: "+un+")":"")}
+/* تنبيه في الرئيسية: لما الاشتراك يخلص، أو فاضل عليه 7 أيام أو أقل */
+function subCard(){
+  if(DEMO||!S.mem||!S.mem.expiresAt)return "";
+  var l=subLeft();
+  if(S.expired)return '<div class="card" style="border-color:var(--bad);background:var(--bad-bg)"><div class="sect" style="margin-top:0;color:var(--bad)">⛔ اشتراكك خلص يوم '+fdateS(S.mem.expiresAt)+'</div><div class="sub">كل بياناتك محفوظة وتقدر تشوفها وتطلع تقاريرها، بس مش هتقدر تضيف أو تعدّل حاجة لحد ما تجدد. أول ما يتجدد البرنامج هيرجع لوحده.</div>'+subWa(subMsg())+'</div>';
+  if(l<=7)return '<div class="card" style="border-color:var(--warn);background:var(--warn-bg)"><div class="sect" style="margin-top:0;color:var(--warn)">⏳ اشتراكك هيخلص '+(l<=1?"بكرة":"خلال "+dayW(l))+' ('+fdateS(S.mem.expiresAt)+')</div><div class="sub">جدده قبلها عشان الشغل مايقفش.</div>'+subWa(subMsg())+'</div>';
+  return "";
+}
+/* كارت الاشتراك في الإعدادات */
+function subInfo(){
+  if(DEMO||!S.mem)return "";
+  var x=S.mem,l=subLeft(),st=!x.expiresAt?(x.plan==="lifetime"?"♾️ مدى الحياة":"مفتوح"):S.expired?'<span style="color:var(--bad)">خلص يوم '+fdateS(x.expiresAt)+'</span>':fdateS(x.expiresAt)+' <span style="color:'+(l<=7?"var(--warn)":"var(--muted)")+'">(فاضل '+dayW(l)+')</span>';
+  return '<div class="card"><div class="sect" style="margin-top:0">🔑 اشتراكك</div>'+(x.serial?'<div class="kv"><span>رقم السيريال</span><b dir="ltr" style="letter-spacing:1px">'+serialStr(x.serial)+'</b></div>':'')+
+    (x.plan?'<div class="kv"><span>نوع الاشتراك</span><b>'+(PLAN_NAMES[x.plan]||"")+'</b></div>':'')+'<div class="kv"><span>ينتهي</span><b>'+st+'</b></div>'+(x.expiresAt&&(S.expired||l<=30)?subWa(subMsg()):"")+'</div>';
+}
+/* لما الاشتراك يخلص: أي حفظ في بيانات العميل يتمنع من هنا كمان (القواعد بتمنعه أصلاً من السيرفر) */
+var subLocked=false;
+function lockWrites(){
+  if(subLocked)return;subLocked=true;
+  var F=firebase.firestore;
+  function deny(){setTimeout(function(){toast("اشتراكك خلص، البرنامج دلوقتي للعرض بس. جدده عشان تضيف وتعدّل")},40);var e=new Error("expired");e.code="expired";return Promise.reject(e)}
+  function wrap(P,names,check){names.forEach(function(n){var o=P[n];if(!o)return;P[n]=function(){if(S.expired&&check(this))return deny();return o.apply(this,arguments)}})}
+  function mine(r){return /^users\//.test(r.path||"")}
+  try{
+    wrap(F.DocumentReference.prototype,["set","update","delete"],mine);
+    wrap(F.CollectionReference.prototype,["add"],mine);
+    wrap(F.WriteBatch.prototype,["commit"],function(){return true});
+  }catch(e){/* لو حصل أي حاجة هنا البرنامج يكمّل عادي، والقواعد على السيرفر هي اللي بتمنع */}
+}
 async function pubCfg(){if(pubCfg.v!==undefined)return pubCfg.v;try{var d=await FS.doc("config/public").get();pubCfg.v=d.exists?d.data():null}catch(e){pubCfg.v=null}return pubCfg.v}
 async function contactBtn(el,txt){var c=await pubCfg(),n=c&&String(c.whatsapp||"").replace(/\D/g,"");if(!n||!el)return;el.innerHTML='<a class="btn sec" style="display:block;text-decoration:none;text-align:center;margin-top:10px" target="_blank" rel="noopener" href="https://wa.me/'+n+'?text='+encodeURIComponent(txt)+'">💬 كلّمنا على واتساب'+(c.name?" ("+esc(c.name)+")":"")+'</a>'}
 function renderLogin(){
@@ -1478,7 +1519,7 @@ async function linkSave(btn){
 var BK_KEEP=30,bkBusy=false,bkLastJson=null,bkBooted=false;
 function bkPayload(){var d={};Object.keys(COLLS).forEach(function(k){d[COLLS[k]]=S[k]});return {app:"hesabat",version:1,at:new Date().toISOString(),settings:S.settings||null,brand:S.brand||null,data:d}}
 async function cloudBackup(reason,force){
-  if(DEMO||!S.user||!allLoaded()||bkBusy)return false;
+  if(DEMO||!S.user||!allLoaded()||bkBusy||S.expired)return false;
   var j=bkPayload(),core=JSON.stringify({s:j.settings,b:j.brand,d:j.data});
   var lk="hb_bk_"+S.user.uid,last=+lsGet(lk)||0,now=Date.now();
   if(!force){
@@ -1604,13 +1645,19 @@ async function boot(){
     memRef.onSnapshot(function(d){if(d.exists&&d.data().active===true)location.reload()},function(){});
     return;
   }
-  S.auth="in";
+  S.auth="in";S.mem=mem;S.expired=subExpired();lockWrites();
+  if(mem&&mem.expiresAt)pubCfg().then(function(){refresh()});
+  setInterval(function(){if(subExpired()!==S.expired)location.reload()},5*60e3);
   if(mem){
     var up={lastSeen:Date.now(),opens:firebase.firestore.FieldValue.increment(1),standalone:isStandalone(),device:devName()};
     if(user.email&&mem.email!==user.email)up.email=user.email;
     var un0=lsGet("hb_user");if(un0&&mem.username!==un0)up.username=un0;
     memRef.update(up).catch(function(){});
-    memRef.onSnapshot(function(d){if(d.exists&&d.data().active===false)location.reload()},function(){});
+    memRef.onSnapshot(function(d){
+      if(!d.exists)return;var x=d.data();if(x.active===false)return location.reload();
+      S.mem=x;if(subExpired()!==S.expired)return location.reload();
+      if(S.auth==="in"&&allLoaded())refresh();
+    },function(){});
   }
   var base="users/"+user.uid+"/";
   db={collection:function(c){return FS.collection(base+c)},doc:function(p){return FS.doc(base+p)}};
