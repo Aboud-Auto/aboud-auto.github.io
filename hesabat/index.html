@@ -153,7 +153,7 @@ function fdate(s){return s?'<bdi>'+s.split("-").reverse().join("/")+'</bdi>':""}
 function toast(t){var el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(function(){el.classList.remove("show")},2600)}
 
 /* ---------- state ---------- */
-var db=null,FS=null;
+var db=null,FS=null,FBA=null;
 var S={cars:[],expenses:[],cols:[],cap:[],pay:[],transfers:[],ledger:[],settings:null,loaded:{},tab:"home",filter:"stock",q:"",day:todayStr(),noDb:false,err:null,auth:"checking"};
 var modal=null;
 function allLoaded(){var l=S.loaded;return l.cars&&l.expenses&&l.cols&&l.cap&&l.pay&&l.transfers&&l.ledger&&l.settings}
@@ -491,7 +491,7 @@ function renderLogin(){
     e.preventDefault();var f=e.target,btn=f.querySelector("button");btn.disabled=true;btn.textContent="جاري الدخول…";$("#loginErr").textContent="";
     if(signup&&f.password.value!==f.password2.value){btn.disabled=false;btn.textContent="حفظ الباسورد والدخول";$("#loginErr").textContent="الباسوردين مش زي بعض";return}
     if(signup&&!(f.password.value.length>=8&&/[0-9]/.test(f.password.value)&&/[^0-9]/.test(f.password.value))){btn.disabled=false;btn.textContent="حفظ الباسورد والدخول";$("#loginErr").textContent="الباسورد لازم 8 على الأقل، فيه حروف وأرقام";return}
-    pwEmail(f.password.value).then(function(em){return signup?firebase.auth().createUserWithEmailAndPassword(em,f.password.value):firebase.auth().signInWithEmailAndPassword(em,f.password.value)}).catch(function(err){
+    pwEmail(f.password.value).then(function(em){return signup?FBA.auth().createUserWithEmailAndPassword(em,f.password.value):FBA.auth().signInWithEmailAndPassword(em,f.password.value)}).catch(function(err){
       btn.disabled=false;btn.textContent=signup?"حفظ الباسورد والدخول":"دخول";
       var c=err&&err.code||"";
       $("#loginErr").textContent=/network/.test(c)?"مفيش نت، اتأكد من الاتصال":/too-many/.test(c)?"محاولات كتير، استنى شوية وجرّب":/email-already/.test(c)?"الباسورد ده متسجل قبل كده، دوس رجوع وادخل بيه":/weak-password/.test(c)?"الباسورد ضعيف":"الباسورد غلط";
@@ -1195,7 +1195,7 @@ function importBackup(){
   };
   inp.click();
 }
-function logout(){if(confirm("تسجيل خروج من التطبيق؟"))firebase.auth().signOut().then(function(){location.reload()})}
+function logout(){if(confirm("تسجيل خروج من التطبيق؟"))FBA.auth().signOut().then(function(){location.reload()})}
 /* ---------- export ---------- */
 async function exportCsv(){
   var dl=dlShim();
@@ -1318,7 +1318,7 @@ document.addEventListener("change",function(e){
 async function boot(){
   render();
   if(!window.firebase){S.auth="in";S.noDb=true;render();return}
-  firebase.initializeApp({
+  FBA=firebase.initializeApp({
   apiKey: "AIzaSyBhedAxeakhHhVJc1GHMNd277is_VoIDL4",
   authDomain: "aboud-auto.firebaseapp.com",
   projectId: "aboud-auto",
@@ -1326,11 +1326,11 @@ async function boot(){
   messagingSenderId: "1075120993023",
   appId: "1:1075120993023:web:5609b07289841a0bd3d2ca",
   measurementId: "G-1FYS2JZFKZ"
-});
-  FS=firebase.firestore();
+},"hesabat");
+  FS=FBA.firestore();
   try{FS.enablePersistence({synchronizeTabs:true}).catch(function(){})}catch(e){}
-  var user=await new Promise(function(res){var off=firebase.auth().onAuthStateChanged(function(u){off();res(u)})});
-  if(!user){S.auth="out";render();firebase.auth().onAuthStateChanged(function(u){if(u)location.reload()});return}
+  var user=await new Promise(function(res){var off=FBA.auth().onAuthStateChanged(function(u){off();res(u)})});
+  if(!user){S.auth="out";render();FBA.auth().onAuthStateChanged(function(u){if(u)location.reload()});return}
   S.auth="in";
   var base="users/"+user.uid+"/";
   db={collection:function(c){return FS.collection(base+c)},doc:function(p){return FS.doc(base+p)}};
