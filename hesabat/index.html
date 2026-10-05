@@ -468,32 +468,33 @@ function renderSet(){
     '<div class="kv"><span>مستحق للشركاء</span><b>'+m(T.pOwed)+'</b></div>'+
     '<div class="kv"><span>مصاريف لسه ما اتردّتش للعهدة</span><b>'+m(T.unre)+'</b></div>'+
     '<div class="kv"><span>مراجعة الحسابات</span><b>'+(T.check?'<span class="ok">✔ متطابقة</span>':'<span class="bad">راجع الأرقام</span>')+'</b></div></div>'+
-    '<div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">تصدير العربيات (ملف CSV)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">خد نسخة من بياناتك كل فترة واحفظها في الملفات أو ابعتها لنفسك على واتساب.</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="kv"><span>الحساب</span><b class="num">'+esc((firebase.auth().currentUser||{}).email||"")+'</b></div><button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>'+
+    '<div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">تصدير العربيات (ملف CSV)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">خد نسخة من بياناتك كل فترة واحفظها في الملفات أو ابعتها لنفسك على واتساب.</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="kv"><span>الدخول</span><b>بالباسورد</b></div><button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>'+
     '<div class="card sub">الربح الصافي = سعر البيع − (سعر الشراء + كل المصاريف). في الشراكة: المصاريف بتتخصم من الربح الأول، وبعدين الباقي بيتقسم على حسب مبلغ كل واحد من سعر الشراء.</div>';
 }
 
 
+async function pwEmail(p){var h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("hesabat|"+p));return Array.from(new Uint8Array(h)).slice(0,16).map(function(b){return b.toString(16).padStart(2,"0")}).join("")+"@hesabat.app"}
 function renderLogin(){
   var app=$("#app");$("#nav").innerHTML="";
   if(S.auth==="checking"){app.innerHTML='<div class="login"><img src="icon-180.png" alt=""><h2>حسابات المعرض</h2><div class="sub">جاري التحميل…</div></div>';return}
-  app.innerHTML='<div class="login"><img src="icon-180.png" alt=""><h2>حسابات المعرض</h2><div class="sub">سجّل دخول أو اعمل حساب جديد</div>'+
-    '<form id="loginForm" autocomplete="on"><label class="fld"><span>الإيميل</span><input type="email" name="email" autocomplete="username" dir="ltr" required></label>'+
+  app.innerHTML='<div class="login"><img src="icon-180.png" alt=""><h2>حسابات المعرض</h2><div class="sub">اكتب الباسورد بتاعك</div>'+
+    '<form id="loginForm" autocomplete="on"><input type="hidden" name="email" value="hesabat" autocomplete="username">'+
     '<label class="fld"><span>الباسورد</span><input type="password" name="password" autocomplete="current-password" dir="ltr" required></label>'+
     '<label class="fld" id="pw2" style="display:none"><span>أكد الباسورد</span><input type="password" name="password2" autocomplete="new-password" dir="ltr"></label>'+
     '<div class="err" id="loginErr"></div><button class="btn" type="submit">دخول</button>'+
-    '<button class="btn sec" type="button" id="modeBtn" style="margin-top:10px">مستخدم جديد؟ اعمل حساب</button></form></div>';
+    '<button class="btn sec" type="button" id="modeBtn" style="margin-top:10px">أول مرة؟ اعمل باسورد جديد</button></form></div>';
   var signup=false;
   $("#modeBtn").onclick=function(){signup=!signup;$("#pw2").style.display=signup?"block":"none";
-    $("#loginForm button[type=submit]").textContent=signup?"إنشاء الحساب":"دخول";
-    this.textContent=signup?"عندي حساب، رجوع للدخول":"مستخدم جديد؟ اعمل حساب";$("#loginErr").textContent=""};
+    $("#loginForm button[type=submit]").textContent=signup?"حفظ الباسورد والدخول":"دخول";
+    this.textContent=signup?"عندي باسورد، رجوع للدخول":"أول مرة؟ اعمل باسورد جديد";$("#loginErr").textContent=""};
   $("#loginForm").onsubmit=function(e){
     e.preventDefault();var f=e.target,btn=f.querySelector("button");btn.disabled=true;btn.textContent="جاري الدخول…";$("#loginErr").textContent="";
-    if(signup&&f.password.value!==f.password2.value){btn.disabled=false;btn.textContent="إنشاء الحساب";$("#loginErr").textContent="الباسوردين مش زي بعض";return}
-    if(signup&&f.password.value.length<6){btn.disabled=false;btn.textContent="إنشاء الحساب";$("#loginErr").textContent="الباسورد لازم 6 حروف أو أرقام على الأقل";return}
-    (signup?firebase.auth().createUserWithEmailAndPassword(f.email.value.trim(),f.password.value):firebase.auth().signInWithEmailAndPassword(f.email.value.trim(),f.password.value)).catch(function(err){
-      btn.disabled=false;btn.textContent=signup?"إنشاء الحساب":"دخول";
+    if(signup&&f.password.value!==f.password2.value){btn.disabled=false;btn.textContent="حفظ الباسورد والدخول";$("#loginErr").textContent="الباسوردين مش زي بعض";return}
+    if(signup&&!(f.password.value.length>=8&&/[0-9]/.test(f.password.value)&&/[^0-9]/.test(f.password.value))){btn.disabled=false;btn.textContent="حفظ الباسورد والدخول";$("#loginErr").textContent="الباسورد لازم 8 على الأقل، فيه حروف وأرقام";return}
+    pwEmail(f.password.value).then(function(em){return signup?firebase.auth().createUserWithEmailAndPassword(em,f.password.value):firebase.auth().signInWithEmailAndPassword(em,f.password.value)}).catch(function(err){
+      btn.disabled=false;btn.textContent=signup?"حفظ الباسورد والدخول":"دخول";
       var c=err&&err.code||"";
-      $("#loginErr").textContent=/network/.test(c)?"مفيش نت، اتأكد من الاتصال":/too-many/.test(c)?"محاولات كتير، استنى شوية وجرّب":/email-already/.test(c)?"الإيميل ده عليه حساب، دوس رجوع وسجّل دخول":/invalid-email/.test(c)?"اكتب الإيميل صح":/weak-password/.test(c)?"الباسورد ضعيف، خليه 6 على الأقل":"الإيميل أو الباسورد غلط";
+      $("#loginErr").textContent=/network/.test(c)?"مفيش نت، اتأكد من الاتصال":/too-many/.test(c)?"محاولات كتير، استنى شوية وجرّب":/email-already/.test(c)?"الباسورد ده متسجل قبل كده، دوس رجوع وادخل بيه":/weak-password/.test(c)?"الباسورد ضعيف":"الباسورد غلط";
     });
   };
 }
