@@ -225,7 +225,7 @@ function flowsOf(cars,d){
   cars.forEach(function(c){var a=fx[c.id]||0;if(c.reimbursed&&a&&ok(reimbDay(c))){cash-=a;fund+=a}});
   S.cols.forEach(function(x){if(ids[x.carId]&&ok(x.date)){cash+=+x.cash||0;insta+=+x.insta||0}});
   S.pay.forEach(function(x){if(pk[x.carId+"|"+x.pid]&&ok(x.date))add(x.src,-(+x.amount||0))});
-  S.cap.forEach(function(x){if((x.kind==="withdraw"||x.kind==="pwithdraw")&&ok(x.date))add(x.src,-(+x.amount||0))});
+  S.cap.forEach(function(x){if((x.kind==="withdraw"||x.kind==="pwithdraw"||x.kind==="jam")&&ok(x.date))add(x.src,-(+x.amount||0));else if(x.kind==="addcap"&&ok(x.date))add(x.src,+x.amount||0)});
   S.transfers.forEach(function(x){if(!ok(x.date))return;var a=+x.amount||0;if(x.dir==="toFund"){add(x.src,-a);fund+=a}else if(x.dir==="fromFund"){fund-=a;add(x.src,a)}else if(x.dir==="toInsta"){cash-=a;insta+=a}else{cash+=a;insta-=a}});
   S.ledger.forEach(function(x){if(x.kind==="spay"&&ids[x.carId]&&ok(x.date))add(x.src,-(+x.amount||0))});
   var lm=lmapOf();
@@ -259,7 +259,8 @@ function calc(){
   }).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)});
   var capital=+(S.settings&&S.settings.capital)||0, fund=+(S.settings&&S.settings.fund)||0;
   var withdraw=0,repay=0,pw=0;
-  S.cap.forEach(function(x){var a=+x.amount||0;if(x.kind==="withdraw")withdraw+=a;else if(x.kind==="repay")repay+=a;else if(x.kind==="pwithdraw")pw+=a});
+  var jam=0,addcap=0;
+  S.cap.forEach(function(x){var a=+x.amount||0;if(x.kind==="withdraw")withdraw+=a;else if(x.kind==="repay")repay+=a;else if(x.kind==="pwithdraw")pw+=a;else if(x.kind==="jam")jam+=a;else if(x.kind==="addcap")addcap+=a});
   var profit=0,profitEx=0,lossDef=0,lossPaid=0,soldN=0,stockN=0,stockCost=0,debts=0,deposits=0,unre=0,cashTot=0,instaTot=0,pOwed=0;
   cars.forEach(function(c){
     cashTot+=c.cashIn;instaTot+=c.instaIn;
@@ -275,10 +276,10 @@ function calc(){
   var sOwe=0;cars.forEach(function(c){sOwe+=c.sellerRem});owe+=sOwe;
   var extTot=0;S.ext.forEach(function(x){extTot+=+x.amount||0});
   var F=flowsOf(cars),fundBal=fund+F.fund,safeBal=capital-fund+F.cash,instaBal=F.insta,cashNow=safeBal+instaBal;
-  var lossRem=lossDef-lossPaid,wDef=withdraw-repay,deficit=wDef+lossRem,capNow=capital-deficit;
+  var lossRem=lossDef-lossPaid,wDef=withdraw-repay,deficit=wDef+lossRem,capNow=capital+addcap-jam-deficit;
   var undist=profitEx-repay-lossPaid-pw,value=capNow+undist;
   var check=Math.round(cashNow+fundBal+stockCost+debts+recv-owe-deposits-pOwed-value)===0;
-  return {extTot:extTot,cars:cars,capital:capital,fund:fund,withdraw:withdraw,repay:repay,pw:pw,wDef:wDef,deficit:deficit,capNow:capNow,undist:undist,value:value,
+  return {jam:jam,addcap:addcap,extTot:extTot,cars:cars,capital:capital,fund:fund,withdraw:withdraw,repay:repay,pw:pw,wDef:wDef,deficit:deficit,capNow:capNow,undist:undist,value:value,
     profit:profit,profitEx:profitEx,recv:recv,owe:owe,sOwe:sOwe,lossDef:lossDef,lossPaid:lossPaid,lossRem:lossRem,
     soldN:soldN,stockN:stockN,stockCost:stockCost,debts:debts,cashNow:cashNow,safeBal:safeBal,instaBal:instaBal,
     cashTot:cashTot,instaTot:instaTot,fundBal:fundBal,fundEmp:(S.settings&&S.settings.fundEmp)||"",unre:unre,pOwed:pOwed,check:check};
@@ -311,11 +312,15 @@ function dayCalc(d){
 /* ---------- accounts / capital helpers ---------- */
 function sgn(n){return n<0?"bad":(n>0?"good":"")}
 function lossCars(){return calc().cars.filter(function(c){return c.lossActive&&c.lossRem>0.5})}
-function capOut(k){return k==="withdraw"||k==="pwithdraw"}
+function capOut(k){return k==="withdraw"||k==="pwithdraw"||k==="jam"}
+function capIn(k){return k==="addcap"}
+function capMove(k){return capOut(k)||capIn(k)}
 function capLabel(x){
   if(x.kind==="withdraw")return "👤 سحب من رأس المال";
   if(x.kind==="pwithdraw")return "💵 سحب أرباح";
   if(x.kind==="lossrepay"){var cr=S.cars.find(function(c){return c.id===x.carId});return "📉 سداد خسارة "+esc(cr?cr.name:"عربية")}
+  if(x.kind==="jam")return "🤝 قسط جمعية"+(x.jname?" - "+esc(x.jname):"");
+  if(x.kind==="addcap")return "➕ زيادة رأس المال";
   return "🏦 سداد عجز السحب";
 }
 function srcNote(x){return x&&x.src==="insta"?"من إنستاباي":x&&x.src==="fund"?"من العهدة":""}
@@ -420,7 +425,7 @@ function renderDay(){
   D.cols.forEach(function(x){var c=S.cars.find(function(y){return y.id===x.carId});if(x.trade){items.push({t:"🔁 "+esc(x.tradeName||"عربية")+" دخلت في بيع "+esc(c?c.name:"؟"),d:"(مش بيأثر على السيولة)",a:0,info:+x.trade,del:["collections",x.id]});return}items.push({t:(x.refund?"↩️ مرتجع - رد فلوس ":"💰 تحصيل ")+esc(c?c.name:"؟"),d:"كاش "+fmt(Math.abs(+x.cash||0))+" · إنستاباي "+fmt(Math.abs(+x.insta||0))+(x.note?" · "+esc(x.note):""),a:(+x.cash||0)+(+x.insta||0),del:["collections",x.id]})});
   D.pays.forEach(function(x){var c=carById(x.carId),p=c&&c.parts.find(function(q){return q.id===x.pid});items.push({t:"🤝 تسليم "+esc(p?p.name:"شريك")+" - "+esc(c?c.name:"؟"),d:dline(srcNote(x),esc(x.note||"")),a:-(+x.amount||0),del:["payouts",x.id]})});
   D.sps.forEach(function(x){var c=S.cars.find(function(y){return y.id===x.carId});items.push({t:"💳 سداد للبايع - "+esc(c?c.name:"؟"),d:dline(srcNote(x),esc(x.note||"")),a:-(+x.amount||0),del:["ledger",x.id]})});
-  D.caps.forEach(function(x){var out=capOut(x.kind);items.push({t:capLabel(x),d:dline(srcNote(x),esc(x.note||""),out?"":"(مش بيأثر على السيولة)"),a:out?-(+x.amount||0):0,info:out?null:(+x.amount||0),del:["capital",x.id]})});
+  D.caps.forEach(function(x){var out=capOut(x.kind),inn=capIn(x.kind);items.push({t:capLabel(x),d:dline(srcNote(x),esc(x.note||""),out||inn?"":"(مش بيأثر على السيولة)"),a:out?-(+x.amount||0):(inn?(+x.amount||0):0),info:out||inn?null:(+x.amount||0),del:["capital",x.id]})});
   var lmd=lmapOf();
   D.lds.forEach(function(x){
     var sg=lsigned(x,lmd),lq=x.kind==="loan"?x:lmd[x.loanId],who=esc(lq?lq.person:"؟"),tt;
@@ -484,7 +489,7 @@ function renderCap(){
   var T=calc();
   var list=S.cap.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0)});
   var items=list.length?list.map(function(x){
-    var out=capOut(x.kind),dd=dline(srcNote(x),esc(x.note||""));
+    var out=capOut(x.kind)&&!capIn(x.kind),dd=dline(srcNote(x),esc(x.note||""));
     return '<div class="item"><div style="flex:1"><div class="t">'+capLabel(x)+'</div><div class="d">'+fdate(x.date)+(dd?" · "+dd:"")+'</div></div><span class="num '+(out?"bad":"good")+'" style="font-weight:700">'+fmt(x.amount)+'</span><button class="del" data-act="delitem" data-coll="capital" data-id="'+x.id+'" aria-label="حذف">🗑</button></div>';
   }).join(""):'<div class="empty">لسه مفيش سحب أو سداد</div>';
   var lc=T.cars.filter(function(c){return c.lossActive});
@@ -496,11 +501,14 @@ function renderCap(){
     capSplit(T)+
     '<div class="grid2">'+tile("سحب من رأس المال",m(T.withdraw),"سددت منه "+m(T.repay))+tile("خسائر عربيات متبقية",m(T.lossRem,T.lossRem>0.5?"warn":""),"اتسدد "+m(T.lossPaid)+" من "+m(T.lossDef))+'</div>'+
     '<div class="grid2">'+tile("أرباح متاحة (حصتك بس)",m(T.undist),"للسحب أو لسداد العجز")+tile("أرباح اتسحبت",m(T.pw),"")+'</div>'+
+    '<div class="grid2">'+tile("أقساط جمعية مدفوعة",m(T.jam),"اتخصمت من رأس المال")+tile("زيادات رأس المال",m(T.addcap),"اتضافت لرأس المال")+'</div>'+
     '<div class="actions">'+
       '<button class="abtn" data-act="form" data-kind="capital" data-sub="pwithdraw"><span class="ic">💵</span>سحب أرباح</button>'+
       '<button class="abtn" data-act="form" data-kind="capital" data-sub="withdraw"><span class="ic">👤</span>سحب من رأس المال</button>'+
       '<button class="abtn" data-act="form" data-kind="capital" data-sub="repay"><span class="ic">🏦</span>سداد عجز السحب</button>'+
-      '<button class="abtn" data-act="form" data-kind="capital" data-sub="lossrepay"><span class="ic">📉</span>سداد خسارة عربية</button></div>'+
+      '<button class="abtn" data-act="form" data-kind="capital" data-sub="lossrepay"><span class="ic">📉</span>سداد خسارة عربية</button>'+
+      '<button class="abtn" data-act="form" data-kind="capital" data-sub="jam"><span class="ic">🤝</span>قسط جمعية</button>'+
+      '<button class="abtn" data-act="form" data-kind="capital" data-sub="addcap"><span class="ic">➕</span>زيادة رأس المال</button></div>'+
     lossBox+extBox(T)+
     '<div class="sect">السجل</div><div class="card" style="padding:6px 16px">'+items+'</div>';
 }
@@ -890,17 +898,21 @@ function openForm(kind,o){
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+'<button class="btn" data-act="submit">تأكيد التسليم</button>';
   }else if(kind==="capital"){
     var sub=o.sub||"withdraw",carField="",srcField="",hint="";
-    var KS=[["pwithdraw","💵 سحب أرباح"],["withdraw","👤 سحب من رأس المال"],["repay","🏦 سداد عجز السحب"],["lossrepay","📉 سداد خسارة عربية"]];
+    var KS=[["pwithdraw","💵 سحب أرباح"],["withdraw","👤 سحب من رأس المال"],["repay","🏦 سداد عجز السحب"],["lossrepay","📉 سداد خسارة عربية"],["jam","🤝 قسط جمعية"],["addcap","➕ زيادة رأس المال"]];
     if(sub==="lossrepay"){
       var lcs=lossCars();
       if(!lcs.length){modal=prevModal;return toast("مفيش خسائر عربيات متبقية للسداد")}
       var selc=lcs.some(function(c){return c.id===o.carId})?o.carId:lcs[0].id;
       carField=fld("العربية",'<select name="carId">'+lcs.map(function(c){return '<option value="'+c.id+'"'+(c.id===selc?" selected":"")+'>'+esc(c.name)+' (المتبقي '+fmt(c.lossRem)+')</option>'}).join("")+'</select>');
     }
-    if(sub==="withdraw"||sub==="pwithdraw")srcField=fld("اتسحبت من",srcSel("src"));
+    if(sub==="withdraw"||sub==="pwithdraw"||sub==="jam")srcField=fld("اتسحبت من",srcSel("src"));
+    if(sub==="addcap")srcField=fld("الفلوس دخلت",srcSel("src"));
+    if(sub==="jam"){var jn=[];S.cap.forEach(function(x){if(x.kind==="jam"&&x.jname&&jn.indexOf(x.jname)<0)jn.push(x.jname)});carField=fld("اسم الجمعية (اختياري)",'<input name="jname" autocomplete="off" list="jamnames" value="'+esc(jn[0]||"")+'"><datalist id="jamnames">'+jn.map(function(n){return '<option value="'+esc(n)+'">'}).join("")+'</datalist>')}
     if(sub==="withdraw")hint="السحب من رأس المال بيعمل عجز بتسدده بعدين من الأرباح. عجز السحب الحالي: "+m(T.wDef);
     else if(sub==="pwithdraw")hint="أرباح متاحة للسحب: <b>"+m(T.undist)+"</b>"+(T.deficit>0.5?" · لسه عليك عجز في رأس المال "+m(T.deficit):"");
     else if(sub==="repay")hint="عجز السحب الحالي: "+m(T.wDef)+" · أرباح متاحة: "+m(T.undist);
+    else if(sub==="jam")hint="قسط الجمعية بيتخصم من رأس المال مباشرة (مش من الأرباح). رأس المال الحالي: "+m(T.capNow)+" · اتدفع أقساط لحد دلوقتي: "+m(T.jam);
+    else if(sub==="addcap")hint="المبلغ بيتضاف لرأس المال وللخزنة (مثلاً قبض جمعية أو فلوس من بره). رأس المال الحالي: "+m(T.capNow);
     else hint="أرباح متاحة للسداد: "+m(T.undist);
     h=sheetHead("حركة رأس المال")+'<div class="seg">'+KS.map(function(k){return '<button data-act="capkind" data-k="'+k[0]+'" class="'+(sub===k[0]?"on":"")+'">'+k[1]+'</button>'}).join("")+'</div>'+
       '<input type="hidden" name="kind" value="'+sub+'">'+carField+
@@ -1098,7 +1110,8 @@ async function submitForm(){
       var am=parseNum(val("amount")),ck=val("kind"),T2=calc();
       if(am<=0)return toast("اكتب المبلغ");
       var rec={kind:ck,amount:am,date:val("date")||todayStr(),note:val("note").trim()};
-      if(ck==="withdraw"||ck==="pwithdraw")rec.src=srcVal();
+      if(ck==="withdraw"||ck==="pwithdraw"||ck==="jam"||ck==="addcap")rec.src=srcVal();
+      if(ck==="jam"&&val("jname").trim())rec.jname=val("jname").trim();
       if(ck==="pwithdraw"&&am>T2.undist+0.5)return toast("المبلغ أكبر من الأرباح المتاحة ("+fmt(T2.undist)+"). للسحب من رأس المال اختار «سحب من رأس المال»");
       if(ck==="repay"&&am>T2.wDef+0.5)return toast("السداد أكبر من عجز السحب ("+fmt(T2.wDef)+")");
       if(ck==="lossrepay"){
@@ -1373,13 +1386,13 @@ function rbPeriod(){
   function r(x){return !!x&&x>=f&&x<=t}
   var buys=T.cars.filter(function(c){return r(c.buyDate)}),sales=T.cars.filter(function(c){return c.sold&&r(c.sellDate)});
   var exps=S.expenses.filter(function(e){return r(e.date)}),cols=S.cols.filter(function(x){return r(x.date)});
-  var caps=S.cap.filter(function(x){return r(x.date)&&capOut(x.kind)}),pays=S.pay.filter(function(x){return r(x.date)}),lds=S.ledger.filter(function(x){return r(x.date)&&x.kind!=="spay"}),spays=S.ledger.filter(function(x){return r(x.date)&&x.kind==="spay"});
+  var caps=S.cap.filter(function(x){return r(x.date)&&capMove(x.kind)}),pays=S.pay.filter(function(x){return r(x.date)}),lds=S.ledger.filter(function(x){return r(x.date)&&x.kind!=="spay"}),spays=S.ledger.filter(function(x){return r(x.date)&&x.kind==="spay"});
   var buyT=0,expT=0,cashT=0,instaT=0,salesT=0,costT=0,profT=0,wdT=0,pInT=0,pOutT=0,ldT=0,buyPd=0,spT=0,lmx=lmapOf();
   buys.forEach(function(c){buyT+=+c.buyPrice||0;buyPd+=paidNow(c)-(+c.tradeIn||0);pInT+=c.pTotal});
   exps.forEach(function(e){expT+=+e.amount||0});
   cols.forEach(function(x){cashT+=+x.cash||0;instaT+=+x.insta||0});
   sales.forEach(function(c){salesT+=c.sellPrice;costT+=c.cost;profT+=c.myProfit});
-  caps.forEach(function(x){wdT+=+x.amount||0});
+  caps.forEach(function(x){if(x.kind==="withdraw"||x.kind==="pwithdraw")wdT+=+x.amount||0});
   pays.forEach(function(x){pOutT+=+x.amount||0});
   lds.forEach(function(x){ldT+=lsigned(x,lmx)});
   spays.forEach(function(x){spT+=+x.amount||0});
@@ -1410,7 +1423,7 @@ function rbPeriod(){
     B.push({t:"table",cols:[{h:"العربية",w:.4},{h:"كاش",w:.3,k:"n"},{h:"إنستاباي",w:.3,k:"n"}],
       rows:cols.map(function(x){return [carNameById(x.carId),+x.cash||0,+x.insta||0]}).concat([{cells:["الإجمالي",cashT,instaT]}])})}
   var mv=[];
-  caps.forEach(function(x){mv.push([x.kind==="pwithdraw"?"سحب أرباح":"سحب من رأس المال",rfd(x.date),{v:-(+x.amount||0),c:RK.bad}])});
+  caps.forEach(function(x){var ad=x.kind==="addcap";mv.push([x.kind==="pwithdraw"?"سحب أرباح":(x.kind==="jam"?"قسط جمعية"+(x.jname?" - "+x.jname:""):(ad?"زيادة رأس المال":"سحب من رأس المال")),rfd(x.date),{v:ad?(+x.amount||0):-(+x.amount||0),c:ad?RK.good:RK.bad}])});
   pays.forEach(function(x){var c=carById(x.carId),p=c&&c.parts.find(function(q){return q.id===x.pid});mv.push(["تسليم "+(p?p.name:"شريك")+" - "+(c?c.name:"؟"),rfd(x.date),{v:-(+x.amount||0),c:RK.bad}])});
   spays.forEach(function(x){mv.push(["سداد للبايع - "+carNameById(x.carId),rfd(x.date),{v:-(+x.amount||0),c:RK.bad}])});
   if(mv.length){any=true;B.push({t:"sec",title:"سحوبات وتسليمات"});B.push({t:"table",cols:[{h:"البند",w:.54},{h:"التاريخ",w:.2},{h:"المبلغ",w:.26,k:"n",s:1}],rows:mv})}
