@@ -1314,41 +1314,46 @@ function rbSettle(){
       var o=ppl[k];o.cap+=p.amount;o.prof+=p.profit;o.due+=p.due;o.paid+=p.paid;o.rem+=p.remaining;o.rows.push({c:c,p:p});
     });
   });
-  var myTot=myCap+myP;
-  var tiles=[{l:"ليك انت (رأس مالك + ربحك)",v:rnum(myTot)+" ج",acc:true},
-    {l:"صافي ربح العربيات",v:rnum(profT,true)+" ج",c:rcol(profT)},{l:"ربحك انت",v:rnum(myP,true)+" ج",c:rcol(myP)},
-    {l:"إجمالي البيع",v:rnum(salesT)+" ج"},{l:"إجمالي التكلفة",v:rnum(costT)+" ج"},
-    {l:"رد للعهدة",v:rnum(fxOpen)+" ج",c:fxOpen>0.5?RK.warn:RK.good}];
-  var ptot=0;order.forEach(function(k){ptot+=ppl[k].rem});
-  if(order.length)tiles.splice(1,0,{l:"للشركاء (الباقي ليهم)",v:rnum(ptot)+" ج",c:ptot>0.5?RK.warn:RK.good});
-  if(custRem>0.5)tiles.push({l:"لسه عند العملاء من العربيات دي",v:rnum(custRem)+" ج",c:RK.warn});
-  var B=[{t:"tiles",items:tiles}];
-  B.push({t:"sec",title:"مين ليه كام"});
-  var rows=order.map(function(k){var o=ppl[k];return [k,o.cap,{v:o.prof,c:rcol(o.prof)},o.due,o.paid,{v:o.rem,c:o.rem>0.5?RK.warn:RK.good}]});
-  rows.unshift(["انت",myCap,{v:myP,c:rcol(myP)},myTot,"",""]);
-  var tc=myCap,tp=myP,td=myTot,tpd=0,tr=0;order.forEach(function(k){var o=ppl[k];tc+=o.cap;tp+=o.prof;td+=o.due;tpd+=o.paid;tr+=o.rem});
-  B.push({t:"table",cols:[{h:"الاسم",w:.24},{h:"رأس ماله",w:.16,k:"n"},{h:"ربحه",w:.15,k:"n",s:1},{h:"الإجمالي له",w:.16,k:"n"},{h:"اتسلّم",w:.14,k:"n"},{h:"الباقي له",w:.15,k:"n"}],
-    rows:rows.concat([{cells:["الإجمالي",tc,{v:tp,c:rcol(tp)},td,tpd,tr]}])});
+  var myTot=myCap+myP,pDue=0,pPaid=0,pRem=0;
+  order.forEach(function(k){pDue+=ppl[k].due;pPaid+=ppl[k].paid;pRem+=ppl[k].rem});
+  var outExp=Math.max(0,expT-fx),fxDone=fx-fxOpen;
+  /* 1) الملخص */
+  var B=[{t:"tiles",items:[{l:"إجمالي البيع",v:rnum(salesT)+" ج",acc:true},{l:"صافي الربح",v:rnum(profT,true)+" ج",c:rcol(profT)}]}];
+  if(order.length)B[0].items.push({l:"ربحك انت",v:rnum(myP,true)+" ج",c:rcol(myP)},{l:"ربح الشركاء",v:rnum(profT-myP,true)+" ج",c:rcol(profT-myP)});
+  /* 2) فلوس البيع هتتوزع إزاي */
+  B.push({t:"sec",title:"فلوس البيع هتتوزع إزاي"});
+  var kv=[["ليك انت (رأس مالك + ربحك)",rnum(myTot)+" ج",RK.gold2]];
+  if(order.length)kv.push(["للشركاء (فلوسهم + ربحهم)",rnum(pDue)+" ج"]);
+  if(fxOpen>0.5)kv.push(["رد للعهدة (مصاريف العربيات)",rnum(fxOpen)+" ج",RK.warn]);
+  if(fxDone>0.5)kv.push(["اترد للعهدة قبل كده",rnum(fxDone)+" ج",RK.good]);
+  if(outExp>0.5)kv.push(["مصاريف دفعتها من برّه العهدة (ترجعلك)",rnum(outExp)+" ج"]);
+  var sum=myTot+pDue+fx+outExp,diff=salesT-sum;
+  if(Math.abs(diff)<1)kv.push(["المجموع","= إجمالي البيع ✔",RK.good,"rtl"]);
+  else kv.push(["المجموع",rnum(sum)+" ج (فرق "+rnum(diff,true)+")",RK.warn]);
+  B.push({t:"kv",rows:kv});
+  var selR=0;cars.forEach(function(c){if(c.sellerRem>0.5)selR+=c.sellerRem});
+  if(selR>0.5)B.push({t:"note",text:"⚠️ من نصيبك فيه "+rnum(selR)+" ج لسه عليك للي اشتريت منه العربية (باقي تمن الشراء)."});
+  if(custRem>0.5)B.push({t:"note",text:"⚠️ من فلوس البيع دي لسه "+rnum(custRem)+" ج عند العملاء ومتحصّلتش."});
+  /* 3) الشركاء */
+  if(order.length){
+    B.push({t:"sec",title:"حساب الشركاء"});
+    var rows=order.map(function(k){var o=ppl[k];return [k,o.cap,{v:o.prof,c:rcol(o.prof)},o.due,o.paid,{v:o.rem,c:o.rem>0.5?RK.warn:RK.good}]});
+    var tc=0,tp=0;order.forEach(function(k){tc+=ppl[k].cap;tp+=ppl[k].prof});
+    B.push({t:"table",cols:[{h:"الشريك",w:.22},{h:"دفع",w:.16,k:"n"},{h:"ربحه",w:.15,k:"n",s:1},{h:"ليه",w:.16,k:"n"},{h:"اتسلّم",w:.15,k:"n"},{h:"الباقي له",w:.16,k:"n"}],
+      rows:rows.concat([{cells:["الإجمالي",tc,{v:tp,c:rcol(tp)},pDue,pPaid,pRem]}])});
+  }
+  /* 4) العربيات */
+  B.push({t:"sec",title:"العربيات ("+cars.length+")"});
+  B.push({t:"table",cols:[{h:"العربية",w:.3},{h:"البيع",w:.18,k:"n"},{h:"الشراء",w:.18,k:"n"},{h:"المصاريف",w:.16,k:"n"},{h:"الربح",w:.18,k:"n",s:1}],
+    rows:cars.map(function(c){return [c.name,c.sellPrice,c.cost-c.exp,c.exp,{v:c.profit,c:rcol(c.profit)}]}).concat([{cells:["الإجمالي",salesT,costT-expT,expT,{v:profT,c:rcol(profT)}]}])});
+  /* 5) العهدة */
   var fundAfter=T.fundBal+fxOpen,gap=T.fund-fundAfter;
   B.push({t:"sec",title:"العهدة"});
-  var kv=[["مصاريف العربيات دي من العهدة",rnum(fx)+" ج"]];
-  if(fx-fxOpen>0.5)kv.push(["اترد منها قبل كده",rnum(fx-fxOpen)+" ج",RK.good]);
-  kv.push(["المطلوب ترده للعهدة دلوقتي",rnum(fxOpen)+" ج",fxOpen>0.5?RK.warn:RK.good]);
-  kv.push(["رصيد العهدة دلوقتي",rnum(T.fundBal)+" ج"]);
-  kv.push(["رصيدها بعد الرد",rnum(fundAfter)+" ج"]);
-  kv.push(["رقم العهدة الأساسي",rnum(T.fund)+" ج"]);
-  if(gap>0.5)kv.push(["لسه ناقصها (مصاريف عربيات تانية)",rnum(gap)+" ج",RK.warn]);
-  else kv.push(["الحالة","العهدة هترجع لرقمها كامل ✔",RK.good,"rtl"]);
-  B.push({t:"kv",rows:kv});
-  B.push({t:"sec",title:"العربيات ("+cars.length+")"});
-  B.push({t:"table",cols:[{h:"العربية",w:.3},{h:"البيع",w:.18,k:"n"},{h:"التكلفة",w:.18,k:"n"},{h:"المصاريف",w:.16,k:"n"},{h:"الربح",w:.18,k:"n",s:1}],
-    rows:cars.map(function(c){return [c.name,c.sellPrice,c.cost,c.exp,{v:c.profit,c:rcol(c.profit)}]}).concat([{cells:["الإجمالي",salesT,costT,expT,{v:profT,c:rcol(profT)}]}])});
-  if(order.length){
-    B.push({t:"sec",title:"تفاصيل الشركاء"});
-    var dr=[];order.forEach(function(k){ppl[k].rows.forEach(function(r){dr.push([k,r.c.name,r.p.amount,(Math.round(r.p.share*1000)/10)+"%",{v:r.p.profit,c:rcol(r.p.profit)},{v:r.p.remaining,c:r.p.remaining>0.5?RK.warn:RK.good}])})});
-    B.push({t:"table",cols:[{h:"الشريك",w:.18},{h:"العربية",w:.24},{h:"دفع",w:.15,k:"n"},{h:"النسبة",w:.11},{h:"ربحه",w:.16,k:"n",s:1},{h:"الباقي له",w:.16,k:"n"}],rows:dr});
-  }
-  B.push({t:"note",text:"الربح = سعر البيع − (سعر الشراء + المصاريف). المصاريف بتتخصم الأول وبعدين الربح بيتقسم بنسبة كل شريك. «الإجمالي له» = اللي دفعه في العربية + ربحه. التقرير ده للمراجعة بس ومش بيسجّل أي حركة."});
+  var kv2=[["رصيدها دلوقتي",rnum(T.fundBal)+" ج"],["بعد ما ترد "+rnum(fxOpen),rnum(fundAfter)+" ج",gap>0.5?RK.warn:RK.good]];
+  if(gap>0.5)kv2.push(["لسه ناقصها (مصاريف عربيات لسه متباعتش)",rnum(gap)+" ج",RK.warn]);
+  else kv2.push(["الحالة","هترجع لرقمها كامل ("+rnum(T.fund)+") ✔",RK.good,"rtl"]);
+  B.push({t:"kv",rows:kv2});
+  B.push({t:"note",text:"الربح = البيع − (الشراء + المصاريف)، والربح بيتقسم بنسبة كل شريك بعد خصم المصاريف. التقرير ده للمراجعة بس ومش بيسجّل أي حركة."});
   var R=stlRange(),sp=modal.sp||"all",sub=cars.length+" عربية · "+(sp==="all"?"حتى "+rfd(todayStr()):"من "+rfd(R.f)+" إلى "+rfd(R.t));
   return {title:"تقفيل حساب",sub:sub,file:"ABOUD-AUTO-settle-"+todayStr(),blocks:B};
 }
