@@ -361,7 +361,7 @@ function renderDay(){
     if(c.pTotal>0)items.push({t:"🤝 مساهمة الشركاء في "+esc(c.name),d:"",a:c.pTotal,del:["car",c.id]});
   });
   D.exps.forEach(function(e){var c=S.cars.find(function(x){return x.id===e.carId});var fe=expSrc(e)==="fund",ea=+e.amount||0;items.push({t:"💸 "+esc(e.type||"مصروف")+" - "+esc(c?c.name:"؟"),d:dline(srcNote({src:expSrc(e)}),esc(e.note||""),fe?"(مش من السيولة)":""),a:fe?0:-ea,info:fe?ea:null,del:["expenses",e.id]})});
-  D.cols.forEach(function(x){var c=S.cars.find(function(y){return y.id===x.carId});items.push({t:"💰 تحصيل "+esc(c?c.name:"؟"),d:"كاش "+fmt(x.cash)+" · إنستاباي "+fmt(x.insta)+(x.note?" · "+esc(x.note):""),a:(+x.cash||0)+(+x.insta||0),del:["collections",x.id]})});
+  D.cols.forEach(function(x){var c=S.cars.find(function(y){return y.id===x.carId});items.push({t:(x.refund?"↩️ مرتجع - رد فلوس ":"💰 تحصيل ")+esc(c?c.name:"؟"),d:"كاش "+fmt(Math.abs(+x.cash||0))+" · إنستاباي "+fmt(Math.abs(+x.insta||0))+(x.note?" · "+esc(x.note):""),a:(+x.cash||0)+(+x.insta||0),del:["collections",x.id]})});
   D.pays.forEach(function(x){var c=carById(x.carId),p=c&&c.parts.find(function(q){return q.id===x.pid});items.push({t:"🤝 تسليم "+esc(p?p.name:"شريك")+" - "+esc(c?c.name:"؟"),d:dline(srcNote(x),esc(x.note||"")),a:-(+x.amount||0),del:["payouts",x.id]})});
   D.sps.forEach(function(x){var c=S.cars.find(function(y){return y.id===x.carId});items.push({t:"💳 سداد للبايع - "+esc(c?c.name:"؟"),d:dline(srcNote(x),esc(x.note||"")),a:-(+x.amount||0),del:["ledger",x.id]})});
   D.caps.forEach(function(x){var out=capOut(x.kind);items.push({t:capLabel(x),d:dline(srcNote(x),esc(x.note||""),out?"":"(مش بيأثر على السيولة)"),a:out?-(+x.amount||0):0,info:out?null:(+x.amount||0),del:["capital",x.id]})});
@@ -870,6 +870,15 @@ function openForm(kind,o){
     h=sheetHead("جرد العهدة")+'<div class="preview" style="display:block">المفروض مع '+esc(T.fundEmp||"الموظف")+': <b>'+m(T.fundBal)+'</b></div>'+
       fld("المبلغ اللي معاه فعلًا",minp("amount"))+
       '<div class="preview" id="pv"></div><button class="btn" data-act="submit">تأكيد الجرد</button>';
+  }else if(kind==="ret"){
+    var rc=carById(o.carId);if(!rc||!rc.sold){modal=prevModal;return toast("العربية مش متباعة")}
+    h=sheetHead("↩️ العربية رجعت")+'<input type="hidden" name="carId" value="'+rc.id+'">'+
+      '<div class="preview" style="display:block">'+esc(rc.name)+' · اتباعت بـ '+m(rc.sellPrice)+' يوم '+fdate(rc.sellDate)+'<br>اتحصّل من المشتري: كاش '+m(rc.cashIn)+' · إنستاباي '+m(rc.instaIn)+'</div>'+
+      fld("تاريخ الرجوع",dinp("date"))+
+      '<div class="two">'+fld("رجّعت له كاش (من الخزنة)",minp("cash",rc.cashIn||""))+fld("رجّعت له إنستاباي",minp("insta",rc.instaIn||""))+'</div>'+
+      fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off" placeholder="سبب الرجوع">')+
+      '<div class="sub" style="margin:4px 2px 12px">العربية هترجع للمعرض بنفس تكلفتها ومصاريفها، والربح بتاع البيعة دي هيتشال. ولما تتباع تاني هتتحسب من جديد.</div>'+
+      '<button class="btn" data-act="submit">تأكيد الرجوع</button>';
   }else if(kind==="settings"){
     h=sheetHead("رأس المال والعهدة")+fld("رأس المال الأصلي",minp("capital",T.capital||""))+fld("منه عهدة للمصاريف (جزء من رأس المال)",minp("fund",T.fund||""))+fld("اسم الموظف المسؤول عن العهدة",'<input name="fundEmp" autocomplete="off" placeholder="مثال: أحمد" value="'+esc(T.fundEmp)+'">')+
       '<button class="btn" data-act="submit">حفظ</button>';
@@ -1015,6 +1024,17 @@ async function submitForm(){
       if(df>0)return toast("معاه زيادة "+fmt(df)+" — راجع لو فيه مصروف اتسجل مرتين أو بمبلغ غلط");
       if(!confirm("فيه عجز "+fmt(-df)+". يتسجّل على "+(Tf.fundEmp||"الموظف")+" كفلوس ليك عنده في السلف؟"))return;
       if(await create("ledger",{kind:"loan",person:Tf.fundEmp||"الموظف",dir:"out",amount:-df,date:todayStr(),src:"fund",note:"عجز عهدة"})){closeSheet();openFund();toast("اتسجّل العجز ✔")}
+    }else if(k==="ret"){
+      var rcar=carById(val("carId"));if(!rcar||!rcar.sold)return toast("العربية مش متباعة");
+      var rcs=parseNum(val("cash")),ris=parseNum(val("insta")),coll=rcar.cashIn+rcar.instaIn;
+      if(rcs<0||ris<0)return toast("راجع المبالغ");
+      if(Math.abs(rcs+ris-coll)>0.5)return toast("لازم اللي يترد يساوي اللي اتحصّل ("+fmt(coll)+")");
+      if(S.cap.some(function(x){return x.kind==="lossrepay"&&x.carId===rcar.id}))return toast("العربية دي عليها سداد خسارة، امسح دفعات السداد الأول");
+      var rdt=val("date")||todayStr(),raw=S.cars.find(function(x){return x.id===rcar.id})||{};
+      var rok=true;
+      if(rcs+ris>0)rok=!!(await create("collections",{carId:rcar.id,date:rdt,cash:-rcs,insta:-ris,refund:true,note:"مرتجع"}));
+      if(rok)rok=await patch("cars/"+rcar.id,{sellPrice:null,sellDate:null,lossDeferred:false,returns:(raw.returns||[]).concat([{date:rdt,sellPrice:rcar.sellPrice,sellDate:rcar.sellDate,refund:rcs+ris,note:val("note").trim()}])});
+      if(rok){done({carId:rcar.id});toast("العربية رجعت للمعرض ✔")}
     }else if(k==="transfer"){
       var ta=parseNum(val("amount"));if(ta<=0)return toast("اكتب المبلغ");
       if(await create("transfers",{dir:val("dir")==="toInsta"?"toInsta":"toSafe",amount:ta,date:val("date")||todayStr(),note:val("note").trim()})){closeSheet();toast("اتسجّل التحويل ✔")}
@@ -1049,7 +1069,7 @@ function renderDetail(){
   var cols=S.cols.filter(function(x){return x.carId===c.id}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"")});
   var pays=S.pay.filter(function(x){return x.carId===c.id}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"")});
   var hasP=c.parts.length>0;
-  var h=sheetHead(esc(c.name))+'<div style="margin:-4px 0 10px">'+statusBadge(c)+(hasP?'<span class="ptag">🤝 شراكة</span>':'')+'</div>';
+  var h=sheetHead(esc(c.name))+'<div style="margin:-4px 0 10px">'+statusBadge(c)+(hasP?'<span class="ptag">🤝 شراكة</span>':'')+((c.returns||[]).length?'<span class="ptag">↩️ رجعت قبل كده</span>':'')+'</div>';
   h+='<div class="card"><div class="kv"><span>تاريخ الشراء</span><b>'+fdate(c.buyDate)+'</b></div><div class="kv"><span>سعر الشراء</span><b>'+m(c.buyPrice)+'</b></div>'+
      (c.owedSeller>0.5?'<div class="kv"><span>اتدفع للبايع</span><b>'+m(paidNow(c)+c.sellerPaid)+'</b></div><div class="kv"><span>باقي للبايع</span><b class="'+(c.sellerRem>0.5?"warn":"good")+'">'+(c.sellerRem>0.5?m(c.sellerRem):"اتسدد بالكامل ✔")+'</b></div>':'')+'<div class="kv"><span>المصاريف</span><b>'+m(c.exp)+'</b></div><div class="kv"><span>التكلفة الإجمالية</span><b>'+m(c.cost)+'</b></div>';
   if(c.sold){
@@ -1102,10 +1122,13 @@ function renderDetail(){
   if(exps.length){h+='<div class="sect">المصاريف</div><div class="card" style="padding:6px 16px">'+exps.map(function(e){
     return '<div class="item"><div style="flex:1"><div class="t">'+esc(e.type||"مصروف")+'</div><div class="d">'+fdate(e.date)+(dline(srcNote({src:expSrc(e)}),esc(e.note||""))?" · "+dline(srcNote({src:expSrc(e)}),esc(e.note||"")):"")+'</div></div><span class="num" style="font-weight:700">'+fmt(e.amount)+'</span><button class="del" data-act="delitem" data-coll="expenses" data-id="'+e.id+'" aria-label="حذف">🗑</button></div>'}).join("")+'</div>'}
   if(cols.length){h+='<div class="sect">التحصيلات</div><div class="card" style="padding:6px 16px">'+cols.map(function(x){
-    return '<div class="item"><div style="flex:1"><div class="t">كاش '+fmt(x.cash)+' · إنستاباي '+fmt(x.insta)+'</div><div class="d">'+fdate(x.date)+(x.note?" · "+esc(x.note):"")+'</div></div><button class="del" data-act="delitem" data-coll="collections" data-id="'+x.id+'" aria-label="حذف">🗑</button></div>'}).join("")+'</div>'}
+    return '<div class="item"><div style="flex:1"><div class="t">'+(x.refund?'↩️ رد للمشتري: كاش '+fmt(-(+x.cash||0))+' · إنستاباي '+fmt(-(+x.insta||0)):'كاش '+fmt(x.cash)+' · إنستاباي '+fmt(x.insta))+'</div><div class="d">'+fdate(x.date)+(x.note?" · "+esc(x.note):"")+'</div></div><button class="del" data-act="delitem" data-coll="collections" data-id="'+x.id+'" aria-label="حذف">🗑</button></div>'}).join("")+'</div>'}
   if(pays.length){h+='<div class="sect">التسليمات للشركاء</div><div class="card" style="padding:6px 16px">'+pays.map(function(x){
     var p=c.parts.find(function(q){return q.id===x.pid});
     return '<div class="item"><div style="flex:1"><div class="t">'+esc(p?p.name:"شريك")+'</div><div class="d">'+fdate(x.date)+(dline(srcNote(x),esc(x.note||""))?" · "+dline(srcNote(x),esc(x.note||"")):"")+'</div></div><span class="num" style="font-weight:700">'+fmt(x.amount)+'</span><button class="del" data-act="delitem" data-coll="payouts" data-id="'+x.id+'" aria-label="حذف">🗑</button></div>'}).join("")+'</div>'}
+  if((c.returns||[]).length)h+='<div class="sect">المرتجعات ↩️</div><div class="card" style="padding:6px 16px">'+c.returns.map(function(x){
+    return '<div class="item"><div style="flex:1"><div class="t">اتباعت بـ '+fmt(x.sellPrice)+' ورجعت</div><div class="d">البيع '+fdate(x.sellDate)+' · الرجوع '+fdate(x.date)+(x.note?" · "+esc(x.note):"")+'</div></div><span class="num" style="font-weight:700">'+(x.refund>0?"اترد "+fmt(x.refund):"")+'</span></div>'}).join("")+'</div>';
+  if(c.sold)h+='<button class="btn sec" style="margin-bottom:10px" data-act="form" data-kind="ret" data-car="'+c.id+'">↩️ العربية رجعت (مرتجع)</button>';
   h+='<div class="two" style="margin-top:6px"><button class="btn sec" data-act="form" data-kind="edit" data-car="'+c.id+'">تعديل</button>'+
      (c.sold?'<button class="btn danger" data-act="unsell" data-id="'+c.id+'">إلغاء البيع</button>':'<button class="btn danger" data-act="delcar" data-id="'+c.id+'">حذف العربية</button>')+'</div>';
   if(c.sold)h+='<button class="btn danger" style="margin-top:10px" data-act="delcar" data-id="'+c.id+'">حذف العربية</button>';
