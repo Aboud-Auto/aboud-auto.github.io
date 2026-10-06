@@ -85,7 +85,8 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--text
 .fld input:focus,.fld select:focus,.search:focus,.prow input:focus{outline:2px solid var(--primary);outline-offset:0}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .prow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:12px;align-items:center}
-.prow .pp{grid-column:1/-1;border-style:dashed}
+.prow .pp{grid-column:1/2;border-style:dashed}
+.prow .po{grid-column:2/-1;width:100%;border:1px solid var(--line);border-radius:14px;padding:12px 10px;background:var(--card);color:inherit;font:inherit}
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
 .seg button{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:12px 6px;font-size:14px;font-weight:700;cursor:pointer;color:var(--muted)}
 .seg button.on{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}
@@ -194,10 +195,11 @@ function calc(){
     var e=exp[c.id]||0,ca=cash[c.id]||0,ins=insta[c.id]||0,sold=typeof c.sellPrice==="number";
     var buy=+c.buyPrice||0,cost=buy+e,owedS=buy-paidNow(c),sPaid=spd[c.id]||0;
     var profit=sold?c.sellPrice-cost:null;
-    var parts=(c.partners||[]).map(function(p){
-      var amt=+p.amount||0,hasPct=p.pct!=null&&p.pct!==""&&isFinite(+p.pct),share=hasPct?(+p.pct)/100:(buy>0?amt/buy:0);
+    var shs=shareList(c.partners||[],buy);
+    var parts=(c.partners||[]).map(function(p,pi){
+      var amt=+p.amount||0,hasPct=hasPctOf(p),share=shs[pi];
       var due=amt+(sold?profit*share:0),paid=paidBy[c.id+"|"+p.id]||0;
-      return {id:p.id,name:p.name,amount:amt,pct:hasPct?+p.pct:null,share:share,profit:sold?profit*share:null,due:due,paid:paid,remaining:due-paid};
+      return {id:p.id,name:p.name,amount:amt,pct:hasPct?+p.pct:null,of:p.of||"",share:share,profit:sold?profit*share:null,due:due,paid:paid,remaining:due-paid};
     });
     var pTotal=parts.reduce(function(a,p){return a+p.amount},0);
     var ownerCap=buy-pTotal,ownerShare=parts.length?1-parts.reduce(function(a,p){return a+p.share},0):1;
@@ -739,25 +741,29 @@ function stockFirst(T){return T.cars.filter(function(c){return !c.sold}).concat(
 
 /* partners editor */
 function partnerRow(p){
-  return '<div class="prow" data-pid="'+esc(p&&p.id||"")+'"><input class="pn" placeholder="اسم الشريك" autocomplete="off" value="'+esc(p?p.name:"")+'"><input class="pa" inputmode="decimal" autocomplete="off" placeholder="المبلغ اللي دفعه" value="'+(p?esc(p.amount):"")+'"><button class="del" data-act="rmp" aria-label="حذف الشريك">✕</button><input class="pp" inputmode="decimal" autocomplete="off" placeholder="نسبته من الربح % (فاضي = حسب المبلغ)" value="'+(p&&p.pct!=null?esc(p.pct):"")+'"></div>';
+  return '<div class="prow" data-pid="'+esc(p&&p.id||"")+'"><input class="pn" placeholder="اسم الشريك" autocomplete="off" value="'+esc(p?p.name:"")+'"><input class="pa" inputmode="decimal" autocomplete="off" placeholder="المبلغ اللي دفعه (أو ٠)" value="'+(p?esc(p.amount):"")+'"><button class="del" data-act="rmp" aria-label="حذف الشريك">✕</button><input class="pp" inputmode="decimal" autocomplete="off" placeholder="نسبته % (فاضي = حسب المبلغ)" value="'+(p&&p.pct!=null?esc(p.pct):"")+'"><select class="po"><option value="">من الربح كله</option><option value="mine"'+(p&&p.of==="mine"?" selected":"")+'>من نصيبي أنا</option></select></div>';
 }
 function partnersBox(list){
-  return '<div class="fld"><span>الشركاء في العربية (اختياري)</span><div id="plist">'+(list||[]).map(partnerRow).join("")+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px"><button class="btn sec small" data-act="addp">+ إضافة شريك</button><button class="btn sec small" data-act="eqp">⚖️ قسّم الربح بالتساوي</button></div><div class="sub" style="margin-top:8px">حدد نسبة كل شريك من الربح زي ما اتفقتوا. النسبة اللي مش مكتوبة بتتحسب حسب المبلغ اللي دفعه، والباقي من ١٠٠٪ ليك.</div></div><div class="preview" id="pv"></div>';
+  return '<div class="fld"><span>الشركاء في العربية (اختياري)</span><div id="plist">'+(list||[]).map(partnerRow).join("")+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px"><button class="btn sec small" data-act="addp">+ إضافة شريك</button><button class="btn sec small" data-act="eqp">⚖️ قسّم الربح بالتساوي</button></div><div class="sub" style="margin-top:8px">حدد نسبة كل شريك زي ما اتفقتوا. «من الربح كله» يعني نسبته من ربح العربية كلها، و«من نصيبي أنا» يعني نسبته من الجزء اللي فاضل ليك بعد الشركاء التانيين. الشريك ممكن يدخل من غير فلوس لو كتبت نسبته.</div></div><div class="preview" id="pv"></div>';
 }
 function readPartners(){
   var rows=document.querySelectorAll("#sheet .prow"),out=[],bad=null;
   rows.forEach(function(r,i){
     var n=r.querySelector(".pn").value.trim(),a=parseNum(r.querySelector(".pa").value),pt=r.querySelector(".pp").value.trim();
     if(!n&&!a&&!pt)return;
-    if(!n||a<=0){bad="اكتب اسم الشريك والمبلغ اللي دفعه";return}
-    var o2={id:r.dataset.pid||("p"+Date.now().toString(36)+i),name:n,amount:a};
+    var po=r.querySelector(".po"),mine=!!(po&&po.value==="mine");
+    if(!n||a<0||(a<=0&&pt==="")){bad="اكتب اسم الشريك والمبلغ اللي دفعه أو نسبته من الربح";return}
+    if(mine&&pt===""){bad="حدد نسبة "+n+" من نصيبك";return}
+    var o2={id:r.dataset.pid||("p"+Date.now().toString(36)+i),name:n,amount:a};if(mine)o2.of="mine";
     if(pt!==""){var pv2=parseNum(pt);if(pv2<0||pv2>100){bad="نسبة الربح لازم تكون من ٠ لـ ١٠٠";return}o2.pct=pv2}
     out.push(o2);
   });
   return bad?{error:bad}:{list:out};
 }
 
-function shareSum(list,price){return list.reduce(function(t,p){return t+(p.pct!=null?p.pct/100:(price>0?p.amount/price:0))},0)}
+function hasPctOf(p){return p.pct!=null&&p.pct!==""&&isFinite(+p.pct)}
+function shareList(list,price){var all=0;list.forEach(function(p){if(p.of!=="mine")all+=hasPctOf(p)?(+p.pct)/100:(price>0?(+p.amount||0)/price:0)});var R=1-all;return list.map(function(p){return p.of==="mine"?(hasPctOf(p)?(+p.pct)/100*R:0):(hasPctOf(p)?(+p.pct)/100:(price>0?(+p.amount||0)/price:0))})}
+function shareSum(list,price){var all=0,mine=0;list.forEach(function(p){if(p.of==="mine")mine+=hasPctOf(p)?(+p.pct)/100:0;else all+=hasPctOf(p)?(+p.pct)/100:(price>0?(+p.amount||0)/price:0)});if(all>1.0001)return all;if(mine>1.0001)return 2;return all+(1-all)*mine}
 function openForm(kind,o){
   o=o||{};var T=calc(),h="",prevModal=modal;
   modal={type:"form",kind:kind,o:o};
@@ -929,14 +935,16 @@ function updatePreview(){
   if(k==="buy"||k==="edit"){
     var price=parseNum(val("price")),sum=0,n=0,ssum=0,pd0=val("paid").trim(),stxt="";
     if(pd0!==""){var pdn=parseNum(pd0);stxt=pdn>price?'<b class="bad">المدفوع أكبر من سعر الشراء</b>':'هتدفع دلوقتي: <b>'+m(pdn)+'</b> · باقي للبايع: <b class="warn">'+m(price-pdn)+'</b>'}
+    var plist=[],pnames=[];
     document.querySelectorAll("#sheet .prow").forEach(function(r){
-      var a=parseNum(r.querySelector(".pa").value),ptx=r.querySelector(".pp").value.trim();
-      if(a>0){sum+=a;n++;ssum+=ptx!==""?parseNum(ptx)/100:(price>0?a/price:0)}
+      var a=parseNum(r.querySelector(".pa").value),ptx=r.querySelector(".pp").value.trim(),po=r.querySelector(".po");
+      if(a>0||ptx!==""){sum+=a;n++;plist.push({amount:a,pct:ptx!==""?parseNum(ptx):null,of:po&&po.value==="mine"?"mine":""});pnames.push(r.querySelector(".pn").value.trim()||"شريك")}
     });
+    ssum=shareSum(plist,price);
     if(!n){pv.innerHTML=stxt;return}
     var mine=price-sum;
     pv.innerHTML=mine<0?'<b class="bad">مبالغ الشركاء أكبر من سعر الشراء</b>':ssum>1.0001?'<b class="bad">نسب الأرباح أكتر من ١٠٠٪</b>':
-      'رأس مالك: <b>'+m(mine)+'</b> · رأس مال الشركاء: '+m(sum)+'<br>نسبة ربحك: <b>'+pct(1-ssum)+'</b> · نسبة الشركاء: '+pct(ssum);
+      'رأس مالك: <b>'+m(mine)+'</b> · رأس مال الشركاء: '+m(sum)+'<br>نسبة ربحك: <b>'+pct(1-ssum)+'</b> · '+shareList(plist,price).map(function(s,i){return esc(pnames[i])+' '+pct(s)}).join(' · ');
     if(stxt)pv.innerHTML+='<br>'+stxt;
     return;
   }
@@ -1109,7 +1117,7 @@ function renderDetail(){
     h+='<div class="sect">الشراكة 🤝</div><div class="card"><div class="kv"><span>رأس مالك</span><b>'+m(c.ownerCap)+'</b></div><div class="kv"><span>نسبة ربحك</span><b>'+pct(c.ownerShare)+'</b></div>';
     if(c.sold)h+='<div class="kv"><span>اللي ليك عند البيع</span><b>'+m(c.ownerCap+c.exp+c.myProfit)+'</b></div><div class="sub">رأس مالك + المصاريف اللي دفعتها + ربحك</div>';
     c.parts.forEach(function(p){
-      h+='<div class="pcard"><div class="row"><b>'+esc(p.name)+'</b><span class="sub">دفع '+m(p.amount)+' · نسبته من الربح '+pct(p.share)+'</span></div>';
+      h+='<div class="pcard"><div class="row"><b>'+esc(p.name)+'</b><span class="sub">'+(p.amount>0?'دفع '+m(p.amount):'من غير فلوس')+' · نسبته من الربح '+pct(p.share)+(p.of==="mine"&&p.pct!=null?' ('+fmt(p.pct)+'٪ من نصيبك)':'')+'</span></div>';
       if(c.sold){
         h+='<div class="kv"><span>ربحه</span><b class="'+(p.profit>=0?"good":"bad")+'">'+m(p.profit)+'</b></div>'+
            '<div class="kv"><span>المستحق له</span><b>'+m(p.due)+'</b></div>'+
