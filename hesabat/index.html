@@ -368,6 +368,7 @@ function renderHome(){
     '<button class="abtn" data-act="form" data-kind="sell"><span class="ic">✅</span>بيع عربية</button>'+
     '<button class="abtn" data-act="form" data-kind="expense"><span class="ic">💸</span>تسجيل مصروف</button>'+
     '<button class="abtn" data-act="form" data-kind="collect"><span class="ic">💰</span>تحصيل فلوس</button></div>';
+  h+='<button class="btn" style="margin-bottom:12px" data-act="report" data-kind="settle">🧾 تقفيل (عربيات / أسبوع / شهر)</button>';
   h+='<button class="btn sec" style="margin-bottom:12px" data-act="report" data-kind="day">📄 تقرير وكشف حساب (صورة / PDF)</button>';
   h+='<div class="card row" data-act="tab" data-tab="day" style="cursor:pointer"><div><div class="tl">النهاردة</div><div style="font-weight:700">مصاريف '+m(D.expT)+' · تحصيل '+m(D.cashT+D.instaT)+'</div></div><span class="sub">تقفيل اليوم ‹</span></div>';
   h+='<div class="grid2">'+
@@ -398,7 +399,7 @@ function carListHtml(){
 }
 function renderCars(){
   var F=[["stock","في المعرض"],["sold","اتباعت"],["debt","عليها فلوس"],["partner","شراكة"],["all","الكل"]];
-  return '<div class="top"><h1>العربيات</h1><button class="btn small" data-act="form" data-kind="buy">+ شراء عربية</button></div>'+
+  return '<div class="top"><h1>العربيات</h1><div style="display:flex;gap:8px"><button class="btn small sec" data-act="report" data-kind="settle">🧾 تقفيل</button><button class="btn small" data-act="form" data-kind="buy">+ شراء عربية</button></div></div>'+
     '<input class="search" id="q" placeholder="ابحث باسم العربية أو اللوحة" value="'+esc(S.q)+'">'+
     '<div class="chips">'+F.map(function(f){return '<button class="chip '+(S.filter===f[0]?"on":"")+'" data-act="filter" data-f="'+f[0]+'">'+f[1]+'</button>'}).join("")+'</div>'+
     '<div id="carList">'+carListHtml()+'</div>';
@@ -1447,7 +1448,87 @@ function rbCarPartners(){
   var fz=function(x){return String(x).replace(/[\\\/:*?"<>|\s]+/g,"-")};
   return {title:"تقرير شامل لشركاء العربية",sub:c.name+" · "+rfd(todayStr()),file:"hesabat-partners-"+fz(c.name)+"-"+todayStr(),blocks:B};
 }
-function buildReport(){return modal.kind==="partner"?rbPartner():modal.kind==="carp"?rbCarPartners():rbPeriod()}
+
+/* ---------- تقفيل (settlement report) ---------- */
+function stlRange(){
+  var sp=modal.sp||"all",t=todayStr(),f="";
+  if(sp==="week")f=addDays(t,-6);
+  else if(sp==="month")f=t.slice(0,8)+"01";
+  else if(sp==="range"){f=modal.sf||"";t=modal.st||t}
+  return {f:f,t:t};
+}
+function stlCars(){
+  var R=stlRange(),sp=modal.sp||"all";
+  return calc().cars.filter(function(c){return c.sold&&(sp==="all"||((c.sellDate||"")>=R.f&&(c.sellDate||"")<=R.t))})
+    .sort(function(a,b){return (b.sellDate||"").localeCompare(a.sellDate||"")});
+}
+function stlSelected(){var sel=modal.sel||{};return stlCars().filter(function(c){return sel[c.id]})}
+function stlSelectAll(){modal.sel={};stlCars().forEach(function(c){modal.sel[c.id]=1})}
+function stlFx(c){return typeof c.fexp==="number"?c.fexp:c.exp}
+function rbSettle(){
+  var cars=stlSelected(),T=calc();
+  if(!cars.length)return null;
+  var salesT=0,costT=0,expT=0,profT=0,myP=0,myCap=0,fx=0,fxOpen=0,custRem=0,ppl={},order=[];
+  cars.forEach(function(c){
+    salesT+=c.sellPrice;costT+=c.cost;expT+=c.exp;profT+=c.profit;myP+=c.myProfit;myCap+=c.ownerCap;
+    var f=stlFx(c);fx+=f;if(!c.reimbursed)fxOpen+=f;
+    if(c.remaining>0.5)custRem+=c.remaining;
+    c.parts.forEach(function(p){
+      var k=p.name||"شريك";if(!ppl[k]){ppl[k]={cap:0,prof:0,due:0,paid:0,rem:0,rows:[]};order.push(k)}
+      var o=ppl[k];o.cap+=p.amount;o.prof+=p.profit;o.due+=p.due;o.paid+=p.paid;o.rem+=p.remaining;o.rows.push({c:c,p:p});
+    });
+  });
+  var myTot=myCap+myP;
+  var tiles=[{l:"ليك انت (رأس مالك + ربحك)",v:rnum(myTot)+" ج",acc:true},
+    {l:"صافي ربح العربيات",v:rnum(profT,true)+" ج",c:rcol(profT)},{l:"ربحك انت",v:rnum(myP,true)+" ج",c:rcol(myP)},
+    {l:"إجمالي البيع",v:rnum(salesT)+" ج"},{l:"إجمالي التكلفة",v:rnum(costT)+" ج"},
+    {l:"رد للعهدة",v:rnum(fxOpen)+" ج",c:fxOpen>0.5?RK.warn:RK.good}];
+  var ptot=0;order.forEach(function(k){ptot+=ppl[k].rem});
+  if(order.length)tiles.splice(1,0,{l:"للشركاء (الباقي ليهم)",v:rnum(ptot)+" ج",c:ptot>0.5?RK.warn:RK.good});
+  if(custRem>0.5)tiles.push({l:"لسه عند العملاء من العربيات دي",v:rnum(custRem)+" ج",c:RK.warn});
+  var B=[{t:"tiles",items:tiles}];
+  B.push({t:"sec",title:"مين ليه كام"});
+  var rows=order.map(function(k){var o=ppl[k];return [k,o.cap,{v:o.prof,c:rcol(o.prof)},o.due,o.paid,{v:o.rem,c:o.rem>0.5?RK.warn:RK.good}]});
+  rows.unshift(["انت",myCap,{v:myP,c:rcol(myP)},myTot,"",""]);
+  var tc=myCap,tp=myP,td=myTot,tpd=0,tr=0;order.forEach(function(k){var o=ppl[k];tc+=o.cap;tp+=o.prof;td+=o.due;tpd+=o.paid;tr+=o.rem});
+  B.push({t:"table",cols:[{h:"الاسم",w:.24},{h:"رأس ماله",w:.16,k:"n"},{h:"ربحه",w:.15,k:"n",s:1},{h:"الإجمالي له",w:.16,k:"n"},{h:"اتسلّم",w:.14,k:"n"},{h:"الباقي له",w:.15,k:"n"}],
+    rows:rows.concat([{cells:["الإجمالي",tc,{v:tp,c:rcol(tp)},td,tpd,tr]}])});
+  var fundAfter=T.fundBal+fxOpen,gap=T.fund-fundAfter;
+  B.push({t:"sec",title:"العهدة"});
+  var kv=[["مصاريف العربيات دي من العهدة",rnum(fx)+" ج"]];
+  if(fx-fxOpen>0.5)kv.push(["اترد منها قبل كده",rnum(fx-fxOpen)+" ج",RK.good]);
+  kv.push(["المطلوب ترده للعهدة دلوقتي",rnum(fxOpen)+" ج",fxOpen>0.5?RK.warn:RK.good]);
+  kv.push(["رصيد العهدة دلوقتي",rnum(T.fundBal)+" ج"]);
+  kv.push(["رصيدها بعد الرد",rnum(fundAfter)+" ج"]);
+  kv.push(["رقم العهدة الأساسي",rnum(T.fund)+" ج"]);
+  if(gap>0.5)kv.push(["لسه ناقصها (مصاريف عربيات تانية)",rnum(gap)+" ج",RK.warn]);
+  else kv.push(["الحالة","العهدة هترجع لرقمها كامل ✔",RK.good,"rtl"]);
+  B.push({t:"kv",rows:kv});
+  B.push({t:"sec",title:"العربيات ("+cars.length+")"});
+  B.push({t:"table",cols:[{h:"العربية",w:.3},{h:"البيع",w:.18,k:"n"},{h:"التكلفة",w:.18,k:"n"},{h:"المصاريف",w:.16,k:"n"},{h:"الربح",w:.18,k:"n",s:1}],
+    rows:cars.map(function(c){return [c.name,c.sellPrice,c.cost,c.exp,{v:c.profit,c:rcol(c.profit)}]}).concat([{cells:["الإجمالي",salesT,costT,expT,{v:profT,c:rcol(profT)}]}])});
+  if(order.length){
+    B.push({t:"sec",title:"تفاصيل الشركاء"});
+    var dr=[];order.forEach(function(k){ppl[k].rows.forEach(function(r){dr.push([k,r.c.name,r.p.amount,(Math.round(r.p.share*1000)/10)+"%",{v:r.p.profit,c:rcol(r.p.profit)},{v:r.p.remaining,c:r.p.remaining>0.5?RK.warn:RK.good}])})});
+    B.push({t:"table",cols:[{h:"الشريك",w:.18},{h:"العربية",w:.24},{h:"دفع",w:.15,k:"n"},{h:"النسبة",w:.11},{h:"ربحه",w:.16,k:"n",s:1},{h:"الباقي له",w:.16,k:"n"}],rows:dr});
+  }
+  B.push({t:"note",text:"الربح = سعر البيع − (سعر الشراء + المصاريف). المصاريف بتتخصم الأول وبعدين الربح بيتقسم بنسبة كل شريك. «الإجمالي له» = اللي دفعه في العربية + ربحه. التقرير ده للمراجعة بس ومش بيسجّل أي حركة."});
+  var R=stlRange(),sp=modal.sp||"all",sub=cars.length+" عربية · "+(sp==="all"?"حتى "+rfd(todayStr()):"من "+rfd(R.f)+" إلى "+rfd(R.t));
+  return {title:"تقفيل حساب",sub:sub,file:"hesabat-settle-"+todayStr(),blocks:B};
+}
+function settleFields(){
+  var sp=modal.sp||"all",list=stlCars(),sel=modal.sel||{},n=0;
+  list.forEach(function(c){if(sel[c.id])n++});
+  var h='<div class="seg" style="grid-template-columns:1fr 1fr 1fr 1fr">'+[["all","الكل"],["week","آخر أسبوع"],["month","الشهر ده"],["range","من - إلى"]].map(function(x){return '<button class="'+(sp===x[0]?"on":"")+'" data-act="stlsp" data-v="'+x[0]+'">'+x[1]+'</button>'}).join("")+'</div>';
+  if(sp==="range"){var R=stlRange();h+='<div class="two"><label class="fld"><span>من</span><input type="date" name="stlf" value="'+esc(R.f)+'"></label><label class="fld"><span>إلى</span><input type="date" name="stlt" value="'+esc(R.t)+'"></label></div>'}
+  if(!list.length)return h+'<div class="banner">مفيش عربيات اتباعت في الفترة دي.</div>';
+  h+='<div class="row" style="margin-bottom:6px"><span class="sub">اختار العربيات اللي هتقفلها ('+n+' من '+list.length+')</span><button class="btn sec small" data-act="stlall">'+(n===list.length?"شيل الكل":"اختار الكل")+'</button></div>';
+  h+='<div class="card" style="padding:4px 14px;max-height:260px;overflow-y:auto">'+list.map(function(c){
+    return '<label class="item" style="cursor:pointer"><input type="checkbox" name="stlcar" value="'+esc(c.id)+'"'+(sel[c.id]?" checked":"")+' style="width:22px;height:22px;accent-color:var(--primary);flex:none"><div style="flex:1"><div class="t">'+esc(c.name)+(c.parts.length?'<span class="ptag">🤝 شراكة</span>':'')+'</div><div class="d">اتباعت '+fdate(c.sellDate)+' · ربح '+fmt(c.profit)+'</div></div></label>';
+  }).join("")+'</div>';
+  return h;
+}
+function buildReport(){return modal.kind==="settle"?rbSettle():modal.kind==="partner"?rbPartner():modal.kind==="carp"?rbCarPartners():rbPeriod()}
 
 function reportNames(){var o={},a=[];S.cars.forEach(function(c){(c.partners||[]).forEach(function(p){if(p.name&&!o[p.name]){o[p.name]=1;a.push(p.name)}})});return a}
 function openReport(kind,name,carId){
@@ -1457,9 +1538,10 @@ function openReport(kind,name,carId){
 }
 function drawReportSheet(){
   var names=reportNames(),k=modal.kind;
-  var seg='<div class="seg" style="grid-template-columns:1fr 1fr 1fr 1fr">'+[["day","يومي"],["month","شهري"],["partner","كشف شريك"],["carp","شركاء عربية"]].map(function(x){return '<button class="'+(k===x[0]?"on":"")+'" data-act="rkind" data-k="'+x[0]+'">'+x[1]+'</button>'}).join("")+'</div>';
+  var seg='<div class="seg" style="grid-template-columns:repeat(5,1fr)">'+[["settle","🧾 تقفيل"],["day","يومي"],["month","شهري"],["partner","كشف شريك"],["carp","شركاء عربية"]].map(function(x){return '<button class="'+(k===x[0]?"on":"")+'" data-act="rkind" data-k="'+x[0]+'">'+x[1]+'</button>'}).join("")+'</div>';
   var fld;
-  if(k==="day")fld='<label class="fld"><span>اليوم</span><input type="date" name="rday" value="'+esc(modal.day)+'"></label>';
+  if(k==="settle"){if(!modal.sel)stlSelectAll();fld=settleFields()}
+  else if(k==="day")fld='<label class="fld"><span>اليوم</span><input type="date" name="rday" value="'+esc(modal.day)+'"></label>';
   else if(k==="month")fld='<label class="fld"><span>الشهر</span><input type="month" name="rmonth" value="'+esc(modal.month)+'"></label>';
   else if(k==="carp"){
     var cpc=S.cars.filter(function(c){return (c.partners||[]).length});
@@ -1484,7 +1566,7 @@ async function regenReport(){
   var tok=++rTok;RC=null;
   try{
     var spec=buildReport();
-    if(!spec){if($("#rprev"))$("#rprev").innerHTML='<div class="empty">اختار شريك الأول</div>';return}
+    if(!spec){if($("#rprev"))$("#rprev").innerHTML='<div class="empty">'+(modal.kind==="settle"?"اختار عربية واحدة على الأقل":"اختار شريك الأول")+'</div>';return}
     var cv=await renderReport(spec);
     if(tok!==rTok||!modal||modal.type!=="report")return;
     RC={canvas:cv,file:spec.file};
@@ -1634,6 +1716,8 @@ document.addEventListener("click",async function(e){
   else if(a==="reimb"){var c=carById(t.dataset.id);if(c)patch("cars/"+c.id,{reimbursed:!c.reimbursed,reimbDate:c.reimbursed?null:todayStr()})}
   else if(a==="report")openReport(t.dataset.kind,t.dataset.name,t.dataset.car);
   else if(a==="rkind"){modal.kind=t.dataset.k;drawReportSheet()}
+  else if(a==="stlsp"){modal.sp=t.dataset.v;if(modal.sp==="range"&&!modal.sf){modal.sf=todayStr().slice(0,8)+"01";modal.st=todayStr()}stlSelectAll();drawReportSheet()}
+  else if(a==="stlall"){var sl=stlCars(),sn=sl.filter(function(c){return (modal.sel||{})[c.id]}).length;if(sn===sl.length)modal.sel={};else stlSelectAll();drawReportSheet()}
   else if(a==="rsave")saveReport(t.dataset.f);
   else if(a==="export")exportCsv();
   else if(a==="backup")exportBackup();
@@ -1674,6 +1758,8 @@ document.addEventListener("input",function(e){
 document.addEventListener("change",function(e){
   if(modal&&modal.type==="report"){
     var rn=e.target.name,rmap={rday:"day",rmonth:"month",rpartner:"partner",rcar:"car",rcarp:"car",rexp:"exd"};
+    if(rn==="stlcar"){modal.sel=modal.sel||{};if(e.target.checked)modal.sel[e.target.value]=1;else delete modal.sel[e.target.value];var st=$("#sheet").scrollTop;drawReportSheet();$("#sheet").scrollTop=st;return}
+    if((rn==="stlf"||rn==="stlt")&&e.target.value){if(rn==="stlf")modal.sf=e.target.value;else modal.st=e.target.value;stlSelectAll();drawReportSheet();return}
     if(rmap[rn]){
       if(rn==="rcar"||rn==="rcarp")modal.car=e.target.value;
       else if(rn==="rexp")modal.exd=e.target.value==="1";
