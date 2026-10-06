@@ -196,8 +196,8 @@ function parseNum(v){
   if(/^-?\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,"");
   var n=parseFloat(s); return isFinite(n)?n:0;
 }
-function fmt(n){var r=Math.round(n||0);if(r===0)r=0;return r.toLocaleString("en-US").replace(/,/g,".")}
-function fmtIn(v){var s=String(v==null?"":v).replace(/[٠-٩]/g,function(d){return AR.indexOf(d)});var neg=/^\s*-/.test(s);var d=s.replace(/\D/g,"").replace(/^0+(?=\d)/,"");if(!d)return neg?"-":"";return (neg?"-":"")+d.replace(/\B(?=(\d{3})+(?!\d))/g,".")}
+function fmt(n){var r=Math.round(n||0);if(r===0)r=0;return r.toLocaleString("en-US")}
+function fmtIn(v){var s=String(v==null?"":v).replace(/[٠-٩]/g,function(d){return AR.indexOf(d)});var neg=/^\s*-/.test(s);var d=s.replace(/\D/g,"").replace(/^0+(?=\d)/,"");if(!d)return neg?"-":"";return (neg?"-":"")+d.replace(/\B(?=(\d{3})+(?!\d))/g,",")}
 function moneyInput(el){var v=el.value,pos=el.selectionStart==null?v.length:el.selectionStart,before=v.slice(0,pos).replace(/[^0-9٠-٩]/g,"").length,nv=fmtIn(v);if(nv===v)return;el.value=nv;var i=0,c=0;while(i<nv.length&&c<before){if(/\d/.test(nv[i]))c++;i++}try{el.setSelectionRange(i,i)}catch(x){}}
 function pct(x){return '<span class="num">'+(Math.round((x||0)*1000)/10)+'%</span>'}
 function m(n,cls){return '<span class="num '+(cls||"")+'">'+fmt(n)+'</span> ج'}
@@ -1050,7 +1050,7 @@ function loadImg(src){return new Promise(function(res){var i=imgCache[src];if(i)
 function rf(sz,w){return (w||400)+" "+sz+"px Cairo,Tahoma,Arial,sans-serif"}
 function rtxt(ctx,s,x,y,font,color,al,dir){ctx.font=font;ctx.fillStyle=color;ctx.textBaseline="alphabetic";ctx.direction=dir||"rtl";ctx.textAlign=al||"right";ctx.fillText(String(s),x,y)}
 function rfit(ctx,s,font,maxW){s=String(s==null?"":s);ctx.font=font;ctx.direction="rtl";if(ctx.measureText(s).width<=maxW)return s;while(s.length>1&&ctx.measureText(s+"…").width>maxW)s=s.slice(0,-1);return s+"…"}
-function rnum(n,sign){var v=Math.round(n||0);if(v===0)v=0;return (sign&&v>0?"+":"")+v.toLocaleString("en-US").replace(/,/g,".")}
+function rnum(n,sign){var v=Math.round(n||0);if(v===0)v=0;return (sign&&v>0?"+":"")+v.toLocaleString("en-US")}
 function rcol(n){return n<-0.5?RK.bad:(n>0.5?RK.good:RK.text)}
 function rfd(s){return s?s.split("-").reverse().join("/"):""}
 function rrect(ctx,x,y,w,h,r,fill,stroke){ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x,y,w,h,r);else ctx.rect(x,y,w,h);if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=2;ctx.stroke()}}
