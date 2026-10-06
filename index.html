@@ -890,6 +890,7 @@ function renderDetail(){
     h+='</div>';
   }
   if(hasP){
+    h+='<button class="btn" style="margin:6px 0 4px" data-act="report" data-kind="carp" data-car="'+c.id+'">📄 تقرير شامل للعربية بكل الشركاء والنسب</button>';
     h+='<div class="sect">الشراكة 🤝</div><div class="card"><div class="kv"><span>رأس مالك</span><b>'+m(c.ownerCap)+'</b></div><div class="kv"><span>نسبة ربحك</span><b>'+pct(c.ownerShare)+'</b></div>';
     if(c.sold)h+='<div class="kv"><span>اللي ليك عند البيع</span><b>'+m(c.ownerCap+c.exp+c.myProfit)+'</b></div><div class="sub">رأس مالك + المصاريف اللي دفعتها + ربحك</div>';
     c.parts.forEach(function(p){
@@ -904,7 +905,6 @@ function renderDetail(){
       }
       h+='<div style="padding:6px 0 8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec small" data-act="form" data-kind="payout" data-car="'+c.id+'" data-pid="'+esc(p.id)+'">تسليم فلوس لـ'+esc(p.name)+'</button><button class="btn sec small" data-act="report" data-kind="partner" data-name="'+esc(p.name)+'" data-car="'+c.id+'">📄 تقرير للشريك</button></div></div>';
     });
-    if(c.parts.length>1)h+='<button class="btn sec" style="margin-top:4px" data-act="report" data-kind="carp" data-car="'+c.id+'">📄 تقرير شامل لكل الشركاء</button>';
     h+='</div>';
   }
   if(c.owedSeller>0.5){
