@@ -893,7 +893,7 @@ function renderDetail(){
     h+='<div class="sect">الشراكة 🤝</div><div class="card"><div class="kv"><span>رأس مالك</span><b>'+m(c.ownerCap)+'</b></div><div class="kv"><span>نسبة ربحك</span><b>'+pct(c.ownerShare)+'</b></div>';
     if(c.sold)h+='<div class="kv"><span>اللي ليك عند البيع</span><b>'+m(c.ownerCap+c.exp+c.myProfit)+'</b></div><div class="sub">رأس مالك + المصاريف اللي دفعتها + ربحك</div>';
     c.parts.forEach(function(p){
-      h+='<div class="pcard"><div class="row"><b>'+esc(p.name)+'</b><span class="sub">'+(p.amount>0?'دفع '+m(p.amount):'من غير فلوس')+' · نسبته من الربح '+pct(p.share)+(p.of==="mine"&&p.pct!=null?' ('+fmt(p.pct)+'٪ من نصيبك)':'')+'</span></div>';
+      h+='<div class="pcard"><div class="row"><b>'+esc(p.name)+'</b><span class="sub">'+(p.amount>0?'دفع '+m(p.amount):'من غير فلوس')+' · نسبته من الربح '+pct(p.share)+(p.of==="mine"&&p.pct!=null?' ('+pct(p.pct/100)+' من نصيبك)':'')+'</span></div>';
       if(c.sold){
         h+='<div class="kv"><span>ربحه</span><b class="'+(p.profit>=0?"good":"bad")+'">'+m(p.profit)+'</b></div>'+
            '<div class="kv"><span>المستحق له</span><b>'+m(p.due)+'</b></div>'+
