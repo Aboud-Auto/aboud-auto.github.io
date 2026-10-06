@@ -126,6 +126,54 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;background:#050505;opa
 .card,.tile{border:1px solid var(--line)}
 .nav{border-top:1px solid #3a2f12}
 #rprev canvas{width:100%;height:auto;display:block;border-radius:14px;border:1px solid var(--line)}
+/* ===== Desktop / laptop layout (wide screens only; phone unchanged) ===== */
+.nbrand,.nfoot{display:none}
+@media (min-width:860px) and (hover:hover){
+  .nav{top:0;bottom:0;left:auto;right:0;width:250px;flex-direction:column;justify-content:flex-start;gap:4px;padding:20px 14px;border-top:0;border-left:1px solid #3a2f12;background:linear-gradient(180deg,#141209 0%,#0b0a07 100%)}
+  .nav .nbrand{display:flex;flex-direction:column;align-items:center;gap:6px;padding:4px 0 18px;margin-bottom:10px;border-bottom:1px solid var(--line)}
+  .nav .nbrand img{width:92px;height:92px;border-radius:20px;border:1px solid var(--line);object-fit:cover}
+  .nav .nbrand b{color:var(--primary);font-size:19px;text-align:center;line-height:1.3}
+  .nav .nbrand span{color:var(--muted);font-size:12px}
+  .nav button{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;padding:12px 16px;border-radius:14px;font-size:16px;color:var(--text)}
+  .nav button .ic{font-size:22px;width:28px;text-align:center}
+  .nav button:hover{background:#1d180b;color:var(--primary)}
+  .nav button.on{background:var(--primary);color:var(--primary-ink);font-weight:800}
+  .nav .nfoot{display:block;margin-top:auto;color:var(--muted);font-size:12px;text-align:center;padding-top:12px;border-top:1px solid var(--line)}
+  body:has(.nav:not(:empty)) #app{margin-right:250px}
+  #app{max-width:none;margin:0 auto;padding:28px 40px 40px}
+  #app>*{max-width:1280px;margin-left:auto;margin-right:auto}
+  .brand img{width:84px;height:84px}
+  .brand h1{font-size:32px}
+  .top h1{font-size:26px}
+  .hero{padding:26px 30px}
+  .hero .v{font-size:42px}
+  .grid2{grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+  .tile{padding:18px}
+  .tv{font-size:24px}
+  .actions{grid-template-columns:repeat(4,1fr);gap:14px}
+  .abtn{padding:22px 10px;font-size:17px;transition:background .15s,transform .15s}
+  .abtn .ic{font-size:32px}
+  .abtn:hover{background:#2c240d;transform:translateY(-2px)}
+  .btn.sec:hover{background:#2c240d}
+  .btn:hover{filter:brightness(1.08)}
+  .card.car:hover,.item.car:hover{border-color:var(--primary)}
+  #carList{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
+  #carList .card{margin-bottom:0}
+  #carList .empty{grid-column:1/-1}
+  .search{max-width:520px}
+  .chips{flex-wrap:wrap;overflow:visible}
+  .daynav{max-width:520px}
+  .ov{align-items:center;background:rgba(0,0,0,.65)}
+  .sheet{max-width:760px;max-height:88vh;border-radius:22px;border:1px solid #3a2f12;padding:22px 26px}
+  .toast{bottom:30px;margin-right:125px}
+  .login{margin-top:12vh}
+  ::-webkit-scrollbar{width:10px}
+  ::-webkit-scrollbar-thumb{background:#3a2f12;border-radius:10px}
+  ::-webkit-scrollbar-track{background:transparent}
+}
+@media (min-width:1500px){
+  .grid2{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+}
 </style>
 </head>
 <body>
@@ -300,7 +348,7 @@ function carCard(c){
 
 function renderNav(){
   var tabs=[["home","🏠","الرئيسية"],["cars","🚗","العربيات"],["day","📅","اليوم"],["cap","🏦","رأس المال"],["led","🤝","السلف"],["set","⚙️","الإعدادات"]];
-  $("#nav").innerHTML=tabs.map(function(t){return '<button class="'+(S.tab===t[0]?"on":"")+'" data-act="tab" data-tab="'+t[0]+'"><span class="ic">'+t[1]+'</span>'+t[2]+'</button>'}).join("");
+  $("#nav").innerHTML='<div class="nbrand"><img src="'+esc(brandLogo())+'" alt=""><b>'+esc(brandName())+'</b></div>'+tabs.map(function(t){return '<button class="'+(S.tab===t[0]?"on":"")+'" data-act="tab" data-tab="'+t[0]+'"><span class="ic">'+t[1]+'</span>'+t[2]+'</button>'}).join("")+'<div class="nfoot">'+fdate(todayStr())+'</div>';
 }
 
 function renderHome(){
