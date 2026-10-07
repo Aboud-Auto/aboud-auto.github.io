@@ -1008,7 +1008,7 @@ function openForm(kind,o){
     var isub=o.sub==="wd"?"wd":"dep",isel=IL.some(function(x){return x.id===(o.sel||o.iid)})?(o.sel||o.iid):IL[0].id;
     h=sheetHead("💼 فلوس مستثمر")+'<div class="seg"><button data-act="ikind" data-k="dep" class="'+(isub==="dep"?"on":"")+'">➕ إيداع (جاب فلوس)</button><button data-act="ikind" data-k="wd" class="'+(isub==="wd"?"on":"")+'">➖ سحب (خد فلوس)</button></div>'+
       '<input type="hidden" name="kind" value="'+isub+'">'+
-      fld("المستثمر",'<select name="iid">'+IL.map(function(x){return '<option value="'+esc(x.id)+'"'+(x.id===isel?" selected":"")+'>'+esc(x.name)+' (رصيده '+fmt(x.bal)+' · حر '+fmt(x.free)+')</option>'}).join("")+'</select>')+
+      fld("المستثمر",'<select name="iid">'+IL.map(function(x){return '<option value="'+esc(x.id)+'"'+(x.id===isel?" selected":"")+'>'+esc(x.name)+' (رصيده '+fmt(x.bal)+' · كاش '+fmt(x.free)+')</option>'}).join("")+'</select>')+
       '<div class="two">'+fld("المبلغ",minp("amount"))+fld("التاريخ",dinp("date"))+'</div>'+
       fld(isub==="wd"?"اتسحبت من":"الفلوس دخلت",srcSel("src"))+fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+
       '<div class="preview" id="pv"></div><button class="btn" data-act="submit">حفظ</button>';
@@ -1068,7 +1068,7 @@ function updatePreview(){
   if(k==="invmove"){
     var Ti=calc(),ia0=parseNum(val("amount")),io0=Ti.inv.list.find(function(x){return x.id===val("iid")}),wd0=val("kind")==="wd",ii0=val("src")==="insta",sg1=wd0?-ia0:ia0;
     var sf1=Ti.safeBal+(ii0?0:sg1),ib1=Ti.instaBal+(ii0?sg1:0);
-    pv.innerHTML=(io0?'رصيد '+esc(io0.name)+' بعد العملية: <b>'+m(io0.bal+sg1)+'</b> · حر '+m(io0.free+sg1)+(wd0&&ia0>io0.free+0.5?'<br><b class="bad">المبلغ أكبر من الحر عنده (الباقي شغال في عربيات)</b>':'')+'<br>':'')+'بعد العملية: الخزنة <b class="'+(sf1<0?"bad":"")+'">'+m(sf1)+'</b> · إنستاباي <b class="'+(ib1<0?"bad":"")+'">'+m(ib1)+'</b>';
+    pv.innerHTML=(io0?'رصيد '+esc(io0.name)+' بعد العملية: <b>'+m(io0.bal+sg1)+'</b> · كاش '+m(io0.free+sg1)+(wd0&&ia0>io0.free+0.5?'<br><b class="bad">المبلغ أكبر من الكاش اللي عنده (الباقي شغال في عربيات)</b>':'')+'<br>':'')+'بعد العملية: الخزنة <b class="'+(sf1<0?"bad":"")+'">'+m(sf1)+'</b> · إنستاباي <b class="'+(ib1<0?"bad":"")+'">'+m(ib1)+'</b>';
     return;
   }
   if(k==="buy"||k==="edit"){
@@ -1429,7 +1429,7 @@ function invLossPrompt(cid){
 function invMoveLabel(x){return x.kind==="dep"?"➕ إيداع":x.kind==="wd"?"➖ سحب":"📉 سداد خسارة من أرباحه"}
 function invCard(o){
   return '<div class="item car" data-act="inv" data-id="'+esc(o.id)+'" style="cursor:pointer"><div style="flex:1"><div class="t">💼 '+esc(o.name)+(o.lossRem>0.5?'<span class="ptag">📉 عليه خسارة</span>':'')+'</div>'+
-    '<div class="d">'+(o.pct!=null?'نسبته '+o.pct+'% · ':'')+'حر '+fmt(o.free)+' · في عربيات '+fmt(o.working)+'</div></div><span class="num '+(o.bal<0?"bad":"")+'" style="font-weight:700">'+fmt(o.bal)+'</span></div>';
+    '<div class="d">'+(o.pct!=null?'نسبته '+o.pct+'% · ':'')+'كاش في الخزنة '+fmt(o.free)+' · في عربيات '+fmt(o.working)+'</div></div><span class="num '+(o.bal<0?"bad":"")+'" style="font-weight:700">'+fmt(o.bal)+'</span></div>';
 }
 function renderInv(){
   if(S.iv==="jard")return renderJard();
@@ -1491,7 +1491,7 @@ function cashSplit(T){
     '<div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin:4px 0 10px;background:var(--line)"><div style="width:'+w(o.mine)+'%;background:var(--primary)"></div><div style="width:'+w(o.pc)+'%;background:var(--silver)"></div><div style="width:'+w(o.ic)+'%;background:#8a6d1f"></div></div>'+
     '<div class="kv"><span>💰 بتاعتك انت</span><b class="'+(o.mine<0?"bad":"")+'">'+m(o.mine)+'</b></div>'+
     '<div class="kv"><span>🤝 بتاعة الشركاء <span class="sub">(فلوسهم وأرباحهم من عربيات اتباعت)</span></span><b>'+m(o.pc)+'</b></div>'+
-    '<div class="kv"><span>💼 بتاعة المستثمرين <span class="sub">(فلوسهم الحرة)</span></span><b>'+m(o.ic)+'</b></div>'+
+    '<div class="kv"><span>💼 بتاعة المستثمرين <span class="sub">(الكاش بتاعهم)</span></span><b>'+m(o.ic)+'</b></div>'+
     '<div class="kv"><span>الإجمالي (كاش + إنستاباي)</span><b>'+m(o.tot)+'</b></div>';
   if(o.mine<-0.5)h+='<div class="banner" style="margin:10px 0 0">⚠️ انت صارف من فلوس الشركاء أو المستثمرين '+m(-o.mine)+'</div>';
   if(o.pw>0.5||o.iw>0.5)h+='<div class="sub" style="margin-top:8px">وبره الكاش، لسه شغال في عربيات: للشركاء '+m(o.pw)+' · للمستثمرين '+m(o.iw)+'</div>';
@@ -1629,7 +1629,7 @@ function rbInvestor(){
   var T=calc(),o=T.inv.list.find(function(x){return x.id===modal.inv});if(!o)return null;
   var pc=function(x){return (Math.round((x||0)*1000)/10)+"%"},fz=function(x){return String(x).replace(/[\\\/:*?"<>|\s]+/g,"-")};
   var it=[{l:"رصيده الحالي",v:rnum(o.bal)+" ج",acc:true},{l:"رأس ماله (اللي جابه − اللي سحبه)",v:rnum(o.cap)+" ج"},{l:"أرباحه من العربيات",v:rnum(o.prof)+" ج",c:RK.good},
-    {l:"شغال في عربيات",v:rnum(o.working)+" ج"},{l:"حر في الخزنة",v:rnum(o.free)+" ج"}];
+    {l:"شغال في عربيات",v:rnum(o.working)+" ج"},{l:"كاش في الخزنة",v:rnum(o.free)+" ج"}];
   if(o.loss>0.5)it.push({l:"خسائره من العربيات",v:rnum(o.loss)+" ج",c:RK.bad},{l:"خسارة عليه لسه",v:rnum(Math.max(o.lossRem,0))+" ج",c:o.lossRem>0.5?RK.warn:RK.good});
   var B=[{t:"tiles",items:it}];
   var cars=o.cars.slice().sort(function(a,b){return (a.c.buyDate||"").localeCompare(b.c.buyDate||"")});
@@ -1658,7 +1658,7 @@ function rbInvestor(){
 }
 function rbInvAll(){
   var T=calc(),I=T.inv;if(!I.list.length)return null;
-  var B=[{t:"tiles",items:[{l:"إجمالي فلوس المستثمرين",v:rnum(I.bal)+" ج",acc:true},{l:"شغالة في عربيات",v:rnum(I.working)+" ج"},{l:"حرة في الخزنة",v:rnum(I.free)+" ج"},
+  var B=[{t:"tiles",items:[{l:"إجمالي فلوس المستثمرين",v:rnum(I.bal)+" ج",acc:true},{l:"شغالة في عربيات",v:rnum(I.working)+" ج"},{l:"كاش في الخزنة",v:rnum(I.free)+" ج"},
     {l:"أرباحهم من العربيات",v:rnum(I.prof)+" ج",c:RK.good},{l:"عدد المستثمرين",v:String(I.list.length)}]}];
   if(I.loss>0.5)B[0].items.push({l:"خسائر عليهم لسه",v:rnum(I.lossRem)+" ج",c:I.lossRem>0.5?RK.warn:RK.good});
   B.push({t:"sec",title:"المستثمرين"});
