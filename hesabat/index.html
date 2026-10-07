@@ -2397,13 +2397,61 @@ function demoData(){
   S.brand={name:"معرض تجريبي"};
   S.cars=[];S.expenses=[];S.cols=[];S.cap=[];S.pay=[];S.transfers=[];S.ledger=[];S.ext=[];S.inv=[];S.invmov=[];
   ["cars","expenses","cols","cap","pay","transfers","ledger","ext","inv","invmov","settings"].forEach(function(k){S.loaded[k]=true});
+  if(PROMO)promoData();
+}
+/* نسخة العرض للفيديو الترويجي: افتح الرابط بـ ?promo وهتفتح تجريبي فيه بيانات جاهزة. الحساب التجريبي العادي زي ما هو فاضي */
+var PROMO=/[?&]promo\b/.test(location.search);
+function promoData(){
+  function d(n){var x=new Date();x.setDate(x.getDate()-n);return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0")}
+  var t=Date.now(),k=0;function c(o){o.createdAt=t-(1e6-(k++)*1e3);return o}
+  S.brand={name:"معرض النور للسيارات"};
+  S.settings={capital:2000000,fund:100000,fundEmp:"محمود"};
+  S.inv=[c({id:"i1",name:"محمد السيد",pct:30,note:""})];
+  S.invmov=[c({id:"im1",iid:"i1",kind:"dep",amount:300000,date:d(24),src:"cash",note:"أول إيداع"})];
+  S.cars=[
+    c({id:"c1",name:"هيونداي إلنترا 2019",buyPrice:485000,buyPaid:null,buyDate:d(20),buySrc:"cash",reimbursed:false,partners:[],investors:[{iid:"i1",name:"محمد السيد",amount:200000,mode:"money"}]}),
+    c({id:"c2",name:"كيا سيراتو 2020",buyPrice:540000,buyPaid:null,buyDate:d(18),buySrc:"cash",reimbursed:false,partners:[{id:"p1",name:"أحمد عبد الله",amount:270000,pct:50}],investors:[],sellPrice:590000,sellDate:d(4)}),
+    c({id:"c3",name:"تويوتا كورولا 2021",buyPrice:720000,buyPaid:650000,buyDate:d(12),buySrc:"cash",reimbursed:false,partners:[],investors:[]}),
+    c({id:"c4",name:"نيسان صني 2018",buyPrice:330000,buyPaid:null,buyDate:d(15),buySrc:"cash",reimbursed:false,partners:[],investors:[],sellPrice:365000,sellDate:d(2)}),
+    c({id:"c5",name:"شيفروليه أوبترا 2017",buyPrice:260000,buyPaid:null,buyDate:d(22),buySrc:"cash",reimbursed:false,partners:[],investors:[],sellPrice:278000,sellDate:d(9)})
+  ];
+  S.expenses=[
+    ["c1",3500,"توكيل",19],["c1",5000,"عمولة مسوق",17],["c1",800,"غسيل وتنضيف",16],
+    ["c2",6500,"صيانة",16],["c2",4000,"دهان",14],["c2",2500,"ترخيص وأوراق",10],
+    ["c3",1500,"نقل",11],["c3",3000,"سمكرة",8],
+    ["c4",2000,"كهرباء",13],["c4",3000,"عمولة المعرض",0],["c3",1200,"غسيل وتنضيف",0],
+    ["c5",4000,"صيانة",20]
+  ].map(function(e,i){return c({id:"e"+i,carId:e[0],amount:e[1],date:d(e[3]),type:e[2],src:"fund",sv:2,note:""})});
+  S.cols=[
+    c({id:"k1",carId:"c2",date:d(4),cash:400000,insta:190000,note:"عند البيع"}),
+    c({id:"k2",carId:"c4",date:d(2),cash:300000,insta:50000,note:"عند البيع"}),
+    c({id:"k4",carId:"c4",date:d(0),cash:5000,insta:0,note:"دفعة من الباقي"}),
+    c({id:"k3",carId:"c5",date:d(9),cash:278000,insta:0,note:"عند البيع"})
+  ];
+  S.cap=[
+    c({id:"cp1",kind:"addcap",amount:150000,date:d(21),src:"cash",note:"قبض الجمعية"}),
+    c({id:"cp2",kind:"jam",amount:10000,date:d(6),src:"cash",jname:"جمعية المعرض",note:""}),
+    c({id:"cp3",kind:"withdraw",amount:25000,date:d(5),src:"cash",note:"مصاريف البيت"})
+  ];
+  S.transfers=[
+    c({id:"t1",dir:"toSafe",amount:100000,date:d(3),note:"تحويل من إنستاباي للخزنة"}),
+    c({id:"t2",dir:"toFund",src:"cash",amount:20000,date:d(7),note:"تزويد العهدة"})
+  ];
+  S.ledger=[
+    c({id:"l1",kind:"loan",person:"الحاج سعيد",dir:"out",amount:100000,date:d(11),src:"cash",note:"سلفة يرجعها آخر الشهر"}),
+    c({id:"l2",kind:"pay",loanId:"l1",amount:40000,date:d(3),src:"cash",note:"دفعة أولى"}),
+    c({id:"l3",kind:"loan",person:"كريم",dir:"in",amount:50000,date:d(6),src:"cash",note:"أمانة عندي"})
+  ];
+  S.ext=[c({id:"x1",desc:"سمسرة بيع BMW 320i",seller:"م. هشام",buyer:"أ. وليد",amount:15000,date:d(5),how:"cash",note:""})];
+  S.pay=[];
 }
 function startDemo(){DEMO=true;db=demoDb;demoData();S.auth="in";S.tab="home";S.err=null;S.noDb=false;applyBrand();render();window.scrollTo(0,0)}
-function demoBar(){return '<div class="banner demo">👀 دي نسخة تجريبية فاضية: ابدأ بتحديد رأس المال والعهدة، وبعدها جرّب شراء وبيع براحتك. مفيش حاجة هتتحفظ.<button class="btn small" data-act="demoSignup">اعمل حسابك دلوقتي</button></div>'}
+function demoBar(){if(PROMO)return "";return '<div class="banner demo">👀 دي نسخة تجريبية فاضية: ابدأ بتحديد رأس المال والعهدة، وبعدها جرّب شراء وبيع براحتك. مفيش حاجة هتتحفظ.<button class="btn small" data-act="demoSignup">اعمل حسابك دلوقتي</button></div>'}
 function exitDemo(signup){try{if(signup)sessionStorage.setItem("hb_signup","1")}catch(e){}location.reload()}
 
 /* ---------- boot ---------- */
 async function boot(){
+  if(PROMO){startDemo();return}
   render();
   if(!window.firebase){S.auth="in";S.noDb=true;render();return}
   FBA=firebase.initializeApp({
