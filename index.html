@@ -378,6 +378,7 @@ function renderHome(){
     '<button class="abtn" data-act="form" data-kind="expense"><span class="ic">💸</span>تسجيل مصروف</button>'+
     '<button class="abtn" data-act="form" data-kind="collect"><span class="ic">💰</span>تحصيل فلوس</button></div>';
   h+='<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="ext">🤝 تسجيل عمولة خارجية</button>';
+  h+='<button class="btn sec" style="margin-bottom:12px" data-act="jard">📋 جرد الشركاء والمستثمرين</button>';
   h+='<button class="btn" style="margin-bottom:12px" data-act="report" data-kind="settle">🧾 تقفيل (عربيات / أسبوع / شهر)</button>';
   h+='<button class="btn sec" style="margin-bottom:12px" data-act="report" data-kind="day">📄 تقرير وكشف حساب (صورة / PDF)</button>';
   h+='<div class="card row" data-act="tab" data-tab="day" style="cursor:pointer"><div><div class="tl">النهاردة</div><div style="font-weight:700">مصاريف '+m(D.expT)+' · تحصيل '+m(D.cashT+D.instaT)+'</div></div><span class="sub">تقفيل اليوم ‹</span></div>';
@@ -621,6 +622,7 @@ function refresh(){
   if(modal&&modal.type==="detail")renderDetail();
   if(modal&&modal.type==="loan")renderLoan();
   if(modal&&modal.type==="inv")renderInvDetail();
+  if(modal&&modal.type==="person")renderPerson();
 }
 function renderListOnly(){var l=$("#carList");if(l)l.innerHTML=carListHtml();if(modal&&modal.type==="detail")renderDetail()}
 
@@ -1207,8 +1209,9 @@ function invCard(o){
     '<div class="d">'+(o.pct!=null?'نسبته '+o.pct+'% · ':'')+'حر '+fmt(o.free)+' · في عربيات '+fmt(o.working)+'</div></div><span class="num '+(o.bal<0?"bad":"")+'" style="font-weight:700">'+fmt(o.bal)+'</span></div>';
 }
 function renderInv(){
+  if(S.iv==="jard")return renderJard();
   var T=calc(),I=T.inv;
-  var h='<div class="top"><h1>تشغيل أموال</h1><button class="btn small" data-act="form" data-kind="investor">+ مستثمر جديد</button></div>'+
+  var h='<div class="top"><h1>تشغيل أموال</h1><button class="btn small" data-act="form" data-kind="investor">+ مستثمر جديد</button></div>'+invSeg()+
     '<div class="hero"><div class="l">فلوس المستثمرين اللي معاك</div><div class="v">'+m(I.bal)+'</div>'+
     '<div class="s">حرة في الخزنة: '+m(I.free)+' · شغالة في عربيات: '+m(I.working)+'</div>'+
     (I.lossRem>0.5?'<div class="s">خسائر عليهم لسه ما اتسددتش: '+m(I.lossRem)+'</div>':'')+
@@ -1248,6 +1251,127 @@ function renderInvDetail(){
   h+='<div class="two" style="margin-top:6px"><button class="btn sec" data-act="form" data-kind="investor" data-iid="'+esc(o.id)+'">تعديل</button><button class="btn danger" data-act="delinv" data-id="'+esc(o.id)+'">حذف المستثمر</button></div>';
   var prev=$("#sheet").scrollTop;
   $("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=prev;
+}
+
+/* ---------- جرد الشركاء والمستثمرين ---------- */
+function jardPeople(){
+  var T=calc(),mp={},L=[];
+  function get(n){if(!mp[n]){mp[n]={name:n,pc:[],inv:null};L.push(mp[n])}return mp[n]}
+  T.cars.forEach(function(c){c.parts.forEach(function(p){if(p.name)get(p.name).pc.push({c:c,p:p})})});
+  T.inv.list.forEach(function(o){if(o.name)get(o.name).inv=o});
+  L.forEach(function(x){
+    var s={amt:0,prof:0,due:0,paid:0,rem:0,open:0};
+    x.pc.forEach(function(r){s.amt+=r.p.amount;if(r.c.sold)s.prof+=r.p.profit;else s.open++;s.due+=r.p.due;s.paid+=r.p.paid;s.rem+=r.p.remaining});
+    x.ps=s;x.kind=x.pc.length&&x.inv?"both":x.inv?"inv":"partner";
+    x.ncars=x.pc.length+(x.inv?x.inv.cars.length:0);
+    x.owed=s.rem+(x.inv?x.inv.bal:0);
+    x.net=s.prof+(x.inv?x.inv.prof-x.inv.loss:0);
+    x.put=s.amt+(x.inv?x.inv.cap:0);
+    x.rows=[];
+    x.pc.forEach(function(r){x.rows.push({c:r.c,t:"p",amount:r.p.amount,share:r.p.share,profit:r.p.profit,paid:r.p.paid,rem:r.p.remaining})});
+    if(x.inv)x.inv.cars.forEach(function(r){x.rows.push({c:r.c,t:"i",amount:r.v.amount,share:r.v.share,profit:r.v.profit,mode:r.v})});
+    x.rows.sort(function(a,b){return (b.c.buyDate||"").localeCompare(a.c.buyDate||"")});
+  });
+  L.sort(function(a,b){return a.name.localeCompare(b.name,"ar")});
+  return {T:T,list:L};
+}
+function jardKind(x){return x.kind==="both"?"🤝 شريك + 💼 مستثمر":x.kind==="inv"?"💼 مستثمر":"🤝 شريك"}
+function jardKindTxt(x){return x.kind==="both"?"شريك/مستثمر":x.kind==="inv"?"مستثمر":"شريك"}
+function invSeg(){return '<div class="seg" style="margin-bottom:12px"><button data-act="ivview" data-v="list" class="'+(S.iv!=="jard"?"on":"")+'">💼 المستثمرين</button><button data-act="ivview" data-v="jard" class="'+(S.iv==="jard"?"on":"")+'">📋 الجرد</button></div>'}
+function renderJard(){
+  var J=jardPeople(),L=J.list,np=0,ni=0,owP=0,owI=J.T.inv.bal;
+  L.forEach(function(x){if(x.pc.length){np++;owP+=x.ps.rem}if(x.inv)ni++});
+  var h='<div class="top"><h1>الجرد</h1></div>'+invSeg()+
+    '<div class="hero"><div class="l">إجمالي اللي ليهم عندك</div><div class="v">'+m(owP+owI)+'</div>'+
+    '<div class="s">🤝 '+np+' شريك · مستحق لهم '+m(owP)+'</div><div class="s">💼 '+ni+' مستثمر · أرصدتهم '+m(owI)+'</div></div>';
+  if(L.length)h+='<button class="btn" style="margin-bottom:12px" data-act="report" data-kind="jardall">📄 جرد شامل لكل الناس (صورة / PDF)</button>';
+  h+=L.length?'<div class="sect">اختار الشخص اللي عايز تجرده</div><div class="card" style="padding:6px 16px">'+L.map(function(x){
+    return '<div class="item car" data-act="person" data-name="'+esc(x.name)+'" style="cursor:pointer"><div style="flex:1"><div class="t">'+esc(x.name)+'<span class="ptag">'+jardKind(x)+'</span></div>'+
+      '<div class="d">'+x.ncars+' عربية · '+(x.net>=0?"ربحه ":"خسارته ")+fmt(Math.abs(x.net))+'</div></div><span class="num '+(x.owed<0?"bad":"")+'" style="font-weight:700">'+fmt(x.owed)+'</span></div>';
+  }).join("")+'</div><div class="sub" style="margin:6px 2px">الرقم اللي جنب كل اسم = اللي ليه عندك (للشريك: فلوسه + ربحه − اللي اتسلّمه، وللمستثمر: رصيده).</div>':
+    '<div class="empty">لسه مفيش شركاء ولا مستثمرين.<br>الشريك بيظهر هنا لما تسجّل عربية بشراكة، والمستثمر لما تضيفه من «المستثمرين».</div>';
+  return h;
+}
+function openPerson(n){modal={type:"person",name:n};renderPerson();$("#sheet").scrollTop=0}
+function renderPerson(){
+  var x=jardPeople().list.find(function(q){return q.name===modal.name});if(!x){closeSheet();return}
+  var h=sheetHead(esc(x.name))+'<div style="margin:-4px 0 10px"><span class="ptag" style="margin:0">'+jardKind(x)+'</span></div>'+
+    '<div class="hero"><div class="l">ليه عندك</div><div class="v">'+m(x.owed)+'</div><div class="s">'+x.ncars+' عربية · '+(x.net>=0?"إجمالي ربحه ":"إجمالي خسارته ")+m(Math.abs(x.net))+'</div></div>';
+  if(x.pc.length){var s=x.ps;
+    h+='<div class="sect">🤝 كشريك</div><div class="card">'+
+      '<div class="kv"><span>عدد العربيات</span><b>'+x.pc.length+(s.open?' (منها '+s.open+' في المعرض)':'')+'</b></div>'+
+      '<div class="kv"><span>إجمالي اللي دفعه</span><b>'+m(s.amt)+'</b></div>'+
+      '<div class="kv"><span>أرباحه من العربيات المباعة</span><b class="'+(s.prof>=0?"good":"bad")+'">'+m(s.prof)+'</b></div>'+
+      '<div class="kv"><span>المستحق له (فلوسه + ربحه)</span><b>'+m(s.due)+'</b></div>'+
+      '<div class="kv"><span>اتسلّم</span><b>'+m(s.paid)+'</b></div>'+
+      '<div class="kv"><span>الباقي له</span><b class="'+(s.rem>0.5?"warn":"good")+'">'+m(s.rem)+'</b></div></div>';
+  }
+  if(x.inv){var o=x.inv;
+    h+='<div class="sect">💼 كمستثمر</div><div class="card">'+
+      '<div class="kv"><span>رأس ماله (اللي جابه − اللي سحبه)</span><b>'+m(o.cap)+'</b></div>'+
+      '<div class="kv"><span>أرباحه</span><b class="good">'+m(o.prof)+'</b></div>'+
+      (o.loss>0.5?'<div class="kv"><span>خسائره</span><b class="bad">'+m(o.loss)+'</b></div>':'')+
+      (o.lossRem>0.5?'<div class="kv"><span>خسارة عليه لسه</span><b class="warn">'+m(o.lossRem)+'</b></div>':'')+
+      '<div class="kv"><span>رصيده</span><b>'+m(o.bal)+'</b></div>'+
+      '<div class="kv"><span>شغال في عربيات · حر</span><b>'+fmt(o.working)+' · '+fmt(o.free)+'</b></div>'+
+      '<button class="btn sec small" style="margin-top:8px" data-act="inv" data-id="'+esc(o.id)+'">فتح حساب المستثمر (إيداع / سحب)</button></div>';
+  }
+  h+='<button class="btn" style="margin:6px 0 10px" data-act="report" data-kind="person" data-name="'+esc(x.name)+'">📄 جرد '+esc(x.name)+' (صورة / PDF)</button>';
+  if(x.rows.length)h+='<div class="sect">العربيات اللي دخل فيها ('+x.rows.length+')</div><div class="card" style="padding:6px 16px">'+x.rows.map(function(r){
+    var c=r.c;
+    return '<div class="item car" data-act="car" data-id="'+c.id+'" style="cursor:pointer"><div style="flex:1"><div class="t">'+esc(c.name)+'<span class="ptag">'+(r.t==="p"?"🤝 شريك":"💼 مستثمر")+'</span></div>'+
+      '<div class="d">'+(r.t==="p"?(r.amount>0?"دفع "+fmt(r.amount):"من غير فلوس"):"من فلوسه "+fmt(r.amount))+' · نسبته '+pct(r.share)+' · '+(c.sold?"اتباعت "+fdate(c.sellDate):"في المعرض")+(r.t==="p"&&c.sold?' · الباقي له '+fmt(r.rem):'')+'</div></div>'+
+      (c.sold?'<span class="num '+(r.profit>=0?"good":"bad")+'" style="font-weight:700">'+fmt(r.profit)+'</span>':'<span class="badge b-stock">شغالة</span>')+'</div>';
+  }).join("")+'</div>';
+  var prev=$("#sheet").scrollTop;
+  $("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=prev;
+}
+function jardNames(){return jardPeople().list.map(function(x){return x.name})}
+function rbPerson(){
+  var x=jardPeople().list.find(function(q){return q.name===modal.person});if(!x)return null;
+  var pc=function(v){return (Math.round((v||0)*1000)/10)+"%"},fz=function(v){return String(v).replace(/[\\\/:*?"<>|\s]+/g,"-")};
+  var it=[{l:"ليه عندي",v:rnum(x.owed)+" ج",acc:true},{l:"عدد العربيات",v:String(x.ncars)},{l:x.net>=0?"إجمالي ربحه":"إجمالي خسارته",v:rnum(Math.abs(x.net))+" ج",c:x.net>=0?RK.good:RK.bad},{l:"الصفة",v:jardKindTxt(x)}];
+  var B=[{t:"tiles",items:it}];
+  if(x.rows.length){
+    var ta=0,tp=0;
+    B.push({t:"sec",title:"العربيات اللي دخل فيها ("+x.rows.length+")"});
+    B.push({t:"table",cols:[{h:"العربية",w:.26},{h:"الصفة",w:.12},{h:"دفع",w:.17,k:"n"},{h:"نسبته",w:.1},{h:"ربحه",w:.16,k:"n",s:1},{h:"الحالة",w:.19}],
+      rows:x.rows.slice().reverse().map(function(r){ta+=r.amount;if(r.c.sold)tp+=r.profit;return [r.c.name,r.t==="p"?"شريك":"مستثمر",r.amount,pc(r.share),r.c.sold?{v:r.profit,c:rcol(r.profit)}:"",r.c.sold?"اتباعت":"في المعرض"]})
+        .concat([{cells:["الإجمالي","",ta,"",{v:tp,c:rcol(tp)},""]}])});
+  }
+  if(x.pc.length){var s=x.ps;
+    B.push({t:"sec",title:"حسابه كشريك"});
+    B.push({t:"kv",rows:[["إجمالي اللي دفعه",rnum(s.amt)+" ج"],["أرباحه من العربيات المباعة",rnum(s.prof,true)+" ج",rcol(s.prof)],["المستحق له (فلوسه + ربحه)",rnum(s.due)+" ج"],["اتسلّم",rnum(s.paid)+" ج"],["الباقي له",rnum(s.rem)+" ج",s.rem>0.5?RK.warn:RK.good]]});
+    var py=[];x.pc.forEach(function(r){S.pay.forEach(function(q){if(q.carId===r.c.id&&q.pid===r.p.id)py.push({c:r.c,q:q})})});
+    if(py.length){py.sort(function(a,b){return (a.q.date||"").localeCompare(b.q.date||"")});
+      B.push({t:"table",cols:[{h:"تسليمات ليه",w:.46},{h:"التاريخ",w:.24},{h:"المبلغ",w:.3,k:"n"}],rows:py.map(function(o){return [o.c.name,rfd(o.q.date),+o.q.amount||0]}).concat([{cells:["الإجمالي","",x.ps.paid]}])})}
+  }
+  if(x.inv){var o=x.inv,kv=[["إجمالي اللي جابه",rnum(o.dep)+" ج"]];
+    if(o.wd>0.5)kv.push(["− اللي اتسحب له",rnum(o.wd)+" ج",RK.bad]);
+    kv.push(["+ أرباحه",rnum(o.prof)+" ج",RK.good]);
+    if(o.loss>0.5)kv.push(["− خسائره",rnum(o.loss)+" ج",RK.bad]);
+    if(o.lossRem>0.5)kv.push(["خسارة عليه لسه",rnum(o.lossRem)+" ج",RK.warn]);
+    kv.push(["= رصيده",rnum(o.bal)+" ج",RK.gold2],["منه شغال في عربيات",rnum(o.working)+" ج"],["ومنه حر",rnum(o.free)+" ج"]);
+    B.push({t:"sec",title:"حسابه كمستثمر"});B.push({t:"kv",rows:kv});
+  }
+  B.push({t:"note",text:"الربح الصافي لكل عربية = سعر البيع − (سعر الشراء + المصاريف)، وبعدين بيتقسم بنسبة كل واحد. «ليه عندي» = الباقي له كشريك + رصيده كمستثمر."});
+  return {title:"جرد حساب",sub:x.name+" · حتى "+rfd(todayStr()),file:PFX+"-jard-"+fz(x.name)+"-"+todayStr(),blocks:B};
+}
+function rbJardAll(){
+  var J=jardPeople(),L=J.list;if(!L.length)return null;
+  var np=0,ni=0,owP=0,pP=0,pI=0;
+  L.forEach(function(x){if(x.pc.length){np++;owP+=x.ps.rem;pP+=x.ps.prof}if(x.inv){ni++;pI+=x.inv.prof-x.inv.loss}});
+  var owI=J.T.inv.bal;
+  var B=[{t:"tiles",items:[{l:"إجمالي اللي ليهم عندي",v:rnum(owP+owI)+" ج",acc:true},{l:"عدد الناس",v:String(L.length)},
+    {l:"مستحق للشركاء ("+np+")",v:rnum(owP)+" ج"},{l:"أرصدة المستثمرين ("+ni+")",v:rnum(owI)+" ج"},
+    {l:"أرباح الشركاء",v:rnum(pP,true)+" ج",c:rcol(pP)},{l:"صافي أرباح المستثمرين",v:rnum(pI,true)+" ج",c:rcol(pI)}]}];
+  B.push({t:"sec",title:"الجرد"});
+  var tc=0,tn=0,to=0,tt=0;
+  B.push({t:"table",cols:[{h:"الاسم",w:.24},{h:"الصفة",w:.17},{h:"عربيات",w:.1},{h:"دفع",w:.16,k:"n"},{h:"ربحه",w:.15,k:"n",s:1},{h:"ليه عندي",w:.18,k:"n"}],
+    rows:L.map(function(x){tt+=x.ncars;tc+=x.put;tn+=x.net;to+=x.owed;return [x.name,jardKindTxt(x),String(x.ncars),x.put,{v:x.net,c:rcol(x.net)},{v:x.owed,c:x.owed>0.5?RK.warn:RK.text}]})
+      .concat([{cells:["الإجمالي","",String(tt),tc,{v:tn,c:rcol(tn)},to]}])});
+  B.push({t:"note",text:"«دفع» للشريك = اللي دفعه في العربيات، وللمستثمر = رأس ماله (اللي جابه − اللي سحبه). «ليه عندي» = الباقي للشريك + رصيد المستثمر. التقرير للمراجعة بس ومش بيسجّل أي حركة."});
+  return {title:"جرد شامل للشركاء والمستثمرين",sub:L.length+" شخص · حتى "+rfd(todayStr()),file:PFX+"-jard-all-"+todayStr(),blocks:B};
 }
 
 /* investor reports */
@@ -1637,21 +1761,28 @@ function settleFields(){
   }).join("")+'</div>';
   return h;
 }
-function buildReport(){return modal.kind==="inv"?rbInvestor():modal.kind==="invall"?rbInvAll():modal.kind==="settle"?rbSettle():modal.kind==="partner"?rbPartner():modal.kind==="carp"?rbCarPartners():rbPeriod()}
+function buildReport(){return modal.kind==="person"?rbPerson():modal.kind==="jardall"?rbJardAll():modal.kind==="inv"?rbInvestor():modal.kind==="invall"?rbInvAll():modal.kind==="settle"?rbSettle():modal.kind==="partner"?rbPartner():modal.kind==="carp"?rbCarPartners():rbPeriod()}
 
 function reportNames(){var o={},a=[];S.cars.forEach(function(c){(c.partners||[]).forEach(function(p){if(p.name&&!o[p.name]){o[p.name]=1;a.push(p.name)}})});return a}
 function openReport(kind,name,carId){
   var names=reportNames();
-  modal={type:"report",kind:kind||"day",day:S.day||todayStr(),month:todayStr().slice(0,7),partner:(name&&names.indexOf(name)>=0)?name:(names[0]||""),car:carId||"",exd:true,inv:(kind==="inv"&&name)?name:((S.inv[0]||{}).id||"")};
+  modal={type:"report",kind:kind||"day",day:S.day||todayStr(),month:todayStr().slice(0,7),partner:(name&&names.indexOf(name)>=0)?name:(names[0]||""),car:carId||"",exd:true,inv:(kind==="inv"&&name)?name:((S.inv[0]||{}).id||""),person:(kind==="person"&&name)?name:""};
   drawReportSheet();
 }
 function drawReportSheet(){
   var names=reportNames(),k=modal.kind;
-  var seg='<div class="seg" style="grid-template-columns:repeat(4,1fr)">'+[["settle","🧾 تقفيل"],["day","يومي"],["month","شهري"],["partner","كشف شريك"],["carp","شركاء عربية"],["inv","كشف مستثمر"],["invall","كل المستثمرين"]].map(function(x){return '<button class="'+(k===x[0]?"on":"")+'" data-act="rkind" data-k="'+x[0]+'">'+x[1]+'</button>'}).join("")+'</div>';
+  var seg='<div class="seg" style="grid-template-columns:repeat(4,1fr)">'+[["settle","🧾 تقفيل"],["day","يومي"],["month","شهري"],["partner","كشف شريك"],["carp","شركاء عربية"],["inv","كشف مستثمر"],["invall","كل المستثمرين"],["person","جرد شخص"],["jardall","جرد شامل"]].map(function(x){return '<button class="'+(k===x[0]?"on":"")+'" data-act="rkind" data-k="'+x[0]+'">'+x[1]+'</button>'}).join("")+'</div>';
   var fld;
   if(k==="settle"){if(!modal.sel)stlSelectAll();fld=settleFields()}
   else if(k==="day")fld='<label class="fld"><span>اليوم</span><input type="date" name="rday" value="'+esc(modal.day)+'"></label>';
   else if(k==="month")fld='<label class="fld"><span>الشهر</span><input type="month" name="rmonth" value="'+esc(modal.month)+'"></label>';
+  else if(k==="jardall")fld=jardNames().length?"":'<div class="banner">مفيش شركاء ولا مستثمرين لسه.</div>';
+  else if(k==="person"){
+    var JN=jardNames();
+    if(JN.length){if(JN.indexOf(modal.person)<0)modal.person=JN[0];
+      fld='<label class="fld"><span>الشخص</span><select name="rperson">'+JN.map(function(n){return '<option value="'+esc(n)+'"'+(n===modal.person?" selected":"")+'>'+esc(n)+'</option>'}).join("")+'</select></label>'}
+    else fld='<div class="banner">مفيش شركاء ولا مستثمرين لسه.</div>';
+  }
   else if(k==="invall")fld=calc().inv.list.length?"":'<div class="banner">مفيش مستثمرين لسه. ضيفهم من «مستثمرين».</div>';
   else if(k==="inv"){
     var IL2=calc().inv.list;
@@ -1682,7 +1813,7 @@ async function regenReport(){
   var tok=++rTok;RC=null;
   try{
     var spec=buildReport();
-    if(!spec){if($("#rprev"))$("#rprev").innerHTML='<div class="empty">'+(modal.kind==="settle"?"اختار عربية واحدة على الأقل":(modal.kind==="inv"||modal.kind==="invall"?"مفيش مستثمرين لسه":"اختار شريك الأول"))+'</div>';return}
+    if(!spec){if($("#rprev"))$("#rprev").innerHTML='<div class="empty">'+(modal.kind==="settle"?"اختار عربية واحدة على الأقل":(modal.kind==="person"||modal.kind==="jardall"?"مفيش شركاء ولا مستثمرين لسه":modal.kind==="inv"||modal.kind==="invall"?"مفيش مستثمرين لسه":"اختار شريك الأول"))+'</div>';return}
     var cv=await renderReport(spec);
     if(tok!==rTok||!modal||modal.type!=="report")return;
     RC={canvas:cv,file:spec.file};
@@ -1800,6 +1931,9 @@ document.addEventListener("click",async function(e){
   }
   else if(a==="loan")openLoan(t.dataset.id);
   else if(a==="inv")openInv(t.dataset.id);
+  else if(a==="person")openPerson(t.dataset.name);
+  else if(a==="ivview"){S.iv=t.dataset.v;render();window.scrollTo(0,0)}
+  else if(a==="jard"){S.tab="inv";S.iv="jard";render();window.scrollTo(0,0)}
   else if(a==="addi"){var il=$("#ilist");if(!il)return;if(!calc().inv.list.length)return toast("ضيف مستثمر الأول");il.insertAdjacentHTML("beforeend",invRow(null,modal&&modal.kind==="edit"&&modal.o?modal.o.id:null));updatePreview()}
   else if(a==="rmi"){t.closest(".irow").remove();updatePreview()}
   else if(a==="ikind"){var kp={amount:val("amount"),date:val("date"),note:val("note")},ksel=val("iid");openForm("invmove",{sub:t.dataset.k,iid:modal&&modal.o?modal.o.iid:undefined,sel:ksel});Object.keys(kp).forEach(function(n){var el=$("#sheet [name='"+n+"']");if(el&&kp[n])el.value=kp[n]});updatePreview()}
@@ -1862,7 +1996,7 @@ document.addEventListener("input",function(e){
 });
 document.addEventListener("change",function(e){
   if(modal&&modal.type==="report"){
-    var rn=e.target.name,rmap={rinv:"inv",rday:"day",rmonth:"month",rpartner:"partner",rcar:"car",rcarp:"car",rexp:"exd"};
+    var rn=e.target.name,rmap={rperson:"person",rinv:"inv",rday:"day",rmonth:"month",rpartner:"partner",rcar:"car",rcarp:"car",rexp:"exd"};
     if(rn==="stlcar"){modal.sel=modal.sel||{};if(e.target.checked)modal.sel[e.target.value]=1;else delete modal.sel[e.target.value];var st=$("#sheet").scrollTop;drawReportSheet();$("#sheet").scrollTop=st;return}
     if((rn==="stlf"||rn==="stlt")&&e.target.value){if(rn==="stlf")modal.sf=e.target.value;else modal.st=e.target.value;stlSelectAll();drawReportSheet();return}
     if(rmap[rn]){
