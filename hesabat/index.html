@@ -2404,7 +2404,7 @@ var PROMO=/[?&]promo\b/.test(location.search);
 function promoData(){
   function d(n){var x=new Date();x.setDate(x.getDate()-n);return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0")}
   var t=Date.now(),k=0;function c(o){o.createdAt=t-(1e6-(k++)*1e3);return o}
-  S.brand={name:"معرض النور للسيارات"};
+  S.brand={name:"ABOUD AUTO",logo:"promo-logo.jpg"};
   S.settings={capital:2000000,fund:100000,fundEmp:"محمود"};
   S.inv=[c({id:"i1",name:"محمد السيد",pct:30,note:""})];
   S.invmov=[c({id:"im1",iid:"i1",kind:"dep",amount:300000,date:d(24),src:"cash",note:"أول إيداع"})];
