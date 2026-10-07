@@ -374,6 +374,7 @@ function renderHome(){
      '<div class="s">رأس المال: '+m(T.capNow)+' · منه عهدة '+m(T.fund)+' · للشغل '+m(T.capNow-T.fund)+'</div>'+
      (Math.abs(T.pOwed)>=0.5?'<div class="s">منها مستحق للشركاء: '+m(T.pOwed)+'</div>':'')+(T.inv.list.length?'<div class="s">💼 فلوس مستثمرين: '+m(T.inv.bal)+' · حرة '+m(T.inv.free)+' · في عربيات '+m(T.inv.working)+'</div>':'')+
      (T.recv>0.5?'<div class="s">ليك عند الناس (سلف): '+m(T.recv)+'</div>':'')+(T.owe>0.5?'<div class="s">عليك للناس: '+m(T.owe)+'</div>':'')+(T.sOwe>0.5?'<div class="s">منها باقي لبايعي عربيات: '+m(T.sOwe)+'</div>':'')+'</div>';
+  h+=cashSplit(T);
   h+='<div class="grid2" style="margin-bottom:10px">'+
      tile("💵 الخزنة (كاش)",m(T.safeBal,T.safeBal<0?"bad":""),"")+
      tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"لسه ماتحوّلش للخزنة")+'</div>'+
@@ -1475,6 +1476,28 @@ function renderInvDetail(){
   $("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=prev;
 }
 
+/* ---------- الكاش بتاع مين ---------- */
+function cashOwn(T){
+  var pc=0,pw=0;
+  T.cars.forEach(function(c){c.parts.forEach(function(p){var r=Math.max(p.remaining,0);if(c.sold)pc+=r;else pw+=r})});
+  var ic=Math.max(T.inv.free,0);
+  return {pc:pc,pw:pw,ic:ic,iw:T.inv.working,mine:T.cashNow-pc-ic,tot:T.cashNow};
+}
+function cashSplit(T){
+  var hasP=T.cars.some(function(c){return c.parts.length});
+  if(!hasP&&!T.inv.list.length)return "";
+  var o=cashOwn(T),t=Math.max(o.tot,1),w=function(v){return Math.max(0,Math.min(100,v/t*100))};
+  var h='<div class="card"><div class="sect" style="margin-top:0">💵 الكاش بتاع مين؟</div>'+
+    '<div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin:4px 0 10px;background:var(--line)"><div style="width:'+w(o.mine)+'%;background:var(--primary)"></div><div style="width:'+w(o.pc)+'%;background:var(--silver)"></div><div style="width:'+w(o.ic)+'%;background:#8a6d1f"></div></div>'+
+    '<div class="kv"><span>💰 بتاعتك انت</span><b class="'+(o.mine<0?"bad":"")+'">'+m(o.mine)+'</b></div>'+
+    '<div class="kv"><span>🤝 بتاعة الشركاء <span class="sub">(فلوسهم وأرباحهم من عربيات اتباعت)</span></span><b>'+m(o.pc)+'</b></div>'+
+    '<div class="kv"><span>💼 بتاعة المستثمرين <span class="sub">(فلوسهم الحرة)</span></span><b>'+m(o.ic)+'</b></div>'+
+    '<div class="kv"><span>الإجمالي (كاش + إنستاباي)</span><b>'+m(o.tot)+'</b></div>';
+  if(o.mine<-0.5)h+='<div class="banner" style="margin:10px 0 0">⚠️ انت صارف من فلوس الشركاء أو المستثمرين '+m(-o.mine)+'</div>';
+  if(o.pw>0.5||o.iw>0.5)h+='<div class="sub" style="margin-top:8px">وبره الكاش، لسه شغال في عربيات: للشركاء '+m(o.pw)+' · للمستثمرين '+m(o.iw)+'</div>';
+  h+='<button class="btn sec small" style="margin-top:10px" data-act="jard">📋 تفاصيل كل شخص</button></div>';
+  return h;
+}
 /* ---------- جرد الشركاء والمستثمرين ---------- */
 function jardPeople(){
   var T=calc(),mp={},L=[];
@@ -1482,11 +1505,11 @@ function jardPeople(){
   T.cars.forEach(function(c){c.parts.forEach(function(p){if(p.name)get(p.name).pc.push({c:c,p:p})})});
   T.inv.list.forEach(function(o){if(o.name)get(o.name).inv=o});
   L.forEach(function(x){
-    var s={amt:0,prof:0,due:0,paid:0,rem:0,open:0};
-    x.pc.forEach(function(r){s.amt+=r.p.amount;if(r.c.sold)s.prof+=r.p.profit;else s.open++;s.due+=r.p.due;s.paid+=r.p.paid;s.rem+=r.p.remaining});
+    var s={amt:0,prof:0,due:0,paid:0,rem:0,open:0,cash:0,inCars:0};
+    x.pc.forEach(function(r){s.amt+=r.p.amount;var rr=Math.max(r.p.remaining,0);if(r.c.sold){s.prof+=r.p.profit;s.cash+=rr}else{s.open++;s.inCars+=rr}s.due+=r.p.due;s.paid+=r.p.paid;s.rem+=r.p.remaining});
     x.ps=s;x.kind=x.pc.length&&x.inv?"both":x.inv?"inv":"partner";
     x.ncars=x.pc.length+(x.inv?x.inv.cars.length:0);
-    x.owed=s.rem+(x.inv?x.inv.bal:0);
+    x.owed=s.rem+(x.inv?x.inv.bal:0);x.cash=s.cash+(x.inv?Math.max(x.inv.free,0):0);x.inCars=s.inCars+(x.inv?x.inv.working:0);
     x.net=s.prof+(x.inv?x.inv.prof-x.inv.loss:0);
     x.put=s.amt+(x.inv?x.inv.cap:0);
     x.rows=[];
@@ -1509,7 +1532,7 @@ function renderJard(){
   if(L.length)h+='<button class="btn" style="margin-bottom:12px" data-act="report" data-kind="jardall">📄 جرد شامل لكل الناس (صورة / PDF)</button>';
   h+=L.length?'<div class="sect">اختار الشخص اللي عايز تجرده</div><div class="card" style="padding:6px 16px">'+L.map(function(x){
     return '<div class="item car" data-act="person" data-name="'+esc(x.name)+'" style="cursor:pointer"><div style="flex:1"><div class="t">'+esc(x.name)+'<span class="ptag">'+jardKind(x)+'</span></div>'+
-      '<div class="d">'+x.ncars+' عربية · '+(x.net>=0?"ربحه ":"خسارته ")+fmt(Math.abs(x.net))+'</div></div><span class="num '+(x.owed<0?"bad":"")+'" style="font-weight:700">'+fmt(x.owed)+'</span></div>';
+      '<div class="d">'+x.ncars+' عربية · '+(x.net>=0?"ربحه ":"خسارته ")+fmt(Math.abs(x.net))+'<br>💵 في الخزنة '+fmt(x.cash)+' · 🚗 في عربيات '+fmt(x.inCars)+'</div></div><span class="num '+(x.owed<0?"bad":"")+'" style="font-weight:700">'+fmt(x.owed)+'</span></div>';
   }).join("")+'</div><div class="sub" style="margin:6px 2px">الرقم اللي جنب كل اسم = اللي ليه عندك (للشريك: فلوسه + ربحه − اللي اتسلّمه، وللمستثمر: رصيده).</div>':
     '<div class="empty">لسه مفيش شركاء ولا مستثمرين.<br>الشريك بيظهر هنا لما تسجّل عربية بشراكة، والمستثمر لما تضيفه من «المستثمرين».</div>';
   return h;
@@ -1518,7 +1541,7 @@ function openPerson(n){modal={type:"person",name:n};renderPerson();$("#sheet").s
 function renderPerson(){
   var x=jardPeople().list.find(function(q){return q.name===modal.name});if(!x){closeSheet();return}
   var h=sheetHead(esc(x.name))+'<div style="margin:-4px 0 10px"><span class="ptag" style="margin:0">'+jardKind(x)+'</span></div>'+
-    '<div class="hero"><div class="l">ليه عندك</div><div class="v">'+m(x.owed)+'</div><div class="s">'+x.ncars+' عربية · '+(x.net>=0?"إجمالي ربحه ":"إجمالي خسارته ")+m(Math.abs(x.net))+'</div></div>';
+    '<div class="hero"><div class="l">ليه عندك</div><div class="v">'+m(x.owed)+'</div><div class="s">💵 في الخزنة '+m(x.cash)+' · 🚗 في عربيات '+m(x.inCars)+'</div><div class="s">'+x.ncars+' عربية · '+(x.net>=0?"إجمالي ربحه ":"إجمالي خسارته ")+m(Math.abs(x.net))+'</div></div>';
   if(x.pc.length){var s=x.ps;
     h+='<div class="sect">🤝 كشريك</div><div class="card">'+
       '<div class="kv"><span>عدد العربيات</span><b>'+x.pc.length+(s.open?' (منها '+s.open+' في المعرض)':'')+'</b></div>'+
@@ -1526,7 +1549,9 @@ function renderPerson(){
       '<div class="kv"><span>أرباحه من العربيات المباعة</span><b class="'+(s.prof>=0?"good":"bad")+'">'+m(s.prof)+'</b></div>'+
       '<div class="kv"><span>المستحق له (فلوسه + ربحه)</span><b>'+m(s.due)+'</b></div>'+
       '<div class="kv"><span>اتسلّم</span><b>'+m(s.paid)+'</b></div>'+
-      '<div class="kv"><span>الباقي له</span><b class="'+(s.rem>0.5?"warn":"good")+'">'+m(s.rem)+'</b></div></div>';
+      '<div class="kv"><span>الباقي له</span><b class="'+(s.rem>0.5?"warn":"good")+'">'+m(s.rem)+'</b></div>'+
+      '<div class="kv" style="padding-right:14px"><span class="sub">· منه في الخزنة (عربيات اتباعت)</span><b>'+m(s.cash)+'</b></div>'+
+      '<div class="kv" style="padding-right:14px"><span class="sub">· منه في عربيات لسه في المعرض</span><b>'+m(s.inCars)+'</b></div></div>';
   }
   if(x.inv){var o=x.inv;
     h+='<div class="sect">💼 كمستثمر</div><div class="card">'+
@@ -1535,7 +1560,8 @@ function renderPerson(){
       (o.loss>0.5?'<div class="kv"><span>خسائره</span><b class="bad">'+m(o.loss)+'</b></div>':'')+
       (o.lossRem>0.5?'<div class="kv"><span>خسارة عليه لسه</span><b class="warn">'+m(o.lossRem)+'</b></div>':'')+
       '<div class="kv"><span>رصيده</span><b>'+m(o.bal)+'</b></div>'+
-      '<div class="kv"><span>شغال في عربيات · حر</span><b>'+fmt(o.working)+' · '+fmt(o.free)+'</b></div>'+
+      '<div class="kv" style="padding-right:14px"><span class="sub">· منه في الخزنة</span><b>'+m(o.free)+'</b></div>'+
+      '<div class="kv" style="padding-right:14px"><span class="sub">· منه في عربيات</span><b>'+m(o.working)+'</b></div>'+
       '<button class="btn sec small" style="margin-top:8px" data-act="inv" data-id="'+esc(o.id)+'">فتح حساب المستثمر (إيداع / سحب)</button></div>';
   }
   h+='<button class="btn" style="margin:6px 0 10px" data-act="report" data-kind="person" data-name="'+esc(x.name)+'">📄 جرد '+esc(x.name)+' (صورة / PDF)</button>';
@@ -1552,7 +1578,7 @@ function jardNames(){return jardPeople().list.map(function(x){return x.name})}
 function rbPerson(){
   var x=jardPeople().list.find(function(q){return q.name===modal.person});if(!x)return null;
   var pc=function(v){return (Math.round((v||0)*1000)/10)+"%"},fz=function(v){return String(v).replace(/[\\\/:*?"<>|\s]+/g,"-")};
-  var it=[{l:"ليه عندي",v:rnum(x.owed)+" ج",acc:true},{l:"عدد العربيات",v:String(x.ncars)},{l:x.net>=0?"إجمالي ربحه":"إجمالي خسارته",v:rnum(Math.abs(x.net))+" ج",c:x.net>=0?RK.good:RK.bad},{l:"الصفة",v:jardKindTxt(x)}];
+  var it=[{l:"ليه عندي",v:rnum(x.owed)+" ج",acc:true},{l:"عدد العربيات",v:String(x.ncars)},{l:"منه في الخزنة",v:rnum(x.cash)+" ج"},{l:"منه في عربيات",v:rnum(x.inCars)+" ج"},{l:x.net>=0?"إجمالي ربحه":"إجمالي خسارته",v:rnum(Math.abs(x.net))+" ج",c:x.net>=0?RK.good:RK.bad},{l:"الصفة",v:jardKindTxt(x)}];
   var B=[{t:"tiles",items:it}];
   if(x.rows.length){
     var ta=0,tp=0;
@@ -1563,7 +1589,7 @@ function rbPerson(){
   }
   if(x.pc.length){var s=x.ps;
     B.push({t:"sec",title:"حسابه كشريك"});
-    B.push({t:"kv",rows:[["إجمالي اللي دفعه",rnum(s.amt)+" ج"],["أرباحه من العربيات المباعة",rnum(s.prof,true)+" ج",rcol(s.prof)],["المستحق له (فلوسه + ربحه)",rnum(s.due)+" ج"],["اتسلّم",rnum(s.paid)+" ج"],["الباقي له",rnum(s.rem)+" ج",s.rem>0.5?RK.warn:RK.good]]});
+    B.push({t:"kv",rows:[["إجمالي اللي دفعه",rnum(s.amt)+" ج"],["أرباحه من العربيات المباعة",rnum(s.prof,true)+" ج",rcol(s.prof)],["المستحق له (فلوسه + ربحه)",rnum(s.due)+" ج"],["اتسلّم",rnum(s.paid)+" ج"],["الباقي له",rnum(s.rem)+" ج",s.rem>0.5?RK.warn:RK.good],["منه في الخزنة (عربيات اتباعت)",rnum(s.cash)+" ج"],["منه في عربيات لسه في المعرض",rnum(s.inCars)+" ج"]]});
     var py=[];x.pc.forEach(function(r){S.pay.forEach(function(q){if(q.carId===r.c.id&&q.pid===r.p.id)py.push({c:r.c,q:q})})});
     if(py.length){py.sort(function(a,b){return (a.q.date||"").localeCompare(b.q.date||"")});
       B.push({t:"table",cols:[{h:"تسليمات ليه",w:.46},{h:"التاريخ",w:.24},{h:"المبلغ",w:.3,k:"n"}],rows:py.map(function(o){return [o.c.name,rfd(o.q.date),+o.q.amount||0]}).concat([{cells:["الإجمالي","",x.ps.paid]}])})}
@@ -1573,7 +1599,7 @@ function rbPerson(){
     kv.push(["+ أرباحه",rnum(o.prof)+" ج",RK.good]);
     if(o.loss>0.5)kv.push(["− خسائره",rnum(o.loss)+" ج",RK.bad]);
     if(o.lossRem>0.5)kv.push(["خسارة عليه لسه",rnum(o.lossRem)+" ج",RK.warn]);
-    kv.push(["= رصيده",rnum(o.bal)+" ج",RK.gold2],["منه شغال في عربيات",rnum(o.working)+" ج"],["ومنه حر",rnum(o.free)+" ج"]);
+    kv.push(["= رصيده",rnum(o.bal)+" ج",RK.gold2],["منه في الخزنة",rnum(o.free)+" ج"],["منه في عربيات",rnum(o.working)+" ج"]);
     B.push({t:"sec",title:"حسابه كمستثمر"});B.push({t:"kv",rows:kv});
   }
   B.push({t:"note",text:"الربح الصافي لكل عربية = سعر البيع − (سعر الشراء + المصاريف)، وبعدين بيتقسم بنسبة كل واحد. «ليه عندي» = الباقي له كشريك + رصيده كمستثمر."});
@@ -1587,6 +1613,8 @@ function rbJardAll(){
   var B=[{t:"tiles",items:[{l:"إجمالي اللي ليهم عندي",v:rnum(owP+owI)+" ج",acc:true},{l:"عدد الناس",v:String(L.length)},
     {l:"مستحق للشركاء ("+np+")",v:rnum(owP)+" ج"},{l:"أرصدة المستثمرين ("+ni+")",v:rnum(owI)+" ج"},
     {l:"أرباح الشركاء",v:rnum(pP,true)+" ج",c:rcol(pP)},{l:"صافي أرباح المستثمرين",v:rnum(pI,true)+" ج",c:rcol(pI)}]}];
+  var CO=cashOwn(J.T);B[0].items.push({l:"منها في الخزنة",v:rnum(CO.pc+CO.ic)+" ج"},{l:"منها في عربيات",v:rnum(CO.pw+CO.iw)+" ج"});
+  B.push({t:"sec",title:"الكاش بتاع مين"});B.push({t:"kv",rows:[["بتاعتي انا",rnum(CO.mine)+" ج",CO.mine<0?RK.bad:RK.gold2],["بتاعة الشركاء",rnum(CO.pc)+" ج"],["بتاعة المستثمرين",rnum(CO.ic)+" ج"],["إجمالي الكاش",rnum(CO.tot)+" ج"]]});
   B.push({t:"sec",title:"الجرد"});
   var tc=0,tn=0,to=0,tt=0;
   B.push({t:"table",cols:[{h:"الاسم",w:.24},{h:"الصفة",w:.17},{h:"عربيات",w:.1},{h:"دفع",w:.16,k:"n"},{h:"ربحه",w:.15,k:"n",s:1},{h:"ليه عندي",w:.18,k:"n"}],
