@@ -511,7 +511,8 @@ function renderDay(){
   var lmd=lmapOf();
   D.lds.forEach(function(x){
     var sg=lsigned(x,lmd),lq=x.kind==="loan"?x:lmd[x.loanId],who=esc(lq?lq.person:"؟"),tt;
-    if(x.kind==="loan")tt=x.dir==="out"?"🤝 سلفة لـ"+who:"🤝 استلام من "+who;
+    if(x.kind==="ladd")tt=lq&&lq.dir==="out"?"➕ سلف زيادة لـ"+who:"➕ استلام زيادة من "+who;
+    else if(x.kind==="loan")tt=x.dir==="out"?"🤝 سلفة لـ"+who:"🤝 استلام من "+who;
     else tt=lq&&lq.dir==="out"?"↩️ "+who+" رجّع فلوس":"↩️ سداد لـ"+who;
     items.push({t:tt,d:dline(srcNote(x),esc(x.note||"")),a:x.src==="fund"?0:sg,info:x.src==="fund"?Math.abs(sg):null,del:["ledger",x.id]});
   });
@@ -631,12 +632,15 @@ function kashEntries(T){
   S.cols.forEach(function(x){if(!cm[x.carId]||x.trade)return;var a=(+x.cash||0)+(+x.insta||0);add({d:x.date,c:x.createdAt||0,a:a,t:(x.refund?"مرتجع - رد فلوس ":a<0?"رد فلوس ":"تحصيل ")+nm(x.carId),k:"كاش "+fmt(Math.abs(+x.cash||0))+" · إنستاباي "+fmt(Math.abs(+x.insta||0)),car:x.carId})});
   S.cap.forEach(function(x){var a=+x.amount||0;if(capOut(x.kind))add({d:x.date,c:x.createdAt||0,a:-a,t:capLabel(x).replace(/^\S+\s/,""),k:x.note||"رأس المال"});else if(capIn(x.kind))add({d:x.date,c:x.createdAt||0,a:a,t:"زيادة رأس المال",k:x.note||"رأس المال",cap:1})});
   var lm=lmapOf();
-  /* السلف: باند واحد لكل سلفة، ولما الفلوس ترجع (أو تسددها) الباند يتحدّث مكانه من غير سطر جديد */
-  var lpd={};S.ledger.forEach(function(x){if(x.kind==="pay"&&lm[x.loanId])lpd[x.loanId]=(lpd[x.loanId]||0)+(+x.amount||0)});
-  S.ledger.forEach(function(x){if(x.kind!=="loan")return;var amt=+x.amount||0,back=Math.min(amt,lpd[x.id]||0),left=amt-back,who=x.person||"؟",o=x.dir==="out",done=left<0.5;
-    E.push({d:x.date,c:x.createdAt||0,a:o?-left:left,side:o?"c":"d",zero:done?(o?"رجّع ✔":"اتسدد ✔"):null,
-      t:o?"سلفة لـ"+who:"فلوس من "+who,k:dline(x.note||"",back>0.5?(o?"رجّع ":"سددت ")+fmt(back)+(done?"":" · فاضل "+fmt(left)):"")||"سلف"});
-    if(x.date&&(!first||x.date<first))first=x.date});
+  /* السلف: باند واحد لكل سلفة. الزيادة والفلوس اللي بترجع بيتعدّلوا في نفس الباند من غير سطر جديد.
+     لو جزء منها من فلوس مستثمر: يتكتب في المدين إنه ليه جزء، وبيقل مكانه لما الفلوس ترجع */
+  loansCalc().forEach(function(l){var o=l.dir==="out",left=Math.max(0,l.remaining),done=left<0.5,who=l.person||"؟";
+    E.push({d:l.date,c:l.createdAt||0,a:o?-left:left,side:o?"c":"d",zero:done?(o?"رجّع ✔":"اتسدد ✔"):null,
+      t:o?"سلفة لـ"+who:"فلوس من "+who,k:dline(l.note||"",l.adds>0.5?(o?"سلف زيادة ":"زيادة ")+fmt(l.adds):"",l.paid>0.5?(o?"رجّع ":"سددت ")+fmt(l.paid)+(done?"":" · فاضل "+fmt(left)):"")||"سلف"});
+    l.invs.forEach(function(v,i){if(v.amount<0.5)return;var vd=v.left<0.5;
+      E.push({d:l.date,c:(l.createdAt||0)+0.1+i/100,a:v.left,side:"d",owe:1,zero:vd?"اترد ✔":null,t:(v.name||"مستثمر")+" ليه في سلفة "+who,k:vd?"رجعتله فلوسه "+fmt(v.amount):"من فلوسه "+fmt(v.amount)+(v.left<v.amount-0.5?" · فاضل "+fmt(v.left):""),});
+    });
+    if(l.date&&(!first||l.date<first))first=l.date});
   if(T.capital)E.push({d:first||todayStr(),c:-1,a:T.capital,t:"رأس المال الأول",k:"أصل رأس المال",cap:1});
   if(T.fund>0.5)E.push({d:first||todayStr(),c:-0.5,a:0,side:"d",info:fmt(T.fund),t:"منه عهدة للمصاريف",k:"رقم ثابت · جزء من رأس المال",ki:1});
   E.sort(function(a,b){return (a.d||"").localeCompare(b.d||"")||a.c-b.c});
@@ -731,15 +735,23 @@ function lmapOf(){var m={};S.ledger.forEach(function(x){if(x.kind==="loan")m[x.i
 function lsigned(x,lm){
   var a=+x.amount||0;
   if(x.kind==="loan")return x.dir==="out"?-a:a;
+  if(x.kind==="ladd"&&lm[x.loanId])return lm[x.loanId].dir==="out"?-a:a;
   if(x.kind==="pay"&&lm[x.loanId])return lm[x.loanId].dir==="out"?a:-a;
   return 0;
 }
 function loansCalc(){
   var m={},list=[];
-  S.ledger.forEach(function(x){if(x.kind==="loan"){m[x.id]={id:x.id,person:x.person||"",dir:x.dir,amount:+x.amount||0,date:x.date,src:x.src,note:x.note||"",createdAt:x.createdAt||0,paid:0,pays:[]};list.push(m[x.id])}});
-  S.ledger.forEach(function(x){if(x.kind==="pay"&&m[x.loanId]){m[x.loanId].paid+=+x.amount||0;m[x.loanId].pays.push(x)}});
-  list.forEach(function(l){l.remaining=l.amount-l.paid;l.pays.sort(function(a,b){return (b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0)})});
-  return list.sort(function(a,b){return (b.date||"").localeCompare(a.date||"")||b.createdAt-a.createdAt});
+  function srt(a,b){return (b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0)}
+  S.ledger.forEach(function(x){if(x.kind==="loan"){m[x.id]={id:x.id,person:x.person||"",dir:x.dir,amount0:+x.amount||0,amount:+x.amount||0,adds:0,date:x.date,src:x.src,note:x.note||"",createdAt:x.createdAt||0,paid:0,pays:[],moves:[],invs:(x.dir==="out"&&x.invs)||[]};list.push(m[x.id])}});
+  S.ledger.forEach(function(x){var l=m[x.loanId];if(!l)return;if(x.kind==="pay"){l.paid+=+x.amount||0;l.pays.push(x);l.moves.push(x)}else if(x.kind==="ladd"){l.adds+=+x.amount||0;l.amount+=+x.amount||0;l.moves.push(x)}});
+  /* لو جزء من السلفة من فلوس مستثمر: اللي بيرجع بيتقسم على قد نصيب كل واحد */
+  list.forEach(function(l){l.remaining=l.amount-l.paid;
+    var r=l.amount>0?Math.max(0,l.remaining)/l.amount:0;
+    l.invs=l.invs.map(function(v){var a=+v.amount||0;return {iid:v.iid,name:v.name||"",amount:a,left:a*r}});
+    l.invTot=l.invs.reduce(function(a,v){return a+v.amount},0);l.invLeft=l.invTot*r;
+    l.myAmount=l.amount-l.invTot;l.myLeft=Math.max(0,l.remaining)-l.invLeft;
+    l.pays.sort(srt);l.moves.sort(srt)});
+  return list.sort(srt);
 }
 function loanRow(l){
   var out=l.dir==="out",open=l.remaining>0.5;
@@ -760,6 +772,28 @@ function renderLed(){
     ((L.length||T.sOwe>0.5)?"":'<div class="empty">لسه مفيش سلف.<br>مثال: حد سحب ١٠٠ ألف من الخزنة وهيرجعها، سجّلها هنا والفلوس هتتخصم من الخزنة وتتحسب «ليك عند الناس» لحد ما يرجّعها.</div>')+
     box("ليك عندهم",oo)+box("عليك ليهم",oi)+sellerBox()+box("اتسددت",dn);
 }
+function liRow(){
+  var L=calc().inv.list;
+  return '<div class="irow lirow"><select class="liv">'+L.map(function(o){return '<option value="'+esc(o.id)+'">'+esc(o.name)+' (متاح '+fmt(o.free)+')</option>'}).join("")+'</select><button class="del" data-act="rmli" aria-label="حذف">✕</button>'+
+    '<input class="lia" data-money="1" inputmode="numeric" autocomplete="off" placeholder="المبلغ من فلوسه"></div>';
+}
+function loanInvBox(){
+  if(!calc().inv.list.length)return "";
+  return '<div class="fld"><span>💼 جزء من فلوس مستثمر (اختياري)</span><div id="lilist"></div>'+
+    '<button class="btn sec small" style="margin-top:4px" data-act="addli">+ جزء من فلوس مستثمر</button>'+
+    '<div class="sub" style="margin-top:8px">لو السلفة جزء منك وجزء من مستثمر، اكتب جزء المستثمر هنا والباقي بيتحسب منك. ولما الفلوس ترجع بتتقسم على قد نصيب كل واحد، وجزء المستثمر يرجع لرصيده.</div></div>';
+}
+function readLoanInv(total){
+  var rows=document.querySelectorAll("#sheet .lirow"),out=[],used={},sum=0,bad=null,L=calc().inv.list;
+  rows.forEach(function(r){if(bad)return;var iid=r.querySelector(".liv").value,a=parseNum(r.querySelector(".lia").value);if(!a)return;
+    var o=L.find(function(x){return x.id===iid});if(!o){bad="اختار المستثمر";return}
+    if(used[iid]){bad=o.name+" متكرر";return}used[iid]=1;
+    if(a>o.free+0.5){bad="رصيد "+o.name+" المتاح "+fmt(o.free)+" بس";return}
+    sum+=a;out.push({iid:iid,name:o.name,amount:a})});
+  if(bad)return {error:bad};
+  if(sum>total+0.5)return {error:"جزء المستثمرين أكبر من مبلغ السلفة"};
+  return {list:out};
+}
 function openLoan(id){modal={type:"loan",id:id};renderLoan();$("#sheet").scrollTop=0}
 function renderLoan(){
   var l=loansCalc().find(function(x){return x.id===modal.id});if(!l){closeSheet();return}
@@ -767,14 +801,18 @@ function renderLoan(){
   var h=sheetHead(esc(l.person||"بدون اسم"))+'<div class="card">'+
     '<div class="kv"><span>النوع</span><b>'+(out?"سلفة (إديته فلوس)":"أمانة (استلمت منه)")+'</b></div>'+
     '<div class="kv"><span>المبلغ</span><b>'+m(l.amount)+'</b></div>'+
+    (l.adds>0.5?'<div class="kv" style="padding-right:14px"><span class="sub">· الأصل '+fmt(l.amount0)+' + زيادة '+fmt(l.adds)+'</span><b></b></div>':'')+
+    (l.invs.length?'<div class="kv" style="padding-right:14px"><span class="sub">· منك</span><b>'+m(l.myAmount)+'</b></div>'+l.invs.map(function(v){return '<div class="kv" style="padding-right:14px"><span class="sub">· من فلوس '+esc(v.name||"مستثمر")+'</span><b>'+m(v.amount)+(l.paid>0.5?' <span class="sub">(فاضل '+fmt(v.left)+')</span>':'')+'</b></div>'}).join(""):'')+
     '<div class="kv"><span>التاريخ</span><b>'+fdate(l.date)+'</b></div>'+
     '<div class="kv"><span>'+(out?"خرجت من":"دخلت في")+'</span><b>'+(l.src==="insta"?"إنستاباي":l.src==="fund"?"العهدة":"الخزنة")+'</b></div>'+
     '<div class="kv"><span>'+(out?"اللي رجّعه":"اللي سددته")+'</span><b>'+m(l.paid)+'</b></div>'+
     '<div class="kv"><span>المتبقي</span><b class="'+(open?(out?"warn":"bad"):"good")+'">'+(open?m(l.remaining):"اتسدد بالكامل ✔")+'</b></div>'+
     (l.note?'<div class="kv"><span>ملاحظة</span><b>'+esc(l.note)+'</b></div>':'')+'</div>';
-  if(open)h+='<button class="btn" style="margin-bottom:10px" data-act="form" data-kind="loanpay" data-loan="'+l.id+'">'+(out?"+ استلام دفعة مرتجعة":"+ سداد دفعة")+'</button>';
-  if(l.pays.length)h+='<div class="sect">الدفعات</div><div class="card" style="padding:6px 16px">'+l.pays.map(function(x){
-    return '<div class="item"><div style="flex:1"><div class="t">'+(out?"رجّع":"سداد")+'</div><div class="d">'+fdate(x.date)+(dline(x.src==="insta"?"إنستاباي":"الخزنة",esc(x.note||""))?" · "+dline(x.src==="insta"?"إنستاباي":"الخزنة",esc(x.note||"")):"")+'</div></div><span class="num good" style="font-weight:700">'+fmt(x.amount)+'</span><button class="del" data-act="delitem" data-coll="ledger" data-id="'+x.id+'" aria-label="حذف">🗑</button></div>';
+  h+='<div class="two" style="margin-bottom:10px">'+(open?'<button class="btn" data-act="form" data-kind="loanpay" data-loan="'+l.id+'">'+(out?"+ استلام دفعة مرتجعة":"+ سداد دفعة")+'</button>':'')+
+    '<button class="btn sec" data-act="form" data-kind="loanadd" data-loan="'+l.id+'">'+(out?"➕ سلف زيادة":"➕ استلمت زيادة")+'</button></div>';
+  if(l.moves.length)h+='<div class="sect">الحركات</div><div class="card" style="padding:6px 16px">'+l.moves.map(function(x){
+    var ad=x.kind==="ladd";
+    return '<div class="item"><div style="flex:1"><div class="t">'+(ad?(out?"➕ سلف زيادة":"➕ استلمت زيادة"):(out?"رجّع":"سداد"))+'</div><div class="d">'+fdate(x.date)+(dline(x.src==="insta"?"إنستاباي":"الخزنة",esc(x.note||""))?" · "+dline(x.src==="insta"?"إنستاباي":"الخزنة",esc(x.note||"")):"")+'</div></div><span class="num '+(ad?"warn":"good")+'" style="font-weight:700">'+fmt(x.amount)+'</span><button class="del" data-act="delitem" data-coll="ledger" data-id="'+x.id+'" aria-label="حذف">🗑</button></div>';
   }).join("")+'</div>';
   h+='<button class="btn danger" style="margin-top:10px" data-act="delloan" data-id="'+l.id+'">حذف السلفة</button>';
   var prev=$("#sheet").scrollTop;
@@ -1125,8 +1163,18 @@ function openForm(kind,o){
       fld("اسم الشخص",'<input name="person" autocomplete="off" placeholder="مثال: أحمد">')+
       '<div class="two">'+fld("المبلغ",minp("amount"))+fld("التاريخ",dinp("date"))+'</div>'+
       fld("من خلال",srcSel("src"))+
+      '<div id="lib" style="'+(ld==="out"?"":"display:none")+'">'+loanInvBox()+'</div>'+
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+
       '<div class="preview" id="pv"></div><button class="btn" data-act="submit">حفظ</button>';
+  }else if(kind==="loanadd"){
+    var la=loansCalc().find(function(x){return x.id===o.loanId});if(!la){modal=prevModal;return}
+    var lao=la.dir==="out";
+    h=sheetHead(lao?"➕ سلف زيادة":"➕ استلمت منه زيادة")+'<div class="preview" style="display:block">'+esc(la.person||"")+' · '+(lao?"عليه دلوقتي ":"ليه دلوقتي ")+m(Math.max(0,la.remaining))+'</div>'+
+      '<input type="hidden" name="loanId" value="'+la.id+'">'+
+      '<div class="two">'+fld("المبلغ",minp("amount"))+fld("التاريخ",dinp("date"))+'</div>'+
+      fld(lao?"الفلوس خرجت من":"الفلوس دخلت في",srcSel("src"))+
+      fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+
+      '<div class="sub" style="margin-bottom:10px">الزيادة بتتضاف على نفس السلفة، ومش بتتعمل سلفة جديدة.</div><button class="btn" data-act="submit">حفظ</button>';
   }else if(kind==="loanpay"){
     var ln=loansCalc().find(function(x){return x.id===o.loanId});if(!ln){modal=prevModal;return}
     var lo=ln.dir==="out";
@@ -1397,8 +1445,16 @@ async function submitForm(){
       var lpn=val("person").trim(),lam=parseNum(val("amount"));
       if(!lpn)return toast("اكتب اسم الشخص");
       if(lam<=0)return toast("اكتب المبلغ");
-      var lnid=await create("ledger",{kind:"loan",person:lpn,dir:val("dir")==="in"?"in":"out",amount:lam,date:val("date")||todayStr(),src:srcVal(),note:val("note").trim()});
+      var ldir=val("dir")==="in"?"in":"out",linv=[];
+      if(ldir==="out"){var LR=readLoanInv(lam);if(LR.error)return toast(LR.error);linv=LR.list}
+      var lrec={kind:"loan",person:lpn,dir:ldir,amount:lam,date:val("date")||todayStr(),src:srcVal(),note:val("note").trim()};if(linv.length)lrec.invs=linv;
+      var lnid=await create("ledger",lrec);
       if(lnid){closeSheet();toast("اتسجّلت ✔")}
+    }else if(k==="loanadd"){
+      var aid=val("loanId"),aa=parseNum(val("amount"));
+      if(!loansCalc().some(function(x){return x.id===aid}))return toast("السلفة مش موجودة");
+      if(aa<=0)return toast("اكتب المبلغ");
+      if(await create("ledger",{kind:"ladd",loanId:aid,amount:aa,date:val("date")||todayStr(),src:srcVal(),note:val("note").trim()})){closeSheet();openLoan(aid);toast("اتضافت الزيادة ✔")}
     }else if(k==="loanpay"){
       var lid=val("loanId"),pa2=parseNum(val("amount")),ln2=loansCalc().find(function(x){return x.id===lid});
       if(!ln2)return toast("السلفة مش موجودة");
@@ -1542,16 +1598,17 @@ function invModeTxt(v){
 }
 function invStats(cars){
   var mp={},list=[];
-  S.inv.forEach(function(v){mp[v.id]={id:v.id,name:v.name||"",pct:hasPctOf(v)?+v.pct:null,note:v.note||"",createdAt:v.createdAt||0,dep:0,wd:0,prof:0,loss:0,lr:0,working:0,cars:[],moves:[]};list.push(mp[v.id])});
+  S.inv.forEach(function(v){mp[v.id]={id:v.id,name:v.name||"",pct:hasPctOf(v)?+v.pct:null,note:v.note||"",createdAt:v.createdAt||0,dep:0,wd:0,prof:0,loss:0,lr:0,working:0,lent:0,loans:[],cars:[],moves:[]};list.push(mp[v.id])});
   S.invmov.forEach(function(x){var o=mp[x.iid];if(!o)return;var a=+x.amount||0;if(x.kind==="dep")o.dep+=a;else if(x.kind==="wd")o.wd+=a;else if(x.kind==="lossrepay")o.lr+=a;o.moves.push(x)});
   cars.forEach(function(c){(c.invs||[]).forEach(function(v){var o=mp[v.iid];if(!o)return;o.cars.push({c:c,v:v});if(!c.sold)o.working+=v.amount;else if(v.profit>=0)o.prof+=v.profit;else o.loss+=-v.profit})});
-  var T={list:list,bal:0,working:0,free:0,lossRem:0,prof:0,loss:0,cap:0};
+  loansCalc().forEach(function(l){l.invs.forEach(function(v){var o=mp[v.iid];if(!o)return;o.lent+=v.left;o.loans.push({l:l,v:v})})});
+  var T={list:list,bal:0,working:0,lent:0,free:0,lossRem:0,prof:0,loss:0,cap:0};
   list.forEach(function(o){
-    o.cap=o.dep-o.wd;o.lossRem=o.loss-o.lr;o.profNet=o.prof-o.lr;o.bal=o.cap+o.prof-o.loss;o.free=o.bal-o.working;
+    o.cap=o.dep-o.wd;o.lossRem=o.loss-o.lr;o.profNet=o.prof-o.lr;o.bal=o.cap+o.prof-o.loss;o.free=o.bal-o.working-o.lent;
     o.repayable=Math.max(0,Math.min(o.lossRem,o.profNet));
     o.moves.sort(function(a,b){return (b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0)});
     o.cars.sort(function(a,b){return (b.c.buyDate||"").localeCompare(a.c.buyDate||"")});
-    T.bal+=o.bal;T.working+=o.working;T.free+=o.free;T.lossRem+=Math.max(o.lossRem,0);T.prof+=o.prof;T.loss+=o.loss;T.cap+=o.cap;
+    T.bal+=o.bal;T.working+=o.working;T.lent+=o.lent;T.free+=o.free;T.lossRem+=Math.max(o.lossRem,0);T.prof+=o.prof;T.loss+=o.loss;T.cap+=o.cap;
   });
   list.sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)});
   return T;
@@ -1613,7 +1670,7 @@ function invLossPrompt(cid){
 function invMoveLabel(x){return x.kind==="dep"?"➕ إيداع":x.kind==="wd"?"➖ سحب":"📉 سداد خسارة من أرباحه"}
 function invCard(o){
   return '<div class="item car" data-act="inv" data-id="'+esc(o.id)+'" style="cursor:pointer"><div style="flex:1"><div class="t">💼 '+esc(o.name)+(o.lossRem>0.5?'<span class="ptag">📉 عليه خسارة</span>':'')+'</div>'+
-    '<div class="d">'+(o.pct!=null?'نسبته '+o.pct+'% · ':'')+'كاش في الخزنة '+fmt(o.free)+' · في عربيات '+fmt(o.working)+'</div></div><span class="num '+(o.bal<0?"bad":"")+'" style="font-weight:700">'+fmt(o.bal)+'</span></div>';
+    '<div class="d">'+(o.pct!=null?'نسبته '+o.pct+'% · ':'')+'كاش في الخزنة '+fmt(o.free)+' · في عربيات '+fmt(o.working)+(o.lent>0.5?' · في سلف '+fmt(o.lent):'')+'</div></div><span class="num '+(o.bal<0?"bad":"")+'" style="font-weight:700">'+fmt(o.bal)+'</span></div>';
 }
 function renderInv(){
   if(S.iv==="jard")return renderJard();
@@ -1640,6 +1697,7 @@ function renderInvDetail(){
     (o.loss>0.5?'<div class="kv"><span>خسائره من العربيات</span><b class="bad">'+m(o.loss)+'</b></div><div class="kv"><span>اتسدد من الخسارة (من أرباحه)</span><b>'+m(o.lr)+'</b></div><div class="kv"><span>خسارة عليه لسه</span><b class="'+(o.lossRem>0.5?"warn":"good")+'">'+(o.lossRem>0.5?m(o.lossRem):"اتسددت ✔")+'</b></div>':'')+
     '<div class="kv"><span>رصيده الحالي</span><b>'+m(o.bal,o.bal<0?"bad":"")+'</b></div>'+
     '<div class="kv" style="padding-right:14px"><span class="sub">· شغال في عربيات</span><b>'+m(o.working)+'</b></div>'+
+    (o.lent>0.5?'<div class="kv" style="padding-right:14px"><span class="sub">· في سلف ('+o.loans.filter(function(x){return x.v.left>0.5}).map(function(x){return esc(x.l.person)}).join("، ")+')</span><b>'+m(o.lent)+'</b></div>':'')+
     '<div class="kv" style="padding-right:14px"><span class="sub">· حر في الخزنة</span><b>'+m(o.free,o.free<0?"bad":"")+'</b></div>'+
     (o.note?'<div class="kv"><span>ملاحظة</span><b>'+esc(o.note)+'</b></div>':'')+'</div>';
   h+='<div class="two" style="margin-bottom:10px"><button class="btn" data-act="form" data-kind="invmove" data-sub="dep" data-iid="'+esc(o.id)+'">➕ إيداع</button><button class="btn sec" data-act="form" data-kind="invmove" data-sub="wd" data-iid="'+esc(o.id)+'">➖ سحب</button></div>';
@@ -2037,7 +2095,8 @@ function rbPeriod(){
     B.push({t:"table",cols:[{h:"البند",w:.54},{h:"التاريخ",w:.2},{h:"المبلغ",w:.26,k:"n",s:1}],
       rows:lds.map(function(x){
         var sg=lsigned(x,lmx),lq=x.kind==="loan"?x:lmx[x.loanId],who=lq?lq.person:"؟",tt;
-        if(x.kind==="loan")tt=x.dir==="out"?"سلفة لـ "+who:"استلام من "+who;else tt=lq&&lq.dir==="out"?who+" رجّع فلوس":"سداد لـ "+who;
+        if(x.kind==="ladd")tt=lq&&lq.dir==="out"?"سلف زيادة لـ "+who:"استلام زيادة من "+who;
+        else if(x.kind==="loan")tt=x.dir==="out"?"سلفة لـ "+who:"استلام من "+who;else tt=lq&&lq.dir==="out"?who+" رجّع فلوس":"سداد لـ "+who;
         return [tt,rfd(x.date),{v:sg,c:rcol(sg)}]})})}
   if(xs.length){any=true;B.push({t:"sec",title:"أرباح خارجية - عمولات ("+xs.length+")"});
     B.push({t:"table",cols:[{h:"العملية",w:.54},{h:"التاريخ",w:.2},{h:"العمولة",w:.26,k:"n"}],
@@ -2385,6 +2444,8 @@ document.addEventListener("click",async function(e){
   else if(a==="ivview"){S.iv=t.dataset.v;render();window.scrollTo(0,0)}
   else if(a==="jard"){S.tab="inv";S.iv="jard";render();window.scrollTo(0,0)}
   else if(a==="addi"){var il=$("#ilist");if(!il)return;if(!calc().inv.list.length)return toast("ضيف مستثمر الأول");il.insertAdjacentHTML("beforeend",invRow(null,modal&&modal.kind==="edit"&&modal.o?modal.o.id:null));updatePreview()}
+  else if(a==="addli"){var lil=$("#lilist");if(lil)lil.insertAdjacentHTML("beforeend",liRow())}
+  else if(a==="rmli"){t.closest(".lirow").remove()}
   else if(a==="rmi"){t.closest(".irow").remove();updatePreview()}
   else if(a==="ikind"){var kp={amount:val("amount"),date:val("date"),note:val("note")},ksel=val("iid");openForm("invmove",{sub:t.dataset.k,iid:modal&&modal.o?modal.o.iid:undefined,sel:ksel});Object.keys(kp).forEach(function(n){var el=$("#sheet [name='"+n+"']");if(el&&kp[n])el.value=kp[n]});updatePreview()}
   else if(a==="ilfull"||a==="ilpart"){document.querySelectorAll("#sheet .seg button").forEach(function(b){b.classList.toggle("on",b===t)});var fa=$("#sheet [name='amount']");if(fa){if(a==="ilfull")fa.value=fmtIn(t.dataset.v);else{fa.value="";fa.focus()}}}
@@ -2392,12 +2453,13 @@ document.addEventListener("click",async function(e){
     if(dO.cars.length||dO.moves.length)return toast("المستثمر عليه حركات أو داخل في عربيات، امسحها الأول");
     confirmBox("تحذف المستثمر "+esc(dO.name)+"؟",async function(){if(await removeDoc("investors/"+did)){closeSheet();toast("اتحذف")}})}
   else if(a==="ldkind"){
+    var lb=$("#lib");if(lb)lb.style.display=t.dataset.k==="out"?"":"none";
     document.querySelectorAll("#sheet .seg button").forEach(function(b){b.classList.toggle("on",b===t)});
     $("#sheet [name='dir']").value=t.dataset.k;
     updatePreview();
   }
   else if(a==="delloan"){var dlid=t.dataset.id;confirmBox("هتحذف السلفة وكل دفعاتها نهائيًا. متأكد؟",async function(){
-    var dp=S.ledger.filter(function(x){return x.kind==="pay"&&x.loanId===dlid});
+    var dp=S.ledger.filter(function(x){return (x.kind==="pay"||x.kind==="ladd")&&x.loanId===dlid});
     for(var i=0;i<dp.length;i++)await removeDoc("ledger/"+dp[i].id);
     if(await removeDoc("ledger/"+dlid)){closeSheet();toast("اتحذفت")}})}
   else if(a==="lossdef"){
@@ -2444,7 +2506,7 @@ document.addEventListener("click",async function(e){
   else if(a==="delitem"){var coll=t.dataset.coll,iid=t.dataset.id;
     if(coll==="car"){openDetail(iid);return}
     confirmBox(coll==="ledger"&&S.ledger.some(function(x){return x.id===iid&&x.kind==="loan"})?"ده هيحذف السلفة وكل دفعاتها. متأكد؟":"تحذف الحركة دي؟",async function(){
-      if(coll==="ledger"){var lp2=S.ledger.filter(function(x){return x.kind==="pay"&&x.loanId===iid});for(var i=0;i<lp2.length;i++)await removeDoc("ledger/"+lp2[i].id)}
+      if(coll==="ledger"){var lp2=S.ledger.filter(function(x){return (x.kind==="pay"||x.kind==="ladd")&&x.loanId===iid});for(var i=0;i<lp2.length;i++)await removeDoc("ledger/"+lp2[i].id)}
       if(await removeDoc(coll+"/"+iid))toast("اتحذفت")})}
 });
 function liveKind(){return modal&&modal.type==="form"&&(modal.kind==="sell"||modal.kind==="collect"||modal.kind==="buy"||modal.kind==="edit"||modal.kind==="invmove"||modal.kind==="transfer"||modal.kind==="loan"||modal.kind==="loanpay"||modal.kind==="sellerpay"||modal.kind==="fundmove"||modal.kind==="fundcount")}
