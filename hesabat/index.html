@@ -618,11 +618,7 @@ function kashEntries(T){
       if(c.sold&&p.pr&&Math.round(p.pr)!==0)add({d:c.sellDate,c:(c.createdAt||0)+1+i/100,at:c.soldAt||null,a:-p.pr,t:(p.pr>0?"ربح ":"خسارة ")+(p.n||"شريك")+" من "+c.name,k:"",car:c.id});
     });
   });
-  /* المصاريف: سطر واحد لكل يوم من غير تفاصيل (التفاصيل في صفحة المصروفات) */
-  var KP=kashPages(),eg={},eo=[];
-  S.expenses.forEach(function(e){if(!cm[e.carId])return;var f=expSrc(e)==="fund",pg=kashPageOf({c:e.createdAt||0},KP),key=pg+"|"+(e.date||"")+"|"+(f?1:0);
-    if(!eg[key]){eg[key]={d:e.date,c:0,s:0,n:0,f:f};eo.push(eg[key])}var g=eg[key];g.s+=+e.amount||0;g.n++;if((e.createdAt||0)>g.c)g.c=e.createdAt||0});
-  eo.forEach(function(g){add({d:g.d,c:g.c,a:-g.s,t:g.f?"العهدة ناقص منها مصاريف":"مصاريف",k:g.n>1?g.n+" مصاريف":"مصروف"})});
+  /* المصاريف مش بتظهر في الكشكول: العهدة رقم ثابت، والتفاصيل في كل عربية والتقارير */
   S.cols.forEach(function(x){if(!cm[x.carId]||x.trade)return;var a=(+x.cash||0)+(+x.insta||0);add({d:x.date,c:x.createdAt||0,a:a,t:(x.refund?"مرتجع - رد فلوس ":a<0?"رد فلوس ":"تحصيل ")+nm(x.carId),k:"كاش "+fmt(Math.abs(+x.cash||0))+" · إنستاباي "+fmt(Math.abs(+x.insta||0)),car:x.carId})});
   S.cap.forEach(function(x){var a=+x.amount||0;if(capOut(x.kind))add({d:x.date,c:x.createdAt||0,a:-a,t:capLabel(x).replace(/^\S+\s/,""),k:x.note||"رأس المال"});else if(capIn(x.kind))add({d:x.date,c:x.createdAt||0,a:a,t:"زيادة رأس المال",k:x.note||"رأس المال",cap:1})});
   var lm=lmapOf();
@@ -630,7 +626,7 @@ function kashEntries(T){
     if(x.kind==="loan")t=x.dir==="out"?"سلفة لـ"+who:"استلام فلوس من "+who;else t=lq&&lq.dir==="out"?who+" رجّع فلوس":"سداد لـ"+who;
     add({d:x.date,c:x.createdAt||0,a:sg,t:t,k:x.note||"سلف"})});
   if(T.capital)E.push({d:first||todayStr(),c:-1,a:T.capital,t:"رأس المال الأول",k:"أصل رأس المال",cap:1});
-  if(T.fund>0.5)E.push({d:first||todayStr(),c:-0.5,a:0,side:"d",info:fmt(T.fund),t:"منه عهدة للمصاريف",k:"جزء من رأس المال",ki:1});
+  if(T.fund>0.5)E.push({d:first||todayStr(),c:-0.5,a:0,side:"d",info:fmt(T.fund),t:"منه عهدة للمصاريف",k:"رقم ثابت · جزء من رأس المال",ki:1});
   E.sort(function(a,b){return (a.d||"").localeCompare(b.d||"")||a.c-b.c});
   return E;
 }
@@ -659,7 +655,7 @@ function renderKash(){
     '<div class="kbl"><span>برّه (في العربيات والمصاريف) <span class="num">'+fmt(away)+'</span></span><span>معاك <span class="num">'+fmt(K.bal)+'</span></span></div>'+
     '<div class="ktrio"><div><div class="kt">خرج</div><div class="kn num">'+fmt(K.out)+'</div></div><div><div class="kt">دخل</div><div class="kn num">'+fmt(K.inn)+'</div></div><div><div class="kt">الباقي</div><div class="kn num">'+fmt(K.bal)+'</div></div></div>'+
     '<div class="kbl" style="margin-top:10px;border-top:1px solid rgba(23,17,10,.25);padding-top:8px"><span>صفحة '+(pi+1)+': دخل <span class="num">'+fmt(sd)+'</span></span><span>خرج <span class="num">'+fmt(sc)+'</span></span><span>الفرق <span class="num">'+fmt(sd-sc)+'</span></span></div>'+
-    (K.T.fund>0.5?'<div class="kbl" style="margin-top:6px"><span>🧾 العهدة <span class="num">'+fmt(K.T.fund)+'</span></span><span>الباقي فيها <span class="num">'+fmt(K.T.fundBal)+'</span></span></div>':'')+'</div>'+
+    (K.T.fund>0.5?'<div class="kbl" style="margin-top:6px"><span>🧾 العهدة (ثابتة) <span class="num">'+fmt(K.T.fund)+'</span></span></div>':'')+'</div>'+
     '<div class="kmon"><button data-act="kpg" data-n="-1" aria-label="الصفحة اللي قبلها"'+(pi>0?'':' disabled style="opacity:.35"')+'>›</button><b>صفحة '+(pi+1)+' من '+(last+1)+'</b><button data-act="kpg" data-n="1" aria-label="الصفحة اللي بعدها"'+(pi<last?'':' disabled style="opacity:.35"')+'>‹</button></div>'+
     (pi===last?'<button class="btn sec" style="margin-bottom:12px" data-act="knew">📄 صفحة جديدة</button>':'<button class="btn sec" style="margin-bottom:12px" data-act="kpg" data-n="99">↩ ارجع للصفحة الحالية</button>')+
     '<div class="kbook"><div class="ktop"><span class="kdate num">'+(pi>0?P[pi-1].date:(K.E[0]&&K.E[0].d)||todayStr()).split("-").reverse().slice(0,2).join("/")+'</span><span class="kbs">بسم الله الرحمن الرحيم</span><span class="kdate num" style="visibility:hidden">00/00</span></div>'+
@@ -677,7 +673,7 @@ function renderKash(){
       '<button class="abtn" data-act="form" data-kind="capital" data-sub="addcap"><span class="ic">➕</span>زيادة رأس المال</button>'+
       '<button class="abtn" data-act="form" data-kind="loan" data-sub="out"><span class="ic">📤</span>سلفة لحد</button>'+
       '<button class="abtn" data-act="form" data-kind="loan" data-sub="in"><span class="ic">📥</span>فلوس من حد</button></div>'+
-    '<div class="sub" style="margin:0 2px 12px">الكشكول بيتملى لوحده من كل حاجة بتسجلها في البرنامج. مدين = اللي دخل، دائن = اللي خرج. العربية بتتكتب بتمنها في الدائن، واللي باقي عليها في المدين جنبها وبيقل لوحده لما تدفع. المصاريف بتظهر سطر واحد لكل يوم (تفاصيلها في صفحة المصروفات). الأرقام هنا فلوسك انت بس (خزنة + إنستاباي + عهدة)، وفلوس الشركا والمستثمرين بتتشال منها وتفضل في حساباتهم.</div>';
+    '<div class="sub" style="margin:0 2px 12px">الكشكول بيتملى لوحده من كل حاجة بتسجلها في البرنامج. مدين = اللي دخل، دائن = اللي خرج. العربية بتتكتب بتمنها في الدائن، واللي باقي عليها في المدين جنبها وبيقل لوحده لما تدفع. العهدة رقم ثابت، والمصاريف مش بتتكتب هنا (تفاصيلها في كل عربية وفي التقارير). الأرقام هنا فلوسك انت بس (خزنة + إنستاباي + عهدة)، وفلوس الشركا والمستثمرين بتتشال منها وتفضل في حساباتهم.</div>';
   return h;
 }
 
