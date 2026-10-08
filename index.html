@@ -580,10 +580,11 @@ function kashEntries(T){
     var ppl=c.parts.map(function(p){return {n:p.name,a:+p.amount||0,pd:+p.paid||0,pr:p.profit}}).concat(c.invs.map(function(v){return {n:v.name,a:+v.amount||0,pd:0,pr:v.profit}}));
     /* فلوس الشريك/المستثمر بتفضل "ليه" لحد ما تقفل الصفحة اللي اتباعت فيها العربية؛ ساعتها تبقى "اترد" ويتكتب ربحه */
     var KPg=kashPages(),stl=c.sold&&KPg.some(function(pg){return c.soldAt?pg.ts>c.soldAt:(pg.date||"")>=(c.sellDate||"9999")});
-    ppl.forEach(function(p,i){if(p.a<0.5)return;var left=stl?0:Math.max(0,p.a-p.pd),done=left<0.5;
-      var kk=done?"اترد مع تقفيل الصفحة":dline(p.pd>0.5?"رجعتله "+fmt(p.pd)+" · فاضل "+fmt(left):"عليك",c.sold?"العربية اتباعت"+(p.pr&&Math.round(p.pr)!==0?" · "+(p.pr>0?"ربحه ":"خسارته ")+fmt(Math.abs(p.pr)):"")+" · يترد مع التقفيل":"");
-      E.push({d:c.buyDate,c:(c.createdAt||0)+0.6+i/100,a:left,side:"d",owe:1,zero:done?"اترد ✔":null,t:(p.n||"شريك")+" ليه في "+c.name,k:kk,car:c.id});
-      if(stl&&p.pr&&Math.round(p.pr)!==0)add({d:c.sellDate,c:(c.createdAt||0)+1+i/100,at:c.soldAt||null,a:-p.pr,t:(p.pr>0?"ربح ":"خسارة ")+(p.n||"شريك")+" من "+c.name,k:"",car:c.id});
+    ppl.forEach(function(p,i){if(p.a<0.5)return;var left=Math.max(0,p.a-p.pd),pr=c.sold&&p.pr?Math.round(p.pr):0;
+      var kk=stl?"اترد ✔ مع تقفيل الصفحة":dline(p.pd>0.5?"رجعتله "+fmt(p.pd)+" · فاضل "+fmt(left):"عليك",c.sold?"العربية اتباعت"+(pr?" · "+(pr>0?"ربحه ":"خسارته ")+fmt(Math.abs(pr)):"")+" · يترد مع التقفيل":"");
+      E.push({d:c.buyDate,c:(c.createdAt||0)+0.6+i/100,a:left,side:"d",owe:1,zero:left<0.5?"اترد ✔":null,t:(p.n||"شريك")+" ليه في "+c.name,k:kk,car:c.id});
+      /* مع التقفيل: سطر واحد في الدائن بالأصل والربح مع بعض */
+      if(stl&&left+pr>0.5)add({d:c.sellDate,c:(c.createdAt||0)+1+i/100,at:c.soldAt||null,a:-(left+pr),t:"رديت لـ"+(p.n||"شريك")+" فلوسه من "+c.name,k:"الأصل "+fmt(left)+(pr?(pr>0?" + الربح ":" - الخسارة ")+fmt(Math.abs(pr)):""),car:c.id});
     });
   });
   /* المصاريف مش بتظهر في الكشكول: العهدة رقم ثابت، والتفاصيل في كل عربية والتقارير */
