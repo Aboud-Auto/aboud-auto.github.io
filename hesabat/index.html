@@ -615,9 +615,12 @@ function kashEntries(T){
     if(ow)E.push({d:c.buyDate,c:(c.createdAt||0)+0.5,a:rem,side:"d",owe:1,zero:rem<0.5?"اتسدد ✔":null,t:"باقي على "+c.name,k:rem<0.5?"اتسدد بالكامل":c.sellerPaid>0.5?"اتدفع منه "+fmt(c.sellerPaid)+" · فاضل "+fmt(rem):"لسه للبايع",car:c.id});
     /* فلوس الشركا والمستثمرين اللي دخلت في العربية: في المدين (فلوس عليك) جنب العربية، وبتتحدّث مكانها لما ترجعلهم */
     var ppl=c.parts.map(function(p){return {n:p.name,a:+p.amount||0,pd:+p.paid||0,pr:p.profit}}).concat(c.invs.map(function(v){return {n:v.name,a:+v.amount||0,pd:0,pr:v.profit}}));
-    ppl.forEach(function(p,i){if(p.a<0.5)return;var left=c.sold?0:Math.max(0,p.a-p.pd),done=left<0.5;
-      E.push({d:c.buyDate,c:(c.createdAt||0)+0.6+i/100,a:left,side:"d",owe:1,zero:done?"اترد ✔":null,t:(p.n||"شريك")+" ليه في "+c.name,k:done?"رجعتله "+fmt(p.a):p.pd>0.5?"رجعتله "+fmt(p.pd)+" · فاضل "+fmt(left):"عليك",car:c.id});
-      if(c.sold&&p.pr&&Math.round(p.pr)!==0)add({d:c.sellDate,c:(c.createdAt||0)+1+i/100,at:c.soldAt||null,a:-p.pr,t:(p.pr>0?"ربح ":"خسارة ")+(p.n||"شريك")+" من "+c.name,k:"",car:c.id});
+    /* فلوس الشريك/المستثمر بتفضل "ليه" لحد ما تقفل الصفحة اللي اتباعت فيها العربية؛ ساعتها تبقى "اترد" ويتكتب ربحه */
+    var KPg=kashPages(),stl=c.sold&&KPg.some(function(pg){return c.soldAt?pg.ts>c.soldAt:(pg.date||"")>=(c.sellDate||"9999")});
+    ppl.forEach(function(p,i){if(p.a<0.5)return;var left=stl?0:Math.max(0,p.a-p.pd),done=left<0.5;
+      var kk=done?"اترد مع تقفيل الصفحة":dline(p.pd>0.5?"رجعتله "+fmt(p.pd)+" · فاضل "+fmt(left):"عليك",c.sold?"العربية اتباعت"+(p.pr&&Math.round(p.pr)!==0?" · "+(p.pr>0?"ربحه ":"خسارته ")+fmt(Math.abs(p.pr)):"")+" · يترد مع التقفيل":"");
+      E.push({d:c.buyDate,c:(c.createdAt||0)+0.6+i/100,a:left,side:"d",owe:1,zero:done?"اترد ✔":null,t:(p.n||"شريك")+" ليه في "+c.name,k:kk,car:c.id});
+      if(stl&&p.pr&&Math.round(p.pr)!==0)add({d:c.sellDate,c:(c.createdAt||0)+1+i/100,at:c.soldAt||null,a:-p.pr,t:(p.pr>0?"ربح ":"خسارة ")+(p.n||"شريك")+" من "+c.name,k:"",car:c.id});
     });
   });
   /* المصاريف مش بتظهر في الكشكول: العهدة رقم ثابت، والتفاصيل في كل عربية والتقارير */
