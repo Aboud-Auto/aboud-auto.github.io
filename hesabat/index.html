@@ -236,6 +236,8 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;background:#050505;opa
 .ke .kdt{font-size:10.5px}
 .kempty{grid-column:1/-1}
 .ke.kinfo .ka,.ke.kinfo .kd{opacity:.7}
+.kclosed{margin-top:10px;border:2px solid #a8322b;color:#a8322b;border-radius:8px;padding:8px 10px;text-align:center;font-weight:800;font-family:"Aref Ruqaa","Cairo",serif;font-size:19px}
+.kclosed div{font-family:"Cairo",Tahoma,sans-serif;font-size:12.5px;font-weight:700;margin-top:2px}
 @media (max-width:380px){.khd,.ke{grid-template-columns:70px 1fr}.ke .ka{font-size:13px}}
 .tog{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .tog .sw{flex:none;width:52px;height:30px;border-radius:99px;border:0;background:var(--line);position:relative;cursor:pointer}
@@ -645,7 +647,7 @@ function kashRow(e){
 function kashPages(){return (((S.brand&&S.brand.kashPages))||[]).slice().sort(function(a,b){return (a.date||"").localeCompare(b.date||"")||a.ts-b.ts})}
 /* الصفحة حسب وقت تسجيل الحركة: أي حاجة تتسجل بعد فتح صفحة جديدة تروح لها حتى لو تاريخها قديم */
 function kashPageOf(e,P){var t=e.at!=null?e.at:(e.c||0),n=0;P.forEach(function(p){if(t>=p.ts)n++});return n}
-async function kashNewPage(){var np=kashPages().concat([{date:todayStr(),ts:Date.now()}]);try{await db.doc("settings/brand").set({kashPages:np},{merge:true});S.kp=null;toast("اتفتحت صفحة جديدة ✔")}catch(e){toast("تعذر الحفظ، جرّب تاني")}}
+async function kashNewPage(){var np=kashPages().concat([{date:todayStr(),ts:Date.now()}]);try{await db.doc("settings/brand").set({kashPages:np},{merge:true});S.kp=null;toast("الصفحة اتقفلت ✔ وبدأت صفحة جديدة")}catch(e){toast("تعذر الحفظ، جرّب تاني")}}
 function renderKash(){
   var K=kashCalc(),P=kashPages(),last=P.length,pi=S.kp==null||S.kp>last?last:Math.max(0,S.kp),deb=[],cred=[],sd=0,sc=0;
   K.E.forEach(function(e){if(kashPageOf(e,P)!==pi)return;if(e.side==="d"||(!e.side&&e.a>0)){deb.push(e);sd+=e.a}else{cred.push(e);sc-=e.a}});
@@ -660,12 +662,14 @@ function renderKash(){
     '<div class="kbl" style="margin-top:10px;border-top:1px solid rgba(23,17,10,.25);padding-top:8px"><span>صفحة '+(pi+1)+': دخل <span class="num">'+fmt(sd)+'</span></span><span>خرج <span class="num">'+fmt(sc)+'</span></span><span>الفرق <span class="num">'+fmt(sd-sc)+'</span></span></div>'+
     (K.T.fund>0.5?'<div class="kbl" style="margin-top:6px"><span>🧾 العهدة (ثابتة) <span class="num">'+fmt(K.T.fund)+'</span></span></div>':'')+'</div>'+
     '<div class="kmon"><button data-act="kpg" data-n="-1" aria-label="الصفحة اللي قبلها"'+(pi>0?'':' disabled style="opacity:.35"')+'>›</button><b>صفحة '+(pi+1)+' من '+(last+1)+'</b><button data-act="kpg" data-n="1" aria-label="الصفحة اللي بعدها"'+(pi<last?'':' disabled style="opacity:.35"')+'>‹</button></div>'+
-    (pi===last?'<button class="btn sec" style="margin-bottom:12px" data-act="knew">📄 صفحة جديدة</button>':'<button class="btn sec" style="margin-bottom:12px" data-act="kpg" data-n="99">↩ ارجع للصفحة الحالية</button>')+
     '<div class="kbook"><div class="ktop"><span class="kdate num">'+(pi>0?P[pi-1].date:(K.E[0]&&K.E[0].d)||todayStr()).split("-").reverse().slice(0,2).join("/")+'</span><span class="kbs">بسم الله الرحمن الرحيم</span><span class="kdate num" style="visibility:hidden">00/00</span></div>'+
       '<div class="ksubj"><b>حساب الخزنة</b><span>صفحة '+(pi+1)+(rng?' · '+rng:'')+'</span></div><div class="ktacc">'+
       '<div class="kside kdeb"><div class="khd"><span>القيمة</span><span>مدين</span></div><div class="klist">'+(deb.length?deb.map(kashRow).join(""):'<div class="kempty">مفيش</div>')+'</div></div>'+
       '<div class="kside kcred"><div class="khd"><span>القيمة</span><span>دائن</span></div><div class="klist">'+(cred.length?cred.map(kashRow).join(""):'<div class="kempty">مفيش</div>')+'</div></div>'+
-    '</div></div>'+
+    '</div>'+
+    (pi<last?'<div class="kclosed">🔒 الصفحة اتقفلت يوم <span class="num">'+dmy(P[pi].date)+'</span><div>دخل <span class="num">'+fmt(sd)+'</span> · خرج <span class="num">'+fmt(sc)+'</span> · الفرق <span class="num">'+fmt(sd-sc)+'</span></div></div>':'')+
+    '</div>'+
+    (pi===last?'<button class="btn" style="margin-bottom:12px" data-act="knew">🔒 تقفيل الصفحة</button>':'<button class="btn sec" style="margin-bottom:12px" data-act="kpg" data-n="99">↩ ارجع للصفحة المفتوحة</button>')+
     '<div class="sect">سجّل حركة</div>'+
     '<div class="kacts">'+
       '<button class="abtn" data-act="form" data-kind="buy"><span class="ic">🚗</span>شراء عربية</button>'+
@@ -2322,7 +2326,7 @@ document.addEventListener("click",async function(e){
   else if(a==="filter"){S.filter=t.dataset.f;render()}
   else if(a==="kmon"){S.km=kashShift(kashMonth(),+t.dataset.n);render()}
   else if(a==="kpg"){var kl=kashPages().length,kc=S.kp==null||S.kp>kl?kl:S.kp;kc+=+t.dataset.n;S.kp=kc>=kl?null:Math.max(0,kc);render();window.scrollTo(0,0)}
-  else if(a==="knew")confirmBox("تفتح صفحة جديدة في الكشكول؟ الصفحة دي هتتقفل والجديدة هتبدأ فاضية، وتقدر ترجع للقديمة في أي وقت.",kashNewPage);
+  else if(a==="knew")confirmBox("تقفل الصفحة دي؟ هتتقفل بحساباتها وتبدأ صفحة جديدة فاضية، وتقدر ترجع للصفحة المقفولة في أي وقت بالأسهم فوق.",kashNewPage);
   else if(a==="kashToggle"){var kon=!kashOn();await saveBrand({kashkol:kon});S.brand=Object.assign({},S.brand||{},{kashkol:kon});if(kon){S.tab="kash";window.scrollTo(0,0)}render()}
   else if(a==="car")openDetail(t.dataset.id);
   else if(a==="close")closeSheet();
