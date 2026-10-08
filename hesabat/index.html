@@ -215,6 +215,27 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;background:#050505;opa
 .kbal{margin-top:10px;border:2px solid #1d2a44;border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:800}
 .kbal span:first-child{font-family:"Aref Ruqaa","Cairo",serif;font-size:20px}
 .kneg{color:#a8322b}
+/* شكل ورقة الكشكول (٤ أعمدة: القيمة | مدين | القيمة | دائن) */
+.kbook{color:#1f2f6b;padding:12px 8px 14px;border-radius:4px 4px 12px 12px}
+.ktop{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 4px}
+.ktop .kbs{flex:1;text-align:center;font-family:"Aref Ruqaa","Cairo",serif;font-size:19px}
+.ktop .kdate{font-family:"Aref Ruqaa","Cairo",serif;font-size:17px;white-space:nowrap}
+.kbook .ksubj{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:4px 4px 8px;border-bottom:1.5px solid #1f2f6b;margin-bottom:0}
+.kbook .ksubj b{font-family:"Aref Ruqaa","Cairo",serif;font-size:17px}
+.ktacc{border-top:0}
+.kside{padding:0}
+.kside+.kside{border-right:2px solid #c0392b}
+.khd{display:grid;grid-template-columns:80px 1fr;border-bottom:2px solid #c0392b}
+.khd span{text-align:center;padding:4px 0;font-family:"Aref Ruqaa","Cairo",serif;font-size:20px;font-weight:700}
+.khd span:first-child{border-left:1.5px solid #c0392b}
+.kdeb .ka,.kcred .ka{color:#1f2f6b}
+.ke{display:grid;grid-template-columns:80px 1fr;padding:0;border-bottom:1px solid #b9c6dc;align-items:stretch}
+.ke .ka{border-left:1.5px solid #c0392b;padding:6px 3px;text-align:center;font-size:14px;overflow-wrap:anywhere}
+.ke .kb{padding:5px 6px;min-width:0}
+.ke .kd{font-size:16px}
+.ke .kdt{font-size:10.5px}
+.kempty{grid-column:1/-1}
+@media (max-width:380px){.khd,.ke{grid-template-columns:70px 1fr}.ke .ka{font-size:13px}}
 .tog{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .tog .sw{flex:none;width:52px;height:30px;border-radius:99px;border:0;background:var(--line);position:relative;cursor:pointer}
 .tog .sw::after{content:"";position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;background:var(--muted);transition:right .2s}
@@ -612,7 +633,7 @@ function kashCalc(){
 }
 function kashRow(e){
   var nd=e.d?'<span class="num">'+e.d.split("-").reverse().slice(0,2).join("/")+'</span> · ':'';
-  return '<div class="ke'+(e.cap?" kc":"")+'"'+(e.car?' data-act="car" data-id="'+esc(e.car)+'"':'')+'><div class="ka num">'+fmt(Math.abs(e.a))+'</div><div class="kd">'+esc(e.t)+'</div><div class="kdt">'+nd+esc(e.k||"")+'</div></div>';
+  return '<div class="ke'+(e.cap?" kc":"")+'"'+(e.car?' data-act="car" data-id="'+esc(e.car)+'"':'')+'><div class="ka num">'+fmt(Math.abs(e.a))+'</div><div class="kb"><div class="kd">'+esc(e.t)+'</div><div class="kdt">'+nd+esc(e.k||"")+'</div></div></div>';
 }
 function kashPages(){return (((S.brand&&S.brand.kashPages))||[]).slice().sort(function(a,b){return (a.date||"").localeCompare(b.date||"")||a.ts-b.ts})}
 function kashPageOf(e,P){var n=0;P.forEach(function(p){var d=e.d||"";if(d>p.date||(d===p.date&&(e.c||0)>=p.ts))n++});return n}
@@ -631,9 +652,10 @@ function renderKash(){
     '<div class="kbl" style="margin-top:10px;border-top:1px solid rgba(23,17,10,.25);padding-top:8px"><span>صفحة '+(pi+1)+': دخل <span class="num">'+fmt(sd)+'</span></span><span>خرج <span class="num">'+fmt(sc)+'</span></span><span>الفرق <span class="num">'+fmt(sd-sc)+'</span></span></div></div>'+
     '<div class="kmon"><button data-act="kpg" data-n="-1" aria-label="الصفحة اللي قبلها"'+(pi>0?'':' disabled style="opacity:.35"')+'>›</button><b>صفحة '+(pi+1)+' من '+(last+1)+'</b><button data-act="kpg" data-n="1" aria-label="الصفحة اللي بعدها"'+(pi<last?'':' disabled style="opacity:.35"')+'>‹</button></div>'+
     (pi===last?'<button class="btn sec" style="margin-bottom:12px" data-act="knew">📄 صفحة جديدة</button>':'<button class="btn sec" style="margin-bottom:12px" data-act="kpg" data-n="99">↩ ارجع للصفحة الحالية</button>')+
-    '<div class="kbook"><h2>حساب الخزنة</h2><div class="ksub">صفحة '+(pi+1)+(rng?' · '+rng:'')+'</div><div class="ktacc">'+
-      '<div class="kside kcred"><h3>دائن<small>خارج</small></h3><div class="klist">'+(cred.length?cred.map(kashRow).join(""):'<div class="kempty">مفيش</div>')+'</div></div>'+
-      '<div class="kside kdeb"><h3>مدين<small>داخل</small></h3><div class="klist">'+(deb.length?deb.map(kashRow).join(""):'<div class="kempty">مفيش</div>')+'</div></div>'+
+    '<div class="kbook"><div class="ktop"><span class="kdate num">'+(pi>0?P[pi-1].date:(K.E[0]&&K.E[0].d)||todayStr()).split("-").reverse().slice(0,2).join("/")+'</span><span class="kbs">بسم الله الرحمن الرحيم</span><span class="kdate num" style="visibility:hidden">00/00</span></div>'+
+      '<div class="ksubj"><b>حساب الخزنة</b><span>صفحة '+(pi+1)+(rng?' · '+rng:'')+'</span></div><div class="ktacc">'+
+      '<div class="kside kdeb"><div class="khd"><span>القيمة</span><span>مدين</span></div><div class="klist">'+(deb.length?deb.map(kashRow).join(""):'<div class="kempty">مفيش</div>')+'</div></div>'+
+      '<div class="kside kcred"><div class="khd"><span>القيمة</span><span>دائن</span></div><div class="klist">'+(cred.length?cred.map(kashRow).join(""):'<div class="kempty">مفيش</div>')+'</div></div>'+
     '</div></div>'+
     '<div class="sect">سجّل حركة</div>'+
     '<div class="kacts">'+
