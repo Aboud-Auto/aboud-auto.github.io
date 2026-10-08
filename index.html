@@ -573,7 +573,7 @@ function kashEntries(T){
     add({d:c.buyDate,c:c.createdAt||0,a:-mine,t:"شراء "+c.name,k:dline(c.tradeIn?"دخلت في بيعة":"",others>0.5?"المدفوع "+fmt(paid)+" · منه شركا/مستثمرين "+fmt(others):"",c.owedSeller>0.5?"باقي للبايع "+fmt(c.owedSeller):"")||"شراء عربية",car:c.id});
     if(c.sold&&(c.parts.length||c.invs.length)){
       var due=0;c.parts.forEach(function(p){due+=p.due});c.invs.forEach(function(v){due+=v.amount+(v.profit||0)});
-      add({d:c.sellDate,c:(c.createdAt||0)+1,a:-due,t:"نصيب الشركا والمستثمرين في "+c.name,k:"فلوسهم وأرباحهم من البيعة",car:c.id});
+      add({d:c.sellDate,c:(c.createdAt||0)+1,at:c.soldAt||null,a:-due,t:"نصيب الشركا والمستثمرين في "+c.name,k:"فلوسهم وأرباحهم من البيعة",car:c.id});
     }
   });
   S.expenses.forEach(function(e){if(!cm[e.carId])return;add({d:e.date,c:e.createdAt||0,a:-(+e.amount||0),t:(e.type||"مصروف")+" - "+nm(e.carId),k:dline("مصروف",e.src==="insta"?"إنستاباي":""),car:e.carId})});
@@ -599,7 +599,8 @@ function kashRow(e){
   return '<div class="ke'+(e.cap?" kc":"")+'"'+(e.car?' data-act="car" data-id="'+esc(e.car)+'"':'')+'><div class="ka num">'+fmt(Math.abs(e.a))+'</div><div class="kb"><div class="kd">'+esc(e.t)+'</div><div class="kdt">'+nd+esc(e.k||"")+'</div></div></div>';
 }
 function kashPages(){return (((S.kashp&&S.kashp.pages))||[]).slice().sort(function(a,b){return (a.date||"").localeCompare(b.date||"")||a.ts-b.ts})}
-function kashPageOf(e,P){var n=0;P.forEach(function(p){var d=e.d||"";if(d>p.date||(d===p.date&&(e.c||0)>=p.ts))n++});return n}
+/* الصفحة حسب وقت تسجيل الحركة: أي حاجة تتسجل بعد فتح صفحة جديدة تروح لها حتى لو تاريخها قديم */
+function kashPageOf(e,P){var t=e.at!=null?e.at:(e.c||0),n=0;P.forEach(function(p){if(t>=p.ts)n++});return n}
 async function kashNewPage(){var np=kashPages().concat([{date:todayStr(),ts:Date.now()}]);try{await db.doc("settings/kash").set({pages:np});S.kp=null;toast("اتفتحت صفحة جديدة ✔")}catch(e){toast("تعذر الحفظ، جرّب تاني")}}
 function renderKash(){
   var K=kashCalc(),P=kashPages(),last=P.length,pi=S.kp==null||S.kp>last?last:Math.max(0,S.kp),deb=[],cred=[],sd=0,sc=0;
@@ -1077,7 +1078,7 @@ async function submitForm(){
       if(tn&&tv<=0)return toast("اكتب قيمة العربية الداخلة");
       var tr=tv>0?Math.min(sp2,tv):0;
       if(cash+ins>sp2-tr+0.5)return toast(tv>=sp2?"إنت اللي هتدفع الفرق، سيب التحصيل فاضي":"المحصّل أكبر من الفرق ("+fmt(sp2-tr)+")");
-      var ok=await patch("cars/"+cid,{sellPrice:sp2,sellDate:dt});
+      var ok=await patch("cars/"+cid,{sellPrice:sp2,sellDate:dt,soldAt:Date.now()});
       if(ok&&(cash>0||ins>0))ok=!!(await create("collections",{carId:cid,date:dt,cash:cash,insta:ins,note:"عند البيع"}));
       if(ok&&tv>0){var tid=await create("cars",{name:tn,buyPrice:tv,buyPaid:null,buyDate:dt,buySrc:val("tsrc")==="insta"?"insta":"cash",tradeIn:tr,tradeFrom:cid,reimbursed:false,partners:[]});ok=!!tid;
         if(ok)ok=!!(await create("collections",{carId:cid,date:dt,cash:0,insta:0,trade:tr,tradeCar:tid,tradeName:tn,note:"عربية داخلة: "+tn}))}
