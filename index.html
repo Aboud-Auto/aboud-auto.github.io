@@ -233,6 +233,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;background:#050505 url
 .ke .kd{font-size:16px}
 .ke .kdt{font-size:10.5px}
 .kempty{grid-column:1/-1}
+.ke.kinfo .ka,.ke.kinfo .kd{opacity:.7}
 @media (max-width:380px){.khd,.ke{grid-template-columns:70px 1fr}.ke .ka{font-size:13px}}
 </style>
 </head>
@@ -569,34 +570,40 @@ function kashEntries(T){
   function nm(id){var c=cm[id];return c?c.name:"عربية"}
   function add(o){if(Math.round(o.a)===0)return;if(o.d&&(!first||o.d<first))first=o.d;E.push(o)}
   T.cars.forEach(function(c){
-    var paid=paidNow(c)-(+c.tradeIn||0),others=c.pTotal+c.iTotal,mine=paid-others;
-    add({d:c.buyDate,c:c.createdAt||0,a:-mine,t:"شراء "+c.name,k:dline(c.tradeIn?"دخلت في بيعة":"",others>0.5?"المدفوع "+fmt(paid)+" · منه شركا/مستثمرين "+fmt(others):"",c.owedSeller>0.5?"باقي للبايع "+fmt(c.owedSeller):"")||"شراء عربية",car:c.id});
+    var paid=paidNow(c)-(+c.tradeIn||0),others=c.pTotal+c.iTotal,mine=paid-others,ow=c.owedSeller>0.5?c.owedSeller:0,rem=Math.max(0,c.sellerRem||0);
+    add({d:c.buyDate,c:c.createdAt||0,a:-(mine+ow),t:"شراء "+c.name,k:dline(c.tradeIn?"دخلت في بيعة":"",ow?(rem>0.5?"باقي عليها "+fmt(rem):"اتدفعت كلها ✔"):"")||"شراء عربية",car:c.id});
+    /* الباقي للبايع: سطر في المدين جنب العربية، وبيقل لوحده لما تدفع (من غير سطر سداد لوحده) */
+    if(ow)E.push({d:c.buyDate,c:(c.createdAt||0)+0.5,a:rem,side:"d",owe:1,zero:rem<0.5?"اتسدد ✔":null,t:"باقي على "+c.name,k:rem<0.5?"اتسدد بالكامل":c.sellerPaid>0.5?"اتدفع منه "+fmt(c.sellerPaid)+" · فاضل "+fmt(rem):"لسه للبايع",car:c.id});
     if(c.sold&&(c.parts.length||c.invs.length)){
       var due=0;c.parts.forEach(function(p){due+=p.due});c.invs.forEach(function(v){due+=v.amount+(v.profit||0)});
-      add({d:c.sellDate,c:(c.createdAt||0)+1,at:c.soldAt||null,a:-due,t:"نصيب الشركا والمستثمرين في "+c.name,k:"فلوسهم وأرباحهم من البيعة",car:c.id});
+      add({d:c.sellDate,c:(c.createdAt||0)+1,at:c.soldAt||null,a:-due,t:"حصة الشركا من بيع "+c.name,k:"",car:c.id});
     }
   });
-  S.expenses.forEach(function(e){if(!cm[e.carId])return;add({d:e.date,c:e.createdAt||0,a:-(+e.amount||0),t:(e.type||"مصروف")+" - "+nm(e.carId),k:dline("مصروف",e.src==="insta"?"إنستاباي":""),car:e.carId})});
+  /* المصاريف: سطر واحد لكل يوم من غير تفاصيل (التفاصيل في صفحة المصروفات) */
+  var KP=kashPages(),eg={},eo=[];
+  S.expenses.forEach(function(e){if(!cm[e.carId])return;var f=true,pg=kashPageOf({c:e.createdAt||0},KP),key=pg+"|"+(e.date||"")+"|"+(f?1:0);
+    if(!eg[key]){eg[key]={d:e.date,c:0,s:0,n:0,f:f};eo.push(eg[key])}var g=eg[key];g.s+=+e.amount||0;g.n++;if((e.createdAt||0)>g.c)g.c=e.createdAt||0});
+  eo.forEach(function(g){add({d:g.d,c:g.c,a:-g.s,t:g.f?"العهدة ناقص منها مصاريف":"مصاريف",k:g.n>1?g.n+" مصاريف":"مصروف"})});
   S.cols.forEach(function(x){if(!cm[x.carId]||x.trade)return;var a=(+x.cash||0)+(+x.insta||0);add({d:x.date,c:x.createdAt||0,a:a,t:(x.refund?"مرتجع - رد فلوس ":a<0?"رد فلوس ":"تحصيل ")+nm(x.carId),k:"كاش "+fmt(Math.abs(+x.cash||0))+" · إنستاباي "+fmt(Math.abs(+x.insta||0)),car:x.carId})});
-  S.pay.forEach(function(x){var c=cm[x.carId];if(!c||c.sold)return;var p=c.parts.find(function(q){return q.id===x.pid});add({d:x.date,c:x.createdAt||0,a:-(+x.amount||0),t:"تسليم "+(p?p.name:"شريك")+" - "+c.name,k:"فلوس شريك",car:c.id})});
-  S.ledger.forEach(function(x){if(x.kind==="spay"&&cm[x.carId])add({d:x.date,c:x.createdAt||0,a:-(+x.amount||0),t:"سداد للبايع - "+nm(x.carId),k:"باقي تمن عربية",car:x.carId})});
+  S.pay.forEach(function(x){var c=cm[x.carId];if(!c||c.sold)return;var p=c.parts.find(function(q){return q.id===x.pid});add({d:x.date,c:x.createdAt||0,a:-(+x.amount||0),t:"فلوس شريك من "+c.name,k:"",car:c.id})});
   S.cap.forEach(function(x){var a=+x.amount||0;if(capOut(x.kind))add({d:x.date,c:x.createdAt||0,a:-a,t:capLabel(x).replace(/^\S+\s/,""),k:x.note||"رأس المال"});else if(capIn(x.kind))add({d:x.date,c:x.createdAt||0,a:a,t:"زيادة رأس المال",k:x.note||"رأس المال",cap:1})});
   var lm=lmapOf();
   S.ledger.forEach(function(x){if(x.kind!=="loan"&&x.kind!=="pay")return;var sg=lsigned(x,lm),lq=x.kind==="loan"?x:lm[x.loanId],who=lq?lq.person||"":"؟",t;
     if(x.kind==="loan")t=x.dir==="out"?"سلفة لـ"+who:"استلام فلوس من "+who;else t=lq&&lq.dir==="out"?who+" رجّع فلوس":"سداد لـ"+who;
     add({d:x.date,c:x.createdAt||0,a:sg,t:t,k:x.note||"سلف"})});
   if(T.capital)E.push({d:first||todayStr(),c:-1,a:T.capital,t:"رأس المال الأول",k:"أصل رأس المال",cap:1});
+  if(T.fund>0.5)E.push({d:first||todayStr(),c:-0.5,a:0,side:"d",info:fmt(T.fund),t:"منه عهدة للمصاريف",k:"جزء من رأس المال",ki:1});
   E.sort(function(a,b){return (a.d||"").localeCompare(b.d||"")||a.c-b.c});
   return E;
 }
 function kashCalc(){
   var T=calc(),E=kashEntries(T),cap=0,inn=0,out=0,bal=0;
-  E.forEach(function(e){bal+=e.a;if(e.cap)cap+=e.a;else if(e.a>0)inn+=e.a;else out-=e.a});
+  E.forEach(function(e){bal+=e.a;if(e.cap)cap+=e.a;else if(e.owe)out-=e.a;else if(e.a>0)inn+=e.a;else out-=e.a});
   return {T:T,E:E,cap:cap,inn:inn,out:out,bal:bal};
 }
 function kashRow(e){
   var nd=e.d?'<span class="num">'+e.d.split("-").reverse().slice(0,2).join("/")+'</span> · ':'';
-  return '<div class="ke'+(e.cap?" kc":"")+'"'+(e.car?' data-act="car" data-id="'+esc(e.car)+'"':'')+'><div class="ka num">'+fmt(Math.abs(e.a))+'</div><div class="kb"><div class="kd">'+esc(e.t)+'</div><div class="kdt">'+nd+esc(e.k||"")+'</div></div></div>';
+  return '<div class="ke'+(e.cap?" kc":"")+(e.ki||e.zero?" kinfo":"")+'"'+(e.car?' data-act="car" data-id="'+esc(e.car)+'"':'')+'><div class="ka num">'+(e.zero?esc(e.zero):e.info?e.info:fmt(Math.abs(e.a)))+'</div><div class="kb"><div class="kd">'+esc(e.t)+'</div><div class="kdt">'+nd+esc(e.k||"")+'</div></div></div>';
 }
 function kashPages(){return (((S.kashp&&S.kashp.pages))||[]).slice().sort(function(a,b){return (a.date||"").localeCompare(b.date||"")||a.ts-b.ts})}
 /* الصفحة حسب وقت تسجيل الحركة: أي حاجة تتسجل بعد فتح صفحة جديدة تروح لها حتى لو تاريخها قديم */
@@ -604,7 +611,7 @@ function kashPageOf(e,P){var t=e.at!=null?e.at:(e.c||0),n=0;P.forEach(function(p
 async function kashNewPage(){var np=kashPages().concat([{date:todayStr(),ts:Date.now()}]);try{await db.doc("settings/kash").set({pages:np});S.kp=null;toast("اتفتحت صفحة جديدة ✔")}catch(e){toast("تعذر الحفظ، جرّب تاني")}}
 function renderKash(){
   var K=kashCalc(),P=kashPages(),last=P.length,pi=S.kp==null||S.kp>last?last:Math.max(0,S.kp),deb=[],cred=[],sd=0,sc=0;
-  K.E.forEach(function(e){if(kashPageOf(e,P)!==pi)return;if(e.a>0){deb.push(e);sd+=e.a}else{cred.push(e);sc-=e.a}});
+  K.E.forEach(function(e){if(kashPageOf(e,P)!==pi)return;if(e.side==="d"||(!e.side&&e.a>0)){deb.push(e);sd+=e.a}else{cred.push(e);sc-=e.a}});
   function dmy(d){return d?d.split("-").reverse().join("/"):""}
   var from=pi>0?dmy(P[pi-1].date):"",to=pi<last?dmy(P[pi].date):"",rng=from&&to?"من "+from+" لـ "+to:from?"من "+from:to?"لحد "+to:"";
   var away=Math.max(0,K.cap-K.bal),pa=K.cap>0?Math.min(100,away/K.cap*100):0;
@@ -613,7 +620,8 @@ function renderKash(){
     '<div class="kbar"><i style="width:'+pa.toFixed(1)+'%"></i></div>'+
     '<div class="kbl"><span>برّه (في العربيات والمصاريف) <span class="num">'+fmt(away)+'</span></span><span>معاك <span class="num">'+fmt(K.bal)+'</span></span></div>'+
     '<div class="ktrio"><div><div class="kt">خرج</div><div class="kn num">'+fmt(K.out)+'</div></div><div><div class="kt">دخل</div><div class="kn num">'+fmt(K.inn)+'</div></div><div><div class="kt">الباقي</div><div class="kn num">'+fmt(K.bal)+'</div></div></div>'+
-    '<div class="kbl" style="margin-top:10px;border-top:1px solid rgba(23,17,10,.25);padding-top:8px"><span>صفحة '+(pi+1)+': دخل <span class="num">'+fmt(sd)+'</span></span><span>خرج <span class="num">'+fmt(sc)+'</span></span><span>الفرق <span class="num">'+fmt(sd-sc)+'</span></span></div></div>'+
+    '<div class="kbl" style="margin-top:10px;border-top:1px solid rgba(23,17,10,.25);padding-top:8px"><span>صفحة '+(pi+1)+': دخل <span class="num">'+fmt(sd)+'</span></span><span>خرج <span class="num">'+fmt(sc)+'</span></span><span>الفرق <span class="num">'+fmt(sd-sc)+'</span></span></div>'+
+    (K.T.fund>0.5?'<div class="kbl" style="margin-top:6px"><span>🧾 العهدة <span class="num">'+fmt(K.T.fund)+'</span></span><span>الباقي فيها <span class="num">'+fmt(K.T.fundBal)+'</span></span></div>':'')+'</div>'+
     '<div class="kmon"><button data-act="kpg" data-n="-1" aria-label="الصفحة اللي قبلها"'+(pi>0?'':' disabled style="opacity:.35"')+'>›</button><b>صفحة '+(pi+1)+' من '+(last+1)+'</b><button data-act="kpg" data-n="1" aria-label="الصفحة اللي بعدها"'+(pi<last?'':' disabled style="opacity:.35"')+'>‹</button></div>'+
     (pi===last?'<button class="btn sec" style="margin-bottom:12px" data-act="knew">📄 صفحة جديدة</button>':'<button class="btn sec" style="margin-bottom:12px" data-act="kpg" data-n="99">↩ ارجع للصفحة الحالية</button>')+
     '<div class="kbook"><div class="ktop"><span class="kdate num">'+(pi>0?P[pi-1].date:(K.E[0]&&K.E[0].d)||todayStr()).split("-").reverse().slice(0,2).join("/")+'</span><span class="kbs">بسم الله الرحمن الرحيم</span><span class="kdate num" style="visibility:hidden">00/00</span></div>'+
@@ -631,7 +639,7 @@ function renderKash(){
       '<button class="abtn" data-act="form" data-kind="capital" data-sub="addcap"><span class="ic">➕</span>زيادة رأس المال</button>'+
       '<button class="abtn" data-act="form" data-kind="loan" data-sub="out"><span class="ic">📤</span>سلفة لحد</button>'+
       '<button class="abtn" data-act="form" data-kind="loan" data-sub="in"><span class="ic">📥</span>فلوس من حد</button></div>'+
-    '<div class="sub" style="margin:0 2px 12px">الكشكول بيتملى لوحده من كل حاجة بتسجلها في البرنامج. مدين = اللي دخل، دائن = اللي خرج. الأرقام هنا فلوسك انت بس (الخزنة بالعهدة اللي فيها + إنستاباي)، وفلوس الشركا والمستثمرين بتتشال منها وتفضل في حساباتهم.</div>';
+    '<div class="sub" style="margin:0 2px 12px">الكشكول بيتملى لوحده من كل حاجة بتسجلها في البرنامج. مدين = اللي دخل، دائن = اللي خرج. العربية بتتكتب بتمنها في الدائن، واللي باقي عليها في المدين جنبها وبيقل لوحده لما تدفع. المصاريف بتظهر سطر واحد لكل يوم (تفاصيلها في صفحة المصروفات). الأرقام هنا فلوسك انت بس (الخزنة بالعهدة اللي فيها + إنستاباي)، وفلوس الشركا والمستثمرين بتتشال منها وتفضل في حساباتهم.</div>';
   return h;
 }
 
