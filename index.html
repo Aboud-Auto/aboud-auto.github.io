@@ -577,21 +577,27 @@ function kashRow(e){
   var nd=e.d?'<span class="num">'+e.d.split("-").reverse().slice(0,2).join("/")+'</span> · ':'';
   return '<div class="ke'+(e.cap?" kc":"")+'"'+(e.car?' data-act="car" data-id="'+esc(e.car)+'"':'')+'><div class="ka num">'+fmt(Math.abs(e.a))+'</div><div class="kd">'+esc(e.t)+'</div><div class="kdt">'+nd+esc(e.k||"")+'</div></div>';
 }
+function kashPages(){return (((S.kashp&&S.kashp.pages))||[]).slice().sort(function(a,b){return (a.date||"").localeCompare(b.date||"")||a.ts-b.ts})}
+function kashPageOf(e,P){var n=0;P.forEach(function(p){var d=e.d||"";if(d>p.date||(d===p.date&&(e.c||0)>=p.ts))n++});return n}
+async function kashNewPage(){var np=kashPages().concat([{date:todayStr(),ts:Date.now()}]);try{await db.doc("settings/kash").set({pages:np});S.kp=null;toast("اتفتحت صفحة جديدة ✔")}catch(e){toast("تعذر الحفظ، جرّب تاني")}}
 function renderKash(){
-  var K=kashCalc(),mk=kashMonth(),prev=0,deb=[],cred=[],sd=0,sc=0;
-  K.E.forEach(function(e){var em=(e.d||"").slice(0,7);if(em<mk)prev+=e.a;else if(em===mk){if(e.a>0){deb.push(e);sd+=e.a}else{cred.push(e);sc-=e.a}}});
-  if(Math.round(prev)!==0){var pe={d:"",c:-2,a:prev,t:"رصيد منقول",k:"من اللي قبل "+kashMonthName(mk),cap:1};if(prev>0){deb.unshift(pe);sd+=prev}else{cred.unshift(pe);sc-=prev}}
+  var K=kashCalc(),P=kashPages(),last=P.length,pi=S.kp==null||S.kp>last?last:Math.max(0,S.kp),deb=[],cred=[],sd=0,sc=0;
+  K.E.forEach(function(e){if(kashPageOf(e,P)!==pi)return;if(e.a>0){deb.push(e);sd+=e.a}else{cred.push(e);sc-=e.a}});
+  function dmy(d){return d?d.split("-").reverse().join("/"):""}
+  var from=pi>0?dmy(P[pi-1].date):"",to=pi<last?dmy(P[pi].date):"",rng=from&&to?"من "+from+" لـ "+to:from?"من "+from:to?"لحد "+to:"";
   var away=Math.max(0,K.cap-K.bal),pa=K.cap>0?Math.min(100,away/K.cap*100):0;
   var h='<div class="top"><h1>📒 الكشكول</h1></div>'+
     '<div class="kcap"><div class="l">أصل رأس المال</div><div class="v">'+m(K.cap)+'</div>'+
     '<div class="kbar"><i style="width:'+pa.toFixed(1)+'%"></i></div>'+
     '<div class="kbl"><span>برّه (في العربيات والمصاريف) <span class="num">'+fmt(away)+'</span></span><span>معاك <span class="num">'+fmt(K.bal)+'</span></span></div>'+
-    '<div class="ktrio"><div><div class="kt">خرج</div><div class="kn num">'+fmt(K.out)+'</div></div><div><div class="kt">دخل</div><div class="kn num">'+fmt(K.inn)+'</div></div><div><div class="kt">الباقي</div><div class="kn num">'+fmt(K.bal)+'</div></div></div></div>'+
-    '<div class="kmon"><button data-act="kmon" data-n="-1" aria-label="الشهر اللي فات">›</button><b>'+kashMonthName(mk)+'</b><button data-act="kmon" data-n="1" aria-label="الشهر الجاي">‹</button></div>'+
-    '<div class="kbook"><h2>حساب الخزنة</h2><div class="ksub">شهر '+kashMonthName(mk)+'</div><div class="ktacc">'+
-      '<div class="kside kdeb"><h3>مدين<small>داخل</small></h3><div class="klist">'+(deb.length?deb.map(kashRow).join(""):'<div class="kempty">مفيش</div>')+'</div><div class="ksum"><span>المجموع</span><span class="num">'+fmt(sd)+'</span></div></div>'+
-      '<div class="kside kcred"><h3>دائن<small>خارج</small></h3><div class="klist">'+(cred.length?cred.map(kashRow).join(""):'<div class="kempty">مفيش</div>')+'</div><div class="ksum"><span>المجموع</span><span class="num">'+fmt(sc)+'</span></div></div>'+
-    '</div><div class="kbal"><span>الرصيد آخر الشهر</span><span class="num'+(sd-sc<0?" kneg":"")+'">'+fmt(sd-sc)+'</span></div></div>'+
+    '<div class="ktrio"><div><div class="kt">خرج</div><div class="kn num">'+fmt(K.out)+'</div></div><div><div class="kt">دخل</div><div class="kn num">'+fmt(K.inn)+'</div></div><div><div class="kt">الباقي</div><div class="kn num">'+fmt(K.bal)+'</div></div></div>'+
+    '<div class="kbl" style="margin-top:10px;border-top:1px solid rgba(23,17,10,.25);padding-top:8px"><span>صفحة '+(pi+1)+': دخل <span class="num">'+fmt(sd)+'</span></span><span>خرج <span class="num">'+fmt(sc)+'</span></span><span>الفرق <span class="num">'+fmt(sd-sc)+'</span></span></div></div>'+
+    '<div class="kmon"><button data-act="kpg" data-n="-1" aria-label="الصفحة اللي قبلها"'+(pi>0?'':' disabled style="opacity:.35"')+'>›</button><b>صفحة '+(pi+1)+' من '+(last+1)+'</b><button data-act="kpg" data-n="1" aria-label="الصفحة اللي بعدها"'+(pi<last?'':' disabled style="opacity:.35"')+'>‹</button></div>'+
+    (pi===last?'<button class="btn sec" style="margin-bottom:12px" data-act="knew">📄 صفحة جديدة</button>':'<button class="btn sec" style="margin-bottom:12px" data-act="kpg" data-n="99">↩ ارجع للصفحة الحالية</button>')+
+    '<div class="kbook"><h2>حساب الخزنة</h2><div class="ksub">صفحة '+(pi+1)+(rng?' · '+rng:'')+'</div><div class="ktacc">'+
+      '<div class="kside kcred"><h3>دائن<small>خارج</small></h3><div class="klist">'+(cred.length?cred.map(kashRow).join(""):'<div class="kempty">مفيش</div>')+'</div></div>'+
+      '<div class="kside kdeb"><h3>مدين<small>داخل</small></h3><div class="klist">'+(deb.length?deb.map(kashRow).join(""):'<div class="kempty">مفيش</div>')+'</div></div>'+
+    '</div></div>'+
     '<div class="sect">سجّل حركة</div>'+
     '<div class="kacts">'+
       '<button class="abtn" data-act="form" data-kind="buy"><span class="ic">🚗</span>شراء عربية</button>'+
@@ -2044,6 +2050,8 @@ document.addEventListener("click",async function(e){
   if(a==="tab"){S.tab=t.dataset.tab;render();window.scrollTo(0,0)}
   else if(a==="filter"){S.filter=t.dataset.f;render()}
   else if(a==="kmon"){S.km=kashShift(kashMonth(),+t.dataset.n);render()}
+  else if(a==="kpg"){var kl=kashPages().length,kc=S.kp==null||S.kp>kl?kl:S.kp;kc+=+t.dataset.n;S.kp=kc>=kl?null:Math.max(0,kc);render();window.scrollTo(0,0)}
+  else if(a==="knew")confirmBox("تفتح صفحة جديدة في الكشكول؟ الصفحة دي هتتقفل والجديدة هتبدأ فاضية، وتقدر ترجع للقديمة في أي وقت.",kashNewPage);
   else if(a==="car")openDetail(t.dataset.id);
   else if(a==="close")closeSheet();
   else if(a==="form")openForm(t.dataset.kind,{carId:t.dataset.car,id:t.dataset.car,pid:t.dataset.pid,sub:t.dataset.sub,loanId:t.dataset.loan,iid:t.dataset.iid});
@@ -2190,6 +2198,7 @@ async function boot(){
   db.doc("settings/main").onSnapshot(function(snap){
     S.settings=snap.exists?snap.data():null;S.loaded.settings=true;refresh();
   },function(err){S.err=err;refresh()});
+  db.doc("settings/kash").onSnapshot(function(snap){S.kashp=snap.exists?snap.data():null;refresh()},function(){});
 }
 boot();
 })();
