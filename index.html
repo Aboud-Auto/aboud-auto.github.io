@@ -577,14 +577,17 @@ function kashEntries(T){
     /* الباقي للبايع: سطر في المدين جنب العربية، وبيقل لوحده لما تدفع (من غير سطر سداد لوحده) */
     if(ow)E.push({d:c.buyDate,c:(c.createdAt||0)+0.5,a:rem,side:"d",owe:1,zero:rem<0.5?"اتسدد ✔":null,t:"باقي على "+c.name,k:rem<0.5?"اتسدد بالكامل":c.sellerPaid>0.5?"اتدفع منه "+fmt(c.sellerPaid)+" · فاضل "+fmt(rem):"لسه للبايع",car:c.id});
     /* فلوس الشركا والمستثمرين اللي دخلت في العربية: في المدين (فلوس عليك) جنب العربية، وبتتحدّث مكانها لما ترجعلهم */
-    var ppl=c.parts.map(function(p){return {n:p.name,a:+p.amount||0,pd:+p.paid||0,pr:p.profit}}).concat(c.invs.map(function(v){return {n:v.name,a:+v.amount||0,pd:0,pr:v.profit}}));
-    /* فلوس الشريك/المستثمر بتفضل "ليه" لحد ما تقفل الصفحة اللي اتباعت فيها العربية؛ ساعتها تبقى "اترد" ويتكتب ربحه */
-    var KPg=kashPages(),stl=c.sold&&KPg.some(function(pg){return c.soldAt?pg.ts>c.soldAt:(pg.date||"")>=(c.sellDate||"9999")});
-    ppl.forEach(function(p,i){if(p.a<0.5)return;var left=Math.max(0,p.a-p.pd),pr=c.sold&&p.pr?Math.round(p.pr):0;
-      var kk=stl?"اترد ✔ مع تقفيل الصفحة":dline(p.pd>0.5?"رجعتله "+fmt(p.pd)+" · فاضل "+fmt(left):"عليك",c.sold?"العربية اتباعت"+(pr?" · "+(pr>0?"ربحه ":"خسارته ")+fmt(Math.abs(pr)):"")+" · يترد مع التقفيل":"");
-      E.push({d:c.buyDate,c:(c.createdAt||0)+0.6+i/100,a:left,side:"d",owe:1,zero:left<0.5?"اترد ✔":null,t:(p.n||"شريك")+" ليه في "+c.name,k:kk,car:c.id});
-      /* مع التقفيل: سطر واحد في الدائن بالأصل والربح مع بعض */
-      if(stl&&left+pr>0.5)add({d:c.sellDate,c:(c.createdAt||0)+1+i/100,at:c.soldAt||null,a:-(left+pr),t:"رديت لـ"+(p.n||"شريك")+" فلوسه من "+c.name,k:"الأصل "+fmt(left)+(pr?(pr>0?" + الربح ":" - الخسارة ")+fmt(Math.abs(pr)):""),car:c.id});
+    var ppl=c.parts.map(function(p){return {key:"p"+p.id,n:p.name,a:+p.amount||0,pd:+p.paid||0,pr:p.profit}}).concat(c.invs.map(function(v){return {key:"i"+v.iid,n:v.name,a:+v.amount||0,pd:0,pr:v.profit}}));
+    /* فلوس الشريك/المستثمر بتفضل "ليه" لحد تقفيل الصفحة اللي اتباعت فيها العربية. مع التقفيل بتختار: رجعتله الأصل والربح، ولا الأصل بس والربح يفضل عليك لتقفيل جاي */
+    var KPg=kashPages();
+    ppl.forEach(function(p,i){if(p.a<0.5)return;var left=Math.max(0,p.a-p.pd),pr=c.sold&&p.pr?Math.round(p.pr):0,pos=pr>0?pr:0,base=left+(pr<0?pr:0),st=kashSettle(c,p.key,KPg),nm2=p.n||"شريك";
+      var kk=st.a>=0?(pos&&st.f<0?"اترد الأصل ✔ · الربح "+fmt(pos)+" لسه عليك":"اترد ✔ مع تقفيل الصفحة"):dline(p.pd>0.5?"رجعتله "+fmt(p.pd)+" · فاضل "+fmt(left):"عليك",c.sold?"العربية اتباعت"+(pr?" · "+(pr>0?"ربحه ":"خسارته ")+fmt(Math.abs(pr)):"")+" · يترد مع التقفيل":"");
+      E.push({d:c.buyDate,c:(c.createdAt||0)+0.6+i/100,a:left,side:"d",owe:1,zero:left<0.5?"اترد ✔":null,t:nm2+" ليه في "+c.name,k:kk,car:c.id});
+      if(st.a<0)return;
+      var atA=KPg[st.a].ts-1;
+      if(pos&&st.f===st.a){if(base+pos>0.5)add({d:KPg[st.a].date,c:(c.createdAt||0)+1+i/100,at:atA,a:-(base+pos),t:"رديت لـ"+nm2+" فلوسه من "+c.name,k:"الأصل "+fmt(base)+" + الربح "+fmt(pos),car:c.id});return}
+      if(base>0.5)add({d:KPg[st.a].date,c:(c.createdAt||0)+1+i/100,at:atA,a:-base,t:"رديت لـ"+nm2+" فلوسه من "+c.name,k:pr<0?"الأصل "+fmt(left)+" - الخسارة "+fmt(-pr):pos?(st.f>=0?"الأصل · الربح اترد في صفحة "+(st.f+1):"الأصل بس · الربح لسه عليك"):"الأصل",car:c.id});
+      if(pos&&st.f>=0)add({d:KPg[st.f].date,c:(c.createdAt||0)+1.5+i/100,at:KPg[st.f].ts-1,a:-pos,t:"رديت لـ"+nm2+" ربحه من "+c.name,k:"الربح",car:c.id});
     });
   });
   /* المصاريف مش بتظهر في الكشكول: العهدة رقم ثابت، والتفاصيل في كل عربية والتقارير */
@@ -614,7 +617,23 @@ function kashRow(e){
 function kashPages(){return (((S.kashp&&S.kashp.pages))||[]).slice().sort(function(a,b){return (a.date||"").localeCompare(b.date||"")||a.ts-b.ts})}
 /* الصفحة حسب وقت تسجيل الحركة: أي حاجة تتسجل بعد فتح صفحة جديدة تروح لها حتى لو تاريخها قديم */
 function kashPageOf(e,P){var t=e.at!=null?e.at:(e.c||0),n=0;P.forEach(function(p){if(t>=p.ts)n++});return n}
-async function kashNewPage(){var np=kashPages().concat([{date:todayStr(),ts:Date.now()}]);try{await db.doc("settings/kash").set({pages:np});S.kp=null;toast("الصفحة اتقفلت ✔ وبدأت صفحة جديدة")}catch(e){toast("تعذر الحفظ، جرّب تاني")}}
+/* a = رقم التقفيل اللي اترد فيه الأصل، f = رقم التقفيل اللي اترد فيه الربح (-1 = لسه) */
+function kashSettle(c,key,P){var r={a:-1,f:-1};if(!c.sold)return r;
+  for(var k=0;k<P.length;k++){if(r.a<0&&(c.soldAt?P[k].ts>c.soldAt:(P[k].date||"")>=(c.sellDate||"9999")))r.a=k;if(r.a>=0&&(P[k].pk||[]).indexOf(c.id+"|"+key)<0){r.f=k;break}}
+  return r}
+/* اللي هيترد مع التقفيل الجاي وليهم ربح (عشان نسأل: الأصل بس ولا الأصل والربح) */
+function kashPend(){var T=calc(),P=kashPages(),L=[];
+  T.cars.forEach(function(c){if(!c.sold)return;
+    c.parts.map(function(p){return {key:"p"+p.id,n:p.name,a:+p.amount||0,pd:+p.paid||0,pr:p.profit}}).concat(c.invs.map(function(v){return {key:"i"+v.iid,n:v.name,a:+v.amount||0,pd:0,pr:v.profit}})).forEach(function(p){
+      var pr=p.pr?Math.round(p.pr):0;if(pr<=0||p.a<0.5)return;var st=kashSettle(c,p.key,P);if(st.f>=0)return;
+      L.push({key:c.id+"|"+p.key,n:p.n||"شريك",car:c.name,base:st.a<0?Math.max(0,p.a-p.pd):0,pr:pr})})});
+  return L}
+function kashCloseSheet(L){
+  return sheetHead("🔒 تقفيل الصفحة")+'<div class="sub" style="margin-bottom:12px">الصفحة هتتقفل وتبدأ صفحة جديدة فاضية. قولّي رجّعت لكل واحد إيه:</div>'+
+    L.map(function(x){return '<div class="card" style="margin-bottom:10px"><div style="font-weight:800">'+esc(x.n)+' · '+esc(x.car)+'</div><div class="sub" style="margin:2px 0 8px">'+(x.base>0.5?'الأصل <span class="num">'+fmt(x.base)+'</span> · ':'')+'الربح <span class="num">'+fmt(x.pr)+'</span></div>'+
+      '<select name="kc" data-key="'+esc(x.key)+'">'+(x.base>0.5?'<option value="all">رجّعتله الأصل والربح</option><option value="base">رجّعتله الأصل بس (الربح لسه عليا)</option>':'<option value="all">رجّعتله الربح</option><option value="base">الربح لسه عليا</option>')+'</select></div>'}).join("")+
+    '<button class="btn" data-act="kclose">🔒 قفّل الصفحة</button>'}
+async function kashNewPage(keep){var np=kashPages().concat([{date:todayStr(),ts:Date.now(),pk:keep||[]}]);try{await db.doc("settings/kash").set({pages:np});S.kp=null;toast("الصفحة اتقفلت ✔ وبدأت صفحة جديدة")}catch(e){toast("تعذر الحفظ، جرّب تاني")}}
 function renderKash(){
   var K=kashCalc(),P=kashPages(),last=P.length,pi=S.kp==null||S.kp>last?last:Math.max(0,S.kp),deb=[],cred=[],sd=0,sc=0;
   K.E.forEach(function(e){if(kashPageOf(e,P)!==pi)return;if(e.side==="d"||(!e.side&&e.a>0)){deb.push(e);sd+=e.a}else{cred.push(e);sc-=e.a}});
@@ -2090,7 +2109,8 @@ document.addEventListener("click",async function(e){
   else if(a==="filter"){S.filter=t.dataset.f;render()}
   else if(a==="kmon"){S.km=kashShift(kashMonth(),+t.dataset.n);render()}
   else if(a==="kpg"){var kl=kashPages().length,kc=S.kp==null||S.kp>kl?kl:S.kp;kc+=+t.dataset.n;S.kp=kc>=kl?null:Math.max(0,kc);render();window.scrollTo(0,0)}
-  else if(a==="knew")confirmBox("تقفل الصفحة دي؟ هتتقفل بحساباتها وتبدأ صفحة جديدة فاضية، وتقدر ترجع للصفحة المقفولة في أي وقت بالأسهم فوق.",kashNewPage);
+  else if(a==="knew"){var KL=kashPend();if(KL.length)openSheet(kashCloseSheet(KL));else confirmBox("تقفل الصفحة دي؟ هتتقفل بحساباتها وتبدأ صفحة جديدة فاضية، وتقدر ترجع للصفحة المقفولة في أي وقت بالأسهم فوق.",function(){kashNewPage([])})}
+  else if(a==="kclose"){var kp=[];document.querySelectorAll('#sheet select[name="kc"]').forEach(function(x){if(x.value==="base")kp.push(x.dataset.key)});closeSheet();kashNewPage(kp)}
   else if(a==="car")openDetail(t.dataset.id);
   else if(a==="close")closeSheet();
   else if(a==="form")openForm(t.dataset.kind,{carId:t.dataset.car,id:t.dataset.car,pid:t.dataset.pid,sub:t.dataset.sub,loanId:t.dataset.loan,iid:t.dataset.iid});
