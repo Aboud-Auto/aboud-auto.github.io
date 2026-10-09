@@ -425,11 +425,11 @@ function tileTap(k){
     h+=cs.length?cs.map(function(c){return tkv(esc(c.name),m(c.cost),c.id,"شراء "+m(+c.buyPrice||0)+(c.exp>0.5?" + مصاريف "+m(c.exp):"")+" · "+fdate(c.buyDate))}).join(""):tnone("مفيش عربيات في المعرض");
     h+=ttot("إجمالي التكلفة",m(T.stockCost));
   }else if(k==="profit"){
-    t="📈 أرباحك من العربيات المباعة";cs=T.cars.filter(function(c){return c.sold});
-    h+=cs.length?cs.map(function(c){return tkv(esc(c.name),m(c.myProfit,c.myProfit>=0?"good":"bad"),c.id,"بيع "+m(c.sellPrice)+" − تكلفة "+m(c.cost)+((c.parts.length||c.invs.length)?" · حصتك بس":"")+(c.lossActive?" · خسارة على مراحل":""))}).join(""):tnone("لسه مفيش عربيات اتباعت");
+    t="🚗 أرباح العربيات";cs=T.cars.filter(function(c){return c.sold});h+=profitSplit(T);if(cs.length)h+=tsec("كل عربية");
+    h+=cs.length?cs.map(function(c){return tkv(esc(c.name)+(c.tradeGot>0?" 🔁":""),m(c.profit,c.profit>=0?"good":"bad"),c.id,"بيع "+m(c.sellPrice)+" − تكلفة "+m(c.cost)+'<br>'+shareLine(c)+(c.lossActive?" · خسارة على مراحل":""))}).join(""):tnone("لسه مفيش عربيات اتباعت");
     cs=T.cars.filter(function(c){return c.forfAmt>0.5});
     if(cs.length)h+=tsec("🔖 عرابين اتصادرت (ربح)")+cs.map(function(c){return tkv(esc(c.name),m(c.forfAmt,"good"),c.id)}).join("");
-    h+=ttot("الإجمالي",m(T.profit,T.profit>=0?"good":"bad"));
+    h+=ttot("نصيبك الإجمالي",m(T.profit,T.profit>=0?"good":"bad"));
   }else if(k==="debts"){
     t="🧾 مديونيات العملاء";cs=T.cars.filter(function(c){return c.sold&&c.remaining>0.5});
     h+=cs.length?cs.map(function(c){return tkv(esc(c.name),m(c.remaining,"warn"),c.id,"اتباعت بـ "+m(c.sellPrice)+" · اتحصّل "+m(c.cashIn+c.instaIn+c.tradeGot)+" · "+fdate(c.sellDate))}).join(""):tnone("مفيش فلوس باقية عند حد 👌");
@@ -478,7 +478,7 @@ function statusBadge(c){
 }
 function carCard(c){
   var line=c.sold?('ربحك <b class="'+(c.myProfit>=0?"good":"bad")+'">'+m(c.myProfit)+'</b>'):('اشتريت '+fdate(c.buyDate));
-  return '<div class="card car" data-act="car" data-id="'+c.id+'"><div class="row"><span class="name">'+esc(c.name)+(c.parts.length?'<span class="ptag">🤝 شراكة</span>':'')+(c.invs.length?'<span class="ptag">💼 مستثمر</span>':'')+(c.lossActive?'<span class="ptag">📉 خسارة على مراحل</span>':'')+(!c.sold&&c.dep>0.5?'<span class="ptag">🔖 عربون '+fmt(c.dep)+'</span>':'')+(c.sellerRem>0.5?'<span class="ptag">⏳ باقي للبايع '+fmt(c.sellerRem)+'</span>':'')+'</span>'+statusBadge(c)+'</div>'+
+  return '<div class="card car" data-act="car" data-id="'+c.id+'"><div class="row"><span class="name">'+esc(c.name)+(c.tradeFrom?'<span class="ptag">🔁 بدل '+esc(carNameById(c.tradeFrom))+'</span>':'')+(c.tradeGot>0?'<span class="ptag">🔁 اتبدلت</span>':'')+(c.parts.length?'<span class="ptag">🤝 شراكة</span>':'')+(c.invs.length?'<span class="ptag">💼 مستثمر</span>':'')+(c.lossActive?'<span class="ptag">📉 خسارة على مراحل</span>':'')+(!c.sold&&c.dep>0.5?'<span class="ptag">🔖 عربون '+fmt(c.dep)+'</span>':'')+(c.sellerRem>0.5?'<span class="ptag">⏳ باقي للبايع '+fmt(c.sellerRem)+'</span>':'')+'</span>'+statusBadge(c)+'</div>'+
     '<div class="row sub" style="margin-top:6px"><span>التكلفة '+m(c.cost)+'</span><span>'+line+'</span></div></div>';
 }
 
@@ -513,13 +513,12 @@ function renderHome(){
   h+='<div class="card row" data-act="tab" data-tab="day" style="cursor:pointer"><div><div class="tl">النهاردة</div><div style="font-weight:700">مصاريف '+m(D.expT)+' · تحصيل '+m(D.cashT+D.instaT)+'</div></div><span class="sub">تقفيل اليوم ‹</span></div>';
   h+='<div class="grid2">'+
     tapTile(tile("عربيات في المعرض",'<span class="num">'+T.stockN+'</span>',"تكلفتها "+m(T.stockCost)),"stock")+
-    tapTile(tile("أرباحك من العربيات المباعة",m(T.profit,T.profit>=0?"good":"bad"),'<span class="num">'+T.soldN+'</span> عربية'),"profit")+
+    tapTile(tile("🚗 أرباح العربيات",m(T.profit,T.profit>=0?"good":"bad"),'نصيبك من <span class="num">'+T.soldN+'</span> عربية'+(carsNet(T)!==T.profit?' · الصافي كله '+m(carsNet(T)):'')),"profit")+
     tapTile(tile("مديونيات العملاء",m(T.debts,T.debts>0?"warn":""),""),"debts")+
     tapTile(tile("عجز رأس المال",m(T.deficit,T.deficit>0?"bad":""),"رأس المال الحالي "+m(T.capNow)+(T.lossRem>0.5?"<br>منها خسائر عربيات "+m(T.lossRem):"")),"deficit")+
     tapTile(tile("رصيد العهدة",m(T.fundBal,T.fundBal<0?"bad":""),"من "+m(T.fund)+" (جزء من رأس المال)"),"fund")+
     tapTile(tile("أرباح متاحة",m(T.undist),"للسحب أو لسداد العجز"),"undist")+
-    tapTile(tile("🤝 أرباح خارجية",m(T.extTot,"good"),"عمولات · مش في الخزنة"),"ext")+
-    tapTile(tile("أرباحك الخاصة",m(T.profit+T.extTot,T.profit+T.extTot>=0?"good":"bad"),"عربيات + عمولات"),"own")+'</div>';
+    tapTile(tile("🤝 أرباح خارجية",m(T.extTot,"good"),"عمولات · مش في الخزنة"),"ext")+'</div>';
   return h;
 }
 
@@ -581,7 +580,7 @@ function renderDay(){
     '<div class="grid2">'+tile("حركة الخزنة",m(D.acct.cash,sgn(D.acct.cash)),"")+tile("حركة إنستاباي",m(D.acct.insta,sgn(D.acct.insta)),"")+
     tile("تحصيل كاش",m(D.cashT),"")+tile("تحصيل إنستاباي",m(D.instaT),"")+tile("مشتريات",m(D.buyT),"")+tile("مصاريف",m(D.expT),"")+
     tile("مساهمة شركاء",m(D.pInT),"")+tile("تسليم شركاء",m(D.pOutT),"")+
-    tile("عربيات اتباعت",'<span class="num">'+D.sales.length+'</span>',"")+tile("أرباحك اليوم",m(D.profT,D.profT>=0?"good":"bad"),"")+(xT>0.5?tile("🤝 عمولات خارجية",m(xT,"good"),"بره الخزنة")+tile("أرباحك الخاصة اليوم",m(D.profT+xT,D.profT+xT>=0?"good":"bad"),"عربيات + عمولات"):"")+'</div>'+
+    tile("عربيات اتباعت",'<span class="num">'+D.sales.length+'</span>',"")+tile("أرباحك اليوم",m(D.profT,D.profT>=0?"good":"bad"),"")+(xT>0.5?tile("🤝 عمولات خارجية",m(xT,"good"),"بره الخزنة"):"")+'</div>'+
     '<div class="sect">حركة اليوم</div><div class="card" style="padding:6px 16px">'+list+'</div>';
 }
 
@@ -988,7 +987,7 @@ function openForm(kind,o){
       '<div class="two">'+fld("اتحصّل كاش",minp("cash"))+fld("اتحصّل إنستاباي",minp("insta"))+'</div>'+
       '<div class="card" style="margin:4px 0 12px"><div class="sect" style="margin-top:0">🔁 عربية داخلة في البيعة (بدل)</div><div class="sub" style="margin-bottom:8px">سيبها فاضية لو البيعة عادية.</div>'+
       '<div class="two">'+fld("اسم العربية الداخلة",'<input name="tname" autocomplete="off" placeholder="مثال: لانسر 2015">')+fld("قيمتها",minp("tval"))+'</div>'+
-      fld("لو إنت اللي هتدفع فرق، هتدفعه من",srcSel("tsrc"))+'</div>'+
+      fld("لو الفرق عليك: دفعت منه دلوقتي كام؟",minp("tpaid","","فاضي = دفعته كله"))+fld("ودفعته من",srcSel("tsrc"))+'<div class="sub">لو دفعت جزء من الفرق، الباقي بيتسجل إنه ليه عندك (باقي للعميل) لحد ما تسدده. ولو الفرق على العميل، اكتب اللي دفعه فوق في الكاش أو إنستاباي والباقي بيتسجل عليه.</div></div>'+
       '<div class="preview" id="pv"></div><button class="btn" data-act="submit">تأكيد البيع</button>';
   }else if(kind==="dep"){
     var dst=T.cars.filter(function(c){return !c.sold});
@@ -1091,7 +1090,7 @@ function openForm(kind,o){
       '<div class="two">'+fld("العمولة (صافي)",minp("amount"))+fld("التاريخ",dinp("date"))+'</div>'+
       fld("اتقبضت",'<select name="how"><option value="cash">كاش</option><option value="insta">إنستاباي</option><option value="both">كاش + إنستاباي</option></select>')+
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+
-      '<div class="preview" style="display:block">العمولة هتتسجل في أرباحك الخاصة بس، ومش هتأثر على الخزنة ولا إنستاباي.</div><button class="btn" data-act="submit">حفظ العمولة</button>';
+      '<div class="preview" style="display:block">العمولة هتتسجل في الأرباح الخارجية بس، ومش هتأثر على الخزنة ولا إنستاباي.</div><button class="btn" data-act="submit">حفظ العمولة</button>';
   }else if(kind==="transfer"){
     var dir=o.sub==="toInsta"?"toInsta":"toSafe";
     h=sheetHead("تحويل بين إنستاباي والخزنة")+
@@ -1196,10 +1195,10 @@ function updatePreview(){
   if(k==="sell"){
     var pre=c.sold?0:c.cashIn+c.instaIn,p=parseNum(val("price")),tv=parseNum(val("tval")),tr=tv>0?Math.min(p,tv):0,rest=p-tr-cash-ins-pre,profit=p-c.cost;
     var t='تكلفة العربية: '+m(c.cost)+'<br>صافي الربح: <b class="'+(profit>=0?"good":"bad")+'">'+m(profit)+'</b>';
-    c.invs.forEach(function(v){t+='<br>💼 '+esc(v.name)+' ('+pct(v.share)+'): <b class="'+(profit>=0?"good":"bad")+'">'+m(profit*v.share)+'</b>'});
+    c.parts.forEach(function(q){t+='<br>🤝 '+esc(q.name)+' ('+pct(q.share)+'): <b class="'+(profit>=0?"good":"bad")+'">'+m(profit*q.share)+'</b>'});c.invs.forEach(function(v){t+='<br>💼 '+esc(v.name)+' ('+pct(v.share)+'): <b class="'+(profit>=0?"good":"bad")+'">'+m(profit*v.share)+'</b>'});
     if(c.parts.length||c.invs.length)t+='<br>ربحك (نسبة '+pct(c.ownerShare)+'): <b class="'+(profit>=0?"good":"bad")+'">'+m(profit*c.ownerShare)+'</b>';
     if(pre>0.5)t+='<br>🔖 عربون مدفوع قبل كده: <b>'+m(pre)+'</b> (بيتخصم من السعر)';
-    if(tv>0)t+=tv>p?'<br>🔁 إنت هتدفع فرق للعميل: <b class="warn">'+m(tv-p)+'</b>':'<br>🔁 العميل هيدفع فرق: <b>'+m(p-tv)+'</b>';
+    if(tv>0){var tps=val("tpaid").trim(),tpp=tps===""?tv-p:Math.min(parseNum(tps),tv-p);t+='<br>🔁 <b>راس في راس:</b> '+m(p)+' قصاد '+m(tv);t+=tv>p?'<br>الفرق عليك للعميل: <b class="warn">'+m(tv-p)+'</b> · دفعت '+m(tpp)+' · باقي ليه عندك <b>'+m(Math.max(0,tv-p-tpp))+'</b>':tv<p?'<br>الفرق على العميل: <b>'+m(p-tv)+'</b>':'<br>مفيش فرق ✔'}
     pv.innerHTML=t+(tv>p?'':'<br>باقي على العميل: <b>'+m(rest>0?rest:0)+'</b>');
   }else if(k==="collect"){
     var after=(c.remaining||0)-cash-ins;
@@ -1251,9 +1250,10 @@ async function submitForm(){
       if(cash+ins+pre>sp2-tr+0.5)return toast(tv>=sp2?"إنت اللي هتدفع الفرق، سيب التحصيل فاضي":"المحصّل أكبر من الفرق ("+fmt(Math.max(0,sp2-tr-pre))+")");
       var ok=await patch("cars/"+cid,{sellPrice:sp2,sellDate:dt,soldAt:Date.now()});
       if(ok&&(cash>0||ins>0))ok=!!(await create("collections",{carId:cid,date:dt,cash:cash,insta:ins,note:"عند البيع"}));
-      if(ok&&tv>0){var tid=await create("cars",{name:tn,buyPrice:tv,buyPaid:null,buyDate:dt,buySrc:val("tsrc")==="insta"?"insta":"cash",tradeIn:tr,tradeFrom:cid,reimbursed:false,partners:[]});ok=!!tid;
+      var tpS=val("tpaid").trim(),tdf=tv-tr,tbp=null;if(tv>0&&tdf>0.5&&tpS!==""){var tpn=parseNum(tpS);if(tpn<0||tpn>tdf+0.5){submitting=false;return toast("المدفوع من الفرق لازم يكون من ٠ لحد "+fmt(tdf))}if(tpn<tdf-0.5)tbp=tr+tpn}
+      if(ok&&tv>0){var tid=await create("cars",{name:tn,buyPrice:tv,buyPaid:tbp,buyDate:dt,buySrc:val("tsrc")==="insta"?"insta":"cash",tradeIn:tr,tradeFrom:cid,reimbursed:false,partners:[]});ok=!!tid;
         if(ok)ok=!!(await create("collections",{carId:cid,date:dt,cash:0,insta:0,trade:tr,tradeCar:tid,tradeName:tn,note:"عربية داخلة: "+tn}))}
-      if(ok){done(o);toast("اتباعت ✔");setTimeout(function(){invLossPrompt(cid)},350)}
+      if(ok){done(o);toast("اتباعت ✔");var tidS=tv>0?tid:null;setTimeout(function(){if(tidS)tradeSummary(cid,tidS);else invLossPrompt(cid)},400)}
     }else if(k==="dep"){
       var dcar=carById(val("carId")),dc1=parseNum(val("cash")),di1=parseNum(val("insta"));
       if(!dcar||dcar.sold)return toast("اختار عربية في المعرض");
@@ -1379,7 +1379,7 @@ function renderDetail(){
   var hasP=c.parts.length>0;
   var h=sheetHead(esc(c.name))+'<div style="margin:-4px 0 10px">'+statusBadge(c)+(hasP?'<span class="ptag">🤝 شراكة</span>':'')+((c.returns||[]).length?'<span class="ptag">↩️ رجعت قبل كده</span>':'')+'</div>';
   h+='<div class="card"><div class="kv"><span>تاريخ الشراء</span><b>'+fdate(c.buyDate)+'</b></div><div class="kv"><span>سعر الشراء</span><b>'+m(c.buyPrice)+'</b></div>'+tradeInKv(c)+
-     (c.owedSeller>0.5?'<div class="kv"><span>اتدفع للبايع</span><b>'+m(paidNow(c)+c.sellerPaid)+'</b></div><div class="kv"><span>باقي للبايع</span><b class="'+(c.sellerRem>0.5?"warn":"good")+'">'+(c.sellerRem>0.5?m(c.sellerRem):"اتسدد بالكامل ✔")+'</b></div>':'')+'<div class="kv"><span>المصاريف</span><b>'+m(c.exp)+'</b></div><div class="kv"><span>التكلفة الإجمالية</span><b>'+m(c.cost)+'</b></div>';
+     (c.owedSeller>0.5?'<div class="kv"><span>اتدفع للبايع</span><b>'+m(paidNow(c)+c.sellerPaid)+'</b></div><div class="kv"><span>'+(c.tradeFrom?"باقي للعميل (فرق البدل)":"باقي للبايع")+'</span><b class="'+(c.sellerRem>0.5?"warn":"good")+'">'+(c.sellerRem>0.5?m(c.sellerRem):"اتسدد بالكامل ✔")+'</b></div>':'')+'<div class="kv"><span>المصاريف</span><b>'+m(c.exp)+'</b></div><div class="kv"><span>التكلفة الإجمالية</span><b>'+m(c.cost)+'</b></div>';
   if(c.sold){
     h+='<div class="kv"><span>تاريخ البيع</span><b>'+fdate(c.sellDate)+'</b></div><div class="kv"><span>سعر البيع</span><b>'+m(c.sellPrice)+'</b></div>'+
        '<div class="kv"><span>محصّل كاش</span><b>'+m(c.cashIn)+'</b></div><div class="kv"><span>محصّل إنستاباي</span><b>'+m(c.instaIn)+'</b></div>'+tradeOutKv(c)+
@@ -1915,6 +1915,30 @@ async function renderReport(spec){
   return cv;
 }
 
+/* ---------- أرباح العربيات: توزيع على كل واحد ---------- */
+function carsNet(T){var n=0;T.cars.forEach(function(c){if(c.sold)n+=c.profit||0});return n}
+function shareLine(c){var a=[];if(c.parts.length||c.invs.length)a.push("إنت "+fmt(Math.round(c.myProfit)));c.parts.forEach(function(p){a.push(esc(p.name)+" "+fmt(Math.round(p.profit||0)))});c.invs.forEach(function(v){a.push("💼 "+esc(v.name)+" "+fmt(Math.round(v.profit||0)))});return a.length?'<span class="sub">'+a.join(" · ")+'</span>':'<span class="sub">ليك لوحدك</span>'}
+function profitSplit(T){var sold=T.cars.filter(function(c){return c.sold});if(!sold.length)return "";
+  var net=carsNet(T),mine=0,P={},I={},pa=[],ia=[];
+  sold.forEach(function(c){mine+=c.myProfit||0;c.parts.forEach(function(p){var k=p.name||"شريك";if(!P[k]){P[k]={n:k,v:0,c:0};pa.push(P[k])}P[k].v+=p.profit||0;P[k].c++});c.invs.forEach(function(v){var k=v.iid||v.name;if(!I[k]){I[k]={n:v.name||"مستثمر",v:0,c:0};ia.push(I[k])}I[k].v+=v.profit||0;I[k].c++})});
+  function cl(x){return x>=0?"good":"bad"}
+  var h=tkv("<b>إجمالي صافي الربح</b>",m(net,cl(net)),null,'<span class="num">'+sold.length+'</span> عربية اتباعت (بعد المصاريف)');
+  h+=tsec("نصيب كل واحد")+tkv("⭐ إنت",m(mine,cl(mine)));
+  pa.forEach(function(x){h+=tkv("🤝 "+esc(x.n)+" (شريك)",m(x.v,cl(x.v)),null,'في <span class="num">'+x.c+'</span> عربية')});
+  ia.forEach(function(x){h+=tkv("💼 "+esc(x.n)+" (مستثمر)",m(x.v,cl(x.v)),null,'في <span class="num">'+x.c+'</span> عربية')});
+  return h}
+/* ملخص عملية البدل بعد البيع */
+function tradeSummary(oldId,newId){var o=carById(oldId),n=carById(newId);if(!o||!n){invLossPrompt(oldId);return}
+  var tv=+n.buyPrice||0,sp=+o.sellPrice||0,df=sp-tv,cl=function(x){return x>=0?"good":"bad"};
+  var h=sheetHead("🔁 عملية بدل اتسجلت")+'<div class="card">'+
+    tkv("🚗 "+esc(o.name)+" اتباعت بـ",m(sp))+
+    tkv("ربح "+esc(o.name),m(o.profit,cl(o.profit)),null,shareLine(o))+
+    tkv("🔁 "+esc(n.name)+" دخلت عليك بـ",m(tv))+
+    (df>0.5?tkv("الفرق على العميل",m(df,"good"),null,"اتحصّل "+fmt(o.cashIn+o.instaIn)+" · باقي عليه "+fmt(Math.max(0,o.remaining||0))):df<-0.5?tkv("الفرق عليك للعميل",m(-df,"warn"),null,"دفعت "+fmt(-df-Math.max(0,n.sellerRem||0))+" · باقي ليه عندك "+fmt(Math.max(0,n.sellerRem||0))):tkv("الفرق","مفيش فرق ✔"))+
+    '</div><div class="sub" style="margin:8px 2px 12px">'+esc(n.name)+' دخلت المعرض ومكتوب جنبها «بدل». لو داخل معاك فيها شريك أو مستثمر ضيفه دلوقتي، ولو لأ اضغط تمام.</div>'+
+    '<button class="btn" style="margin-bottom:10px" data-act="form" data-kind="edit" data-car="'+esc(n.id)+'">🤝 دخّل شريك أو مستثمر في '+esc(n.name)+'</button>'+
+    '<button class="btn sec" data-act="tsok" data-id="'+esc(o.id)+'">تمام</button>';
+  modal={type:"tsum"};openSheet(h)}
 var ROLLC=null,ROLLSELF=null;
 function clink(id,name){return '<span data-act="car" data-id="'+esc(id)+'" style="color:var(--primary);text-decoration:underline;cursor:pointer">'+esc(name)+'</span>'}
 /* سطر يوضّح البدل: سعر البيع، قيمة العربية الداخلة، والفرق مين دفعه */
@@ -2003,7 +2027,7 @@ function rbPeriod(){
   if(ims.length)items.push({l:"حركة فلوس مستثمرين",v:rnum(imT,true)+" ج",c:rcol(imT)});
   if(Math.abs(ldT)>0.5)items.push({l:"حركة سلف وأمانات",v:rnum(ldT,true)+" ج",c:rcol(ldT)});
   var xs=S.ext.filter(function(x){return r(x.date)}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")}),xT=0;xs.forEach(function(x){xT+=+x.amount||0});
-  if(xT>0.5){items.push({l:"أرباح خارجية (عمولات)",v:rnum(xT)+" ج",c:RK.good});items.push({l:"إجمالي أرباحك الخاصة",v:rnum(profT+xT,true)+" ج",c:rcol(profT+xT)})}
+  if(xT>0.5){items.push({l:"أرباح خارجية (عمولات)",v:rnum(xT)+" ج",c:RK.good})}
   var B=[{t:"tiles",items:items}],any=false;
   if(sales.length){any=true;B.push({t:"sec",title:"عربيات اتباعت ("+sales.length+")"});
     B.push({t:"table",cols:[{h:"العربية",w:.37},{h:"سعر البيع",w:.21,k:"n"},{h:"التكلفة",w:.21,k:"n"},{h:"ربحك",w:.21,k:"n",s:1}],
@@ -2335,6 +2359,7 @@ document.addEventListener("click",async function(e){
   else if(a==="car")openDetail(t.dataset.id);
   else if(a==="tinfo")tileTap(t.dataset.k);
   else if(a==="close")closeSheet();
+  else if(a==="tsok"){var lc=t.dataset.id;closeSheet();setTimeout(function(){invLossPrompt(lc)},200)}
   else if(a==="form")openForm(t.dataset.kind,{carId:t.dataset.car,id:t.dataset.car,pid:t.dataset.pid,sub:t.dataset.sub,loanId:t.dataset.loan,iid:t.dataset.iid});
   else if(a==="submit")submitForm();
   else if(a==="addp"){$("#plist").insertAdjacentHTML("beforeend",partnerRow(null));var ins=document.querySelectorAll("#plist .pn");ins[ins.length-1].focus()}
