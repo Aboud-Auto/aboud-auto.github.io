@@ -459,7 +459,7 @@ function tileTap(k){
     if(capRecs("pwithdraw").length)h+=tsec("💵 سحوبات الأرباح")+capRecRows("pwithdraw");
   }else if(k==="ext"){
     t="🤝 أرباح خارجية";cs=S.ext.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"")});
-    h+=cs.length?cs.map(function(x){var p=[x.seller?"البايع: "+esc(x.seller):"",x.buyer?"المشتري: "+esc(x.buyer):"",fdate(x.date)].filter(Boolean).join(" · ");return tkv(esc(x.desc||"عمولة"),m(+x.amount||0,"good"),null,p+(x.note?"<br>"+esc(x.note):""))}).join(""):tnone("لسه مفيش عمولات خارجية");
+    h+=cs.length?cs.map(function(x){var p=[x.seller?"البايع: "+esc(x.seller):"",x.buyer?"المشتري: "+esc(x.buyer):"",fdate(x.date)].filter(Boolean).join(" · ");return tkv(esc(x.desc||"عمولة"),m(+x.amount||0,"good")+' <button class="del" data-act="delitem" data-coll="external" data-id="'+x.id+'" aria-label="حذف">🗑</button>',null,p+(x.note?"<br>"+esc(x.note):""))}).join(""):tnone("لسه مفيش عمولات خارجية");
     h+=ttot("الإجمالي",m(T.extTot,"good"));
   }else if(k==="own"){
     t="⭐ أرباحك الخاصة";
@@ -906,6 +906,7 @@ function refresh(){
   if(modal&&modal.type==="loan")renderLoan();
   if(modal&&modal.type==="inv")renderInvDetail();
   if(modal&&modal.type==="person")renderPerson();
+  if(modal&&modal.type==="tinfo"&&modal.k==="ext")tileTap("ext");
 }
 function renderListOnly(){var l=$("#carList");if(l)l.innerHTML=carListHtml();if(modal&&modal.type==="detail")renderDetail()}
 
