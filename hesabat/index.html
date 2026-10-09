@@ -789,11 +789,10 @@ function extRow(x){
   return '<div class="item"><div style="flex:1"><div class="t">🤝 '+esc(x.desc||"عمولة")+'</div><div class="d">'+fdate(x.date)+(dd?" · "+dd:"")+'</div></div><span class="num good" style="font-weight:700">'+fmt(x.amount)+'</span><button class="del" data-act="delitem" data-coll="external" data-id="'+x.id+'" aria-label="حذف">🗑</button></div>';
 }
 function extBox(T){
-  var L=extSorted(),tot=T.profit+T.extTot;
-  return '<div class="sect">🤝 أرباحك الخاصة</div><div class="card">'+
-    '<div class="kv"><span>🚗 أرباح العربيات (حصتك)</span><b>'+m(T.profit,T.profit>=0?"":"bad")+'</b></div>'+
-    '<div class="kv"><span>🤝 أرباح خارجية (عمولات)</span><b>'+m(T.extTot,"good")+'</b></div>'+
-    '<div class="kv"><span>الإجمالي</span><b>'+m(tot,tot>=0?"good":"bad")+'</b></div>'+
+  var L=extSorted();
+  return '<div class="sect">🤝 أرباح خارجية (عمولات)</div><div class="card">'+
+    '<div class="kv"><span>إجمالي العمولات</span><b>'+m(T.extTot,"good")+'</b></div>'+
+    '<div class="kv"><span>عدد العمولات</span><b class="num">'+L.length+'</b></div>'+
     '<div class="sub" style="margin-top:8px">الأرباح الخارجية عمولات من بيعات أو شروات من غير ما المعرض يدفع فلوس. بتتسجل هنا بتفاصيلها بس، ومش بتدخل الخزنة ولا إنستاباي ولا بتتسحب منهم.</div>'+
     '<button class="btn sec" style="margin-top:12px" data-act="form" data-kind="ext">+ تسجيل عمولة خارجية</button></div>'+
     (L.length?'<div class="card" style="padding:6px 16px">'+L.map(extRow).join("")+'</div>':'');
