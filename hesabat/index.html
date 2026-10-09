@@ -1165,7 +1165,7 @@ function openForm(kind,o){
       '<div class="two">'+fld("سعر الشراء",minp("price",c.buyPrice))+fld("تاريخ الشراء",dinp("date",c.buyDate))+'</div>'+
       fld("اتدفع دلوقتي للبايع (سيبه فاضي لو دفعت الكل)",minp("paid",(typeof c.buyPaid==="number"&&c.buyPaid<c.buyPrice)?c.buyPaid:"","اتدفع كله"))+fld("اتدفعت من",srcSel("src",c.buySrc))+
       (c.sold?'<div class="two">'+fld("سعر البيع",minp("sprice",c.sellPrice))+fld("تاريخ البيع",dinp("sdate",c.sellDate))+'</div>':"")+
-      (ROLLC?'<div class="sub" style="margin:0 2px 10px">🔁 العربية دي جت بدل '+esc(ROLLC.name)+' اللي كان فيها شركاء. لو شريك منهم داخل معاك هنا، ضيفه واختار «من حسابه في '+esc(ROLLC.name)+'» وفلوسه هتتنقل من غير ما تتحسب داخلة الخزنة. ولو مش داخل، سيبه وحسابه يفضل في العربية القديمة.</div>':'')+partnersBox(c.parts,c.invs,c.id)+'<button class="btn" data-act="submit">حفظ التعديل</button>';
+      (ROLLC?'<div class="sub" style="margin:0 2px 10px">🔁 العربية دي جت بدل '+esc(ROLLC.name)+' اللي كان فيها شركاء. لو شريك منهم داخل معاك هنا، ضيفه واختار «من حسابه في '+esc(ROLLC.name)+'» وفلوسه هتتنقل من غير ما تتحسب داخلة الخزنة. ولو مش داخل، سيبه وحسابه يفضل في العربية القديمة.</div>':'')+(roc&&roc.invs.length?'<div class="sub" style="margin:0 2px 10px">💼 المستثمر اللي كان في '+esc(roc.name)+' فلوسه وربحه رجعوا رصيده. لو داخل هنا، ضيفه تحت في المستثمرين والمبلغ هيتسحب من رصيده.</div>':'')+partnersBox(c.parts,c.invs,c.id)+'<button class="btn" data-act="submit">حفظ التعديل</button>';
   }else if(kind==="expense"){
     if(!T.cars.length)return toast("سجّل عربية الأول");
     var sel=o.carId||stockFirst(T)[0].id;
@@ -2162,15 +2162,16 @@ function tradeOutKv(c){var tl=S.cols.filter(function(x){return x.carId===c.id&&x
   return h}
 /* الشركاء في عملية البدل: مين اتنقل للعربية الجديدة ومين حسابه فضل في القديمة */
 function tradePairs(c){var L=[];
-  if(c.tradeFrom){var o=carById(c.tradeFrom);if(o&&o.parts.length)L.push({o:o,n:c})}
-  S.cols.forEach(function(x){if(x.carId===c.id&&x.trade&&c.parts.length){var n=carById(x.tradeCar);if(n)L.push({o:c,n:n})}});
+  if(c.tradeFrom){var o=carById(c.tradeFrom);if(o&&(o.parts.length||o.invs.length))L.push({o:o,n:c})}
+  S.cols.forEach(function(x){if(x.carId===c.id&&x.trade&&(c.parts.length||c.invs.length)){var n=carById(x.tradeCar);if(n)L.push({o:c,n:n})}});
   return L}
 function rollRows(o,n){return o.parts.map(function(p){var mv=0;S.pay.forEach(function(x){if(x.roll&&x.carId===o.id&&x.pid===p.id&&x.toCar===n.id)mv+=+x.amount||0});return {p:p,mv:mv}})}
-function tradePartnersBox(c){var L=tradePairs(c);if(!L.length)return "";var h='<div class="sect">🔁 الشركاء في التبديل</div>';
+function tradePartnersBox(c){var L=tradePairs(c);if(!L.length)return "";var h='<div class="sect">🔁 الشركاء والمستثمرين في التبديل</div>';
   L.forEach(function(q){h+='<div class="card" style="padding:6px 16px">'+rollRows(q.o,q.n).map(function(r){
       return '<div class="item"><div style="flex:1"><div class="t">'+esc(r.p.name)+'</div><div class="d">'+(r.mv>0.5?'اتنقل من '+esc(q.o.name)+' لـ '+esc(q.n.name):'مدخلش في '+esc(q.n.name)+' · حسابه فضل في '+esc(q.o.name))+(r.p.remaining>0.5?' · ليه في '+esc(q.o.name)+' '+fmt(r.p.remaining):'')+'</div></div><span class="num" style="font-weight:700">'+(r.mv>0.5?fmt(r.mv):'—')+'</span></div>'}).join("")+
-    '<div style="padding:10px 0"><button class="btn sec small" data-act="form" data-kind="edit" data-car="'+esc(q.n.id)+'">🤝 دخّل / شيل شريك في '+esc(q.n.name)+'</button></div></div>'});
+    invRollRows(q.o,q.n).map(function(r){return '<div class="item"><div style="flex:1"><div class="t">💼 '+esc(r.name)+' (مستثمر)</div><div class="d">'+(r.mv>0.5?'دخل في '+esc(q.n.name)+' من رصيده':'مدخلش في '+esc(q.n.name)+' · فلوسه وربحه رجعوا لرصيده')+'</div></div><span class="num" style="font-weight:700">'+(r.mv>0.5?fmt(r.mv):'—')+'</span></div>'}).join("")+'<div style="padding:10px 0"><button class="btn sec small" data-act="form" data-kind="edit" data-car="'+esc(q.n.id)+'">🤝 دخّل / شيل شريك أو مستثمر في '+esc(q.n.name)+'</button></div></div>'});
   return h}
+function invRollRows(o,n){return o.invs.map(function(v){var nv=n.invs.find(function(w){return w.iid===v.iid});return {name:v.name,mv:nv?+nv.amount||0:0,back:(+v.amount||0)+(v.profit||0)}})}
 function rollSel(p){if(!ROLLC)return "";var cur=p&&p.roll&&p.roll.car===ROLLC.id?p.roll.pid:"";
   return '<select class="pr"><option value="">فلوسه جديدة (دخلت الخزنة)</option>'+ROLLC.parts.map(function(q){return '<option value="'+esc(q.id)+'"'+(cur===q.id?" selected":"")+'>🔁 من حسابه في '+esc(ROLLC.name)+': '+esc(q.name)+' (ليه '+fmt(Math.round(rollAvail(ROLLC,q.id,ROLLSELF)))+')</option>'}).join("")+'</select>'}
 function rollAvail(oc,pid,self){var p=oc.parts.find(function(q){return q.id===pid});if(!p)return 0;var back=0;S.pay.forEach(function(x){if(x.roll&&x.toCar===self&&x.carId===oc.id&&x.pid===pid)back+=+x.amount||0});return Math.max(0,p.remaining+back)}
@@ -2187,10 +2188,10 @@ function tradeBlocks(trs,B){
   var rows=trs.map(function(x){var o=carById(x.carId),n=carById(x.tradeCar),sp=o?+o.sellPrice||0:0,tv=n?+n.buyPrice||0:+x.trade||0,df=sp-tv;
     return [(o?o.name:"؟")+" · "+rnum(sp),(n?n.name:(x.tradeName||"؟"))+" · "+rnum(tv),{v:df,c:df>=0?RK.good:RK.bad},df>0.5?"العميل":df<-0.5?"إنت":"—"]});
   B.push({t:"table",cols:[{h:"خرجت · سعر البيع",w:.32},{h:"دخلت · قيمتها",w:.32},{h:"الفرق",w:.2,k:"n",s:1},{h:"دفع الفرق",w:.16}],rows:rows});
-  var pr=[];trs.forEach(function(x){var o=carById(x.carId),n=carById(x.tradeCar);if(!o||!n||!o.parts.length)return;
+  var pr=[];trs.forEach(function(x){var o=carById(x.carId),n=carById(x.tradeCar);if(!o||!n)return;invRollRows(o,n).forEach(function(r){pr.push(r.mv>0.5?[r.name+" (مستثمر)","دخل في "+n.name+" من رصيده",r.mv]:[r.name+" (مستثمر)","مدخلش · فلوسه رجعت لرصيده",Math.max(0,r.back)])});
     rollRows(o,n).forEach(function(r){pr.push(r.mv>0.5?[r.p.name,"اتنقل من "+o.name+" لـ "+n.name,r.mv]:[r.p.name,"مدخلش · حسابه فضل في "+o.name,Math.max(0,r.p.remaining)])})});
-  if(pr.length){B.push({t:"sec",title:"الشركاء في التبديل"});B.push({t:"table",cols:[{h:"الشريك",w:.26},{h:"اللي حصل",w:.5},{h:"المبلغ",w:.24,k:"n"}],rows:pr})}
-  B.push({t:"note",text:"الفرق موجب = العميل دفعلك الفرق، سالب = إنت دفعت الفرق. العربية الداخلة متسجلة شراء بقيمتها، والفلوس اللي اتحركت فعلاً هي الفرق بس. الشريك اللي اتنقل حسابه للعربية الجديدة مش بيتحسب لا داخل ولا خارج من الخزنة."});
+  if(pr.length){B.push({t:"sec",title:"الشركاء والمستثمرين في التبديل"});B.push({t:"table",cols:[{h:"الشريك",w:.26},{h:"اللي حصل",w:.5},{h:"المبلغ",w:.24,k:"n"}],rows:pr})}
+  B.push({t:"note",text:"الفرق موجب = العميل دفعلك الفرق، سالب = إنت دفعت الفرق. العربية الداخلة متسجلة شراء بقيمتها، والفلوس اللي اتحركت فعلاً هي الفرق بس. الشريك اللي اتنقل حسابه للعربية الجديدة مش بيتحسب لا داخل ولا خارج من الخزنة. المستثمر فلوسه وربحه بيرجعوا رصيده مع البيع، ولو دخل في العربية الجديدة بتتسحب من رصيده."});
 }
 function carNameById(id){var c=S.cars.find(function(x){return x.id===id});return c?c.name:"؟"}
 function rbPeriod(){
