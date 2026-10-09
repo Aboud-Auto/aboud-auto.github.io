@@ -473,9 +473,9 @@ function tileTap(k){
     h+=ttot("الإجمالي",m(T.extTot,"good"));
   }else if(k==="own"){
     t="⭐ أرباحك الخاصة";
-    h+=tkv("أرباح العربيات المباعة",m(T.profit,T.profit>=0?"good":"bad"),null,'<span class="num">'+T.soldN+'</span> عربية')+tkv("+ أرباح خارجية (عمولات)",m(T.extTot,"good"),null,'<span class="num">'+S.ext.length+'</span> عمولة');
-    h+=ttot("الإجمالي",m(T.profit+T.extTot,T.profit+T.extTot>=0?"good":"bad"));
-    h+='<div class="two" style="margin-top:12px"><button class="btn sec small" data-act="tinfo" data-k="profit">تفاصيل العربيات</button><button class="btn sec small" data-act="tinfo" data-k="ext">تفاصيل العمولات</button></div>';
+    h+=tkv("أرباح العربيات المباعة",m(T.profit,T.profit>=0?"good":"bad"),null,'<span class="num">'+T.soldN+'</span> عربية');
+    h+=ttot("الإجمالي",m(T.profit,T.profit>=0?"good":"bad"));
+    h+='<div class="two" style="margin-top:12px"><button class="btn sec small" data-act="tinfo" data-k="profit">تفاصيل العربيات</button></div>';
   }
   modal={type:"tinfo",k:k};
   openSheet(sheetHead(t)+'<div class="card">'+h+'</div>'+(/stock|profit|debts|deficit|fund/.test(k)?'<div class="sub" style="text-align:center;margin-top:8px">اضغط على أي عربية تفتح تفاصيلها</div>':""));
@@ -530,7 +530,7 @@ function renderHome(){
     tile("🧾 العهدة مع "+esc(T.fundEmp||"الموظف"),m(T.fundBal,T.fundBal<0?"bad":""),"من "+m(T.fund)+(T.unre>0.5?" · مستني يترد "+m(T.unre):"")+" ‹").replace('<div class="tile"','<div class="tile" data-act="fund" style="cursor:pointer"')+
     tapTile(tile("أرباح متاحة",m(T.undist),"للسحب أو لسداد العجز"),"undist")+
     tapTile(tile("🤝 أرباح خارجية",m(T.extTot,"good"),"عمولات · مش في الخزنة"),"ext")+
-    tapTile(tile("أرباحك الخاصة",m(T.profit+T.extTot,T.profit+T.extTot>=0?"good":"bad"),"عربيات + عمولات"),"own")+'</div>';
+    tapTile(tile("أرباحك الخاصة",m(T.profit,T.profit>=0?"good":"bad"),"أرباح العربيات"),"own")+'</div>';
   return h;
 }
 
@@ -593,7 +593,7 @@ function renderDay(){
     '<div class="grid2">'+tile("حركة الخزنة",m(D.acct.cash,sgn(D.acct.cash)),"")+tile("حركة إنستاباي",m(D.acct.insta,sgn(D.acct.insta)),"")+
     tile("تحصيل كاش",m(D.cashT),"")+tile("تحصيل إنستاباي",m(D.instaT),"")+tile("مشتريات",m(D.buyT),"")+tile("مصاريف",m(D.expT),"")+
     tile("مساهمة شركاء",m(D.pInT),"")+tile("تسليم شركاء",m(D.pOutT),"")+
-    tile("عربيات اتباعت",'<span class="num">'+D.sales.length+'</span>',"")+tile("أرباحك اليوم",m(D.profT,D.profT>=0?"good":"bad"),"")+(xT>0.5?tile("🤝 عمولات خارجية",m(xT,"good"),"بره الخزنة")+tile("أرباحك الخاصة اليوم",m(D.profT+xT,D.profT+xT>=0?"good":"bad"),"عربيات + عمولات"):"")+'</div>'+
+    tile("عربيات اتباعت",'<span class="num">'+D.sales.length+'</span>',"")+tile("أرباحك اليوم",m(D.profT,D.profT>=0?"good":"bad"),"")+(xT>0.5?tile("🤝 عمولات خارجية",m(xT,"good"),"بره الخزنة"):"")+'</div>'+
     '<div class="sect">حركة اليوم</div><div class="card" style="padding:6px 16px">'+list+'</div>';
 }
 
@@ -1285,7 +1285,7 @@ function openForm(kind,o){
       '<div class="two">'+fld("العمولة (صافي)",minp("amount"))+fld("التاريخ",dinp("date"))+'</div>'+
       fld("اتقبضت",'<select name="how"><option value="cash">كاش</option><option value="insta">إنستاباي</option><option value="both">كاش + إنستاباي</option></select>')+
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+
-      '<div class="preview" style="display:block">العمولة هتتسجل في أرباحك الخاصة بس، ومش هتأثر على الخزنة ولا إنستاباي.</div><button class="btn" data-act="submit">حفظ العمولة</button>';
+      '<div class="preview" style="display:block">العمولة هتتسجل في الأرباح الخارجية بس، ومش هتأثر على الخزنة ولا إنستاباي.</div><button class="btn" data-act="submit">حفظ العمولة</button>';
   }else if(kind==="transfer"){
     var dir=o.sub==="toInsta"?"toInsta":"toSafe";
     h=sheetHead("تحويل بين إنستاباي والخزنة")+
@@ -2232,7 +2232,7 @@ function rbPeriod(){
   if(ims.length)items.push({l:"حركة فلوس مستثمرين",v:rnum(imT,true)+" ج",c:rcol(imT)});
   if(Math.abs(ldT)>0.5)items.push({l:"حركة سلف وأمانات",v:rnum(ldT,true)+" ج",c:rcol(ldT)});
   var xs=S.ext.filter(function(x){return r(x.date)}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")}),xT=0;xs.forEach(function(x){xT+=+x.amount||0});
-  if(xT>0.5){items.push({l:"أرباح خارجية (عمولات)",v:rnum(xT)+" ج",c:RK.good});items.push({l:"إجمالي أرباحك الخاصة",v:rnum(profT+xT,true)+" ج",c:rcol(profT+xT)})}
+  if(xT>0.5){items.push({l:"أرباح خارجية (عمولات)",v:rnum(xT)+" ج",c:RK.good})}
   var B=[{t:"tiles",items:items}],any=false;
   if(sales.length){any=true;B.push({t:"sec",title:"عربيات اتباعت ("+sales.length+")"});
     B.push({t:"table",cols:[{h:"العربية",w:.37},{h:"سعر البيع",w:.21,k:"n"},{h:"التكلفة",w:.21,k:"n"},{h:"ربحك",w:.21,k:"n",s:1}],
