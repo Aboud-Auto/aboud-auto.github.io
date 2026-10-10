@@ -475,6 +475,14 @@ function tileTap(k){
     t="🤝 أرباح خارجية";cs=S.ext.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"")});
     h+=cs.length?cs.map(function(x){var p=[x.seller?"البايع: "+esc(x.seller):"",x.buyer?"المشتري: "+esc(x.buyer):"",fdate(x.date)].filter(Boolean).join(" · ");return tkv(esc(x.desc||"عمولة"),m(+x.amount||0,"good")+' <button class="del" data-act="delitem" data-coll="external" data-id="'+x.id+'" aria-label="حذف">🗑</button>',null,p+(x.note?"<br>"+esc(x.note):""))}).join(""):tnone("لسه مفيش عمولات خارجية");
     h+=ttot("الإجمالي",m(T.extTot,"good"));
+  }else if(k==="owes"){
+    t="💳 فلوس عليك";var OW=owesOf(T);
+    [["s","🏪 للبايعين (باقي تمن عربيات)"],["l","🙋 فلوس خدتها من ناس"],["p","🤝 للشركاء"],["i","💼 للمستثمرين"]].forEach(function(G){
+      var L=OW.list.filter(function(o){return o.ty===G[0]}).sort(function(a,b){return b.tot-a.tot});if(!L.length)return;
+      h+=tsec(G[1])+L.map(function(o){return tkv("لـ "+esc(o.n),m(o.tot,"bad"),null,o.it.map(esc).join("<br>"))}).join("");
+    });
+    if(!OW.list.length)h+=tnone("مفيش فلوس عليك لحد ✔");
+    h+=ttot("إجمالي اللي عليك",m(OW.tot,OW.tot>0.5?"bad":""));
   }else if(k==="own"){
     t="⭐ أرباحك الخاصة";
     h+=tkv("أرباح العربيات المباعة",m(T.profit,T.profit>=0?"good":"bad"),null,'<span class="num">'+T.soldN+'</span> عربية')+tkv("+ أرباح خارجية (عمولات)",m(T.extTot,"good"),null,'<span class="num">'+S.ext.length+'</span> عمولة');
@@ -483,6 +491,16 @@ function tileTap(k){
   }
   modal={type:"tinfo",k:k};
   openSheet(sheetHead(t)+'<div class="card">'+h+'</div>'+(/stock|profit|debts|deficit|fund/.test(k)?'<div class="sub" style="text-align:center;margin-top:8px">اضغط على أي عربية تفتح تفاصيلها</div>':""));
+}
+function owesOf(T){
+  var P={},ord=[],tot=0;
+  function g(n,ty){var k=ty+"|"+n;if(!P[k]){P[k]={n:n,ty:ty,tot:0,it:[]};ord.push(k)}return P[k]}
+  function put(o,a,txt){o.tot+=a;tot+=a;o.it.push(txt+": "+fmt(a))}
+  T.cars.forEach(function(c){if(c.sellerRem>0.5)put(g("بايع "+c.name,"s"),c.sellerRem,"باقي تمن العربية")});
+  loansCalc().forEach(function(l){if(l.dir!=="out"&&l.remaining>0.5)put(g(l.person||"؟","l"),l.remaining,"فلوس خدتها منه"+(l.date?" ("+fdate(l.date)+")":""))});
+  T.cars.forEach(function(c){c.parts.forEach(function(p){if(p.remaining>0.5)put(g(p.name||"شريك","p"),p.remaining,c.name+(c.sold?(p.profit>0.5?" (الأصل + ربحه)":p.profit<-0.5?" (الأصل - خسارته)":" (اتباعت)"):" (لسه في المعرض)"))})});
+  T.inv.list.forEach(function(o){if(o.bal>0.5){var x=g(o.name||"مستثمر","i");put(x,o.bal,"رصيده معاك"+(o.working>0.5?" · منه في عربيات "+fmt(o.working):""))}});
+  return {tot:tot,list:ord.map(function(k){return P[k]})};
 }
 function tapTile(html,k){return html.replace('<div class="tile"','<div class="tile" data-act="tinfo" data-k="'+k+'" style="cursor:pointer"').replace(/<\/div>$/,'<div class="ts" style="opacity:.6">اضغط للتفاصيل ‹</div></div>')}
 function statusBadge(c){
@@ -533,7 +551,8 @@ function renderHome(){
     tapTile(tile("عجز رأس المال",m(T.deficit,T.deficit>0?"bad":""),"رأس المال الحالي "+m(T.capNow)+(T.lossRem>0.5?"<br>منها خسائر عربيات "+m(T.lossRem):"")),"deficit")+
     tile("🧾 العهدة مع "+esc(T.fundEmp||"الموظف"),m(T.fundBal,T.fundBal<0?"bad":""),"من "+m(T.fund)+(T.unre>0.5?" · مستني يترد "+m(T.unre):"")+" ‹").replace('<div class="tile"','<div class="tile" data-act="fund" style="cursor:pointer"')+
     tapTile(tile("أرباح متاحة",m(T.undist),"للسحب أو لسداد العجز"),"undist")+
-    tapTile(tile("🤝 أرباح خارجية",m(T.extTot,"good"),"عمولات · دخلت رأس المال"),"ext")+'</div>';
+    tapTile(tile("🤝 أرباح خارجية",m(T.extTot,"good"),"عمولات · دخلت رأس المال"),"ext")+
+    (function(){var O=owesOf(T);return tapTile(tile("💳 فلوس عليك",m(O.tot,O.tot>0.5?"bad":""),O.list.length?'لـ <span class="num">'+O.list.length+'</span> '+(O.list.length===1?"حد":"أشخاص"):"مفيش حاجة عليك"),"owes")})()+'</div>';
   return h;
 }
 
