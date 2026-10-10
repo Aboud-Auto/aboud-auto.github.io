@@ -415,12 +415,157 @@ function srcSel(n,sel,wf){
 }
 function srcVal(){var v=val("src");return v==="insta"?"insta":v==="fund"?"fund":"cash"}
 
+/* ---------- تشفير البيانات ----------
+   كل بيانات العميل بتتحفظ على السيرفر متشفرة بمفتاح عشوائي (AES-256).
+   المفتاح نفسه محفوظ متشفر مرتين: مرة بالباسورد، ومرة بكود الاسترجاع اللي مع العميل.
+   مفيش نسخة من المفتاح مقروءة على السيرفر، فصاحب البرنامج مايقدرش يقرا البيانات من لوحة Firebase. */
+var ENC={key:null,on:false,doc:null,uid:null};
+var ENC_COLLS={cars:1,expenses:1,collections:1,capital:1,payouts:1,transfers:1,ledger:1,external:1,investors:1,invmoves:1};
+function encPath(p){var a=String(p).split("/");return !!((a.length===2&&ENC_COLLS[a[0]])||p==="settings/main")}
+var PLAIN={},NEEDENC={};
+var TE=new TextEncoder(),TD=new TextDecoder(),KDF_IT=210000;
+function b64(u8){u8=new Uint8Array(u8);var s="";for(var i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
+function unb64(s){var b=atob(s),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+function rnd(n){return crypto.getRandomValues(new Uint8Array(n))}
+async function aesEnc(key,u8){var iv=rnd(12),ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},key,u8)),o=new Uint8Array(12+ct.length);o.set(iv);o.set(ct,12);return b64(o)}
+async function aesDec(key,s){var u=unb64(s);return new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv:u.subarray(0,12)},key,u.subarray(12)))}
+async function kek(secret,salt,it){var m=await crypto.subtle.importKey("raw",TE.encode(secret),"PBKDF2",false,["deriveKey"]);return crypto.subtle.deriveKey({name:"PBKDF2",salt:unb64(salt),iterations:it||KDF_IT,hash:"SHA-256"},m,{name:"AES-GCM",length:256},false,["encrypt","decrypt"])}
+function dekKey(raw){return crypto.subtle.importKey("raw",raw,{name:"AES-GCM"},false,["encrypt","decrypt"])}
+async function encObj(o){return {_e:await aesEnc(ENC.key,TE.encode(JSON.stringify(o))),_v:1}}
+async function decObj(d){return JSON.parse(TD.decode(await aesDec(ENC.key,d._e)))}
+function isEnc(d){return !!d&&typeof d._e==="string"}
+async function plainOf(d){return isEnc(d)?await decObj(d):d}
+async function toStore(path,o){return ENC.on&&encPath(path)?await encObj(o):o}
+/* ضغط النسخ الاحتياطية قبل التشفير عشان تفضل جوه حجم المستند */
+async function gz(u8,dir){var S2=dir?window.CompressionStream:window.DecompressionStream;var s=new Blob([u8]).stream().pipeThrough(new S2("gzip"));return new Uint8Array(await new Response(s).arrayBuffer())}
+async function encText(str){var u=TE.encode(str),z=0;if(window.CompressionStream){try{u=await gz(u,true);z=1}catch(e){u=TE.encode(str)}}return {_e:await aesEnc(ENC.key,u),_z:z}}
+async function decText(x){var u=await aesDec(ENC.key,x._e);if(x._z)u=await gz(u,false);return TD.decode(u)}
+/* كود الاسترجاع: 20 حرف/رقم من غير الحاجات اللي بتتلخبط (O/0 و I/1) */
+var RC_A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function newRC(){var r=rnd(20),s="";for(var i=0;i<20;i++){s+=RC_A[r[i]&31];if(i%4===3&&i<19)s+="-"}return s}
+function normRC(s){return String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"")}
+/* المفتاح على الجهاز: في IndexedDB كمفتاح مايتقريش (non-extractable)، ولو المتصفح مش سامح نحفظه عادي */
+function idb(){return new Promise(function(res,rej){var r=indexedDB.open("hb_keys",1);r.onupgradeneeded=function(){r.result.createObjectStore("k")};r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)}})}
+function idbDo(mode,fn){return idb().then(function(d){return new Promise(function(res,rej){var t=d.transaction("k",mode),r=fn(t.objectStore("k"));t.oncomplete=function(){res(r&&r.result)};t.onerror=t.onabort=function(){rej(t.error)}})})}
+async function keySave(uid,raw){var k=await dekKey(raw);try{await idbDo("readwrite",function(s){return s.put(k,uid)});var back=await idbDo("readonly",function(s){return s.get(uid)});if(back)return k}catch(e){}lsSet("hb_k_"+uid,b64(raw));return k}
+async function keyLoad(uid){try{var k=await idbDo("readonly",function(s){return s.get(uid)});if(k)return k}catch(e){}var l=lsGet("hb_k_"+uid);if(l){try{return await dekKey(unb64(l))}catch(e){}}return null}
+async function keyDel(uid){if(!uid)return;try{await idbDo("readwrite",function(s){return s.delete(uid)})}catch(e){}lsSet("hb_k_"+uid)}
+function cryptoRef(uid){return FS.doc("users/"+uid+"/settings/crypto")}
+async function cryptoDoc(uid,server){var d=server?await cryptoRef(uid).get({source:"server"}):await cryptoRef(uid).get();return d.exists?d.data():null}
+async function cryptoSetup(uid,pw){
+  var raw=rnd(32),rc=newRC(),s1=b64(rnd(16)),s2=b64(rnd(16)),dk=await dekKey(raw);
+  var doc={v:1,it:KDF_IT,salt:s1,pw:await aesEnc(await kek(pw,s1),raw),rsalt:s2,rc:await aesEnc(await kek(normRC(rc),s2),raw),rcView:await aesEnc(dk,TE.encode(rc)),at:Date.now()};
+  var ref=cryptoRef(uid),made=false;
+  await FS.runTransaction(function(t){return t.get(ref).then(function(d){made=!d.exists;if(made)t.set(ref,doc)})});
+  if(!made)return cryptoUnlockPw(uid,pw);
+  await keySave(uid,raw);lsSet("hb_rcshow_"+uid,"1");return true;
+}
+async function cryptoUnlockPw(uid,pw,doc){doc=doc||await cryptoDoc(uid,true);if(!doc)return false;try{var raw=await aesDec(await kek(pw,doc.salt,doc.it),doc.pw)}catch(e){return false}await keySave(uid,raw);return true}
+async function cryptoUnlockRC(uid,rc,pw,doc){
+  try{var raw=await aesDec(await kek(normRC(rc),doc.rsalt,doc.it),doc.rc)}catch(e){return false}
+  var s1=b64(rnd(16));try{await cryptoRef(uid).update({salt:s1,pw:await aesEnc(await kek(pw,s1,doc.it),raw)})}catch(e){}
+  await keySave(uid,raw);return true;
+}
+/* بعد الدخول بالباسورد: نفتح المفتاح على الجهاز، ولو الحساب لسه مش متشفر نشفّره */
+async function encAfterLogin(pw){
+  try{
+    var u=FBA.auth().currentUser;if(!u)return;
+    var doc=await cryptoDoc(u.uid,true);
+    if(doc){await cryptoUnlockPw(u.uid,pw,doc);return}
+    var m=await FS.doc("members/"+u.uid).get(),x=m.exists?m.data():null;
+    if(!x||x.active!==true||(x.expiresAt&&x.expiresAt<=Date.now()))return;
+    await cryptoSetup(u.uid,pw);
+  }catch(e){}
+}
+async function encBoot(user){
+  var uid=user.uid;ENC.uid=uid;
+  var k=await keyLoad(uid),doc=null,ok=false;
+  try{doc=await cryptoDoc(uid);ok=true}catch(e){}
+  if(k){ENC.key=k;ENC.on=true;ENC.doc=doc;return true}
+  if(!ok){S.auth="lock";S.lock="offline";render();return false}
+  if(!doc){if(S.expired)return true;S.auth="lock";S.lock="setup";render();return false}
+  ENC.doc=doc;S.auth="lock";S.lock="unlock";render();return false;
+}
+/* البيانات القديمة اللي لسه مش متشفرة (أو اتسجلت من نسخة قديمة على جهاز تاني) بتتشفر لوحدها */
+var encMigBusy=false,encBkDone=false;
+async function encMigrate(){
+  if(!ENC.on||DEMO||S.expired||encMigBusy||!allLoaded())return;
+  var paths=Object.keys(NEEDENC);if(!paths.length&&encBkDone)return;
+  encMigBusy=true;
+  try{
+    for(var i=0;i<paths.length;i+=300){var b=FS.batch(),n=0;
+      for(var j=i;j<Math.min(i+300,paths.length);j++){var p=paths[j];if(!PLAIN[p]||!NEEDENC[p])continue;b.set(db.doc(p),await encObj(PLAIN[p]));n++}
+      if(n)await b.commit();
+    }
+    if(!encBkDone){
+      var snap=await db.collection("backups").get();
+      for(var q=0;q<snap.docs.length;q++){var d=snap.docs[q],x=d.data();if(typeof x.json!=="string")continue;var e=await encText(x.json);
+        await d.ref.set({at:x.at||0,reason:x.reason||"",cars:x.cars||0,size:x.size||0,_e:e._e,_z:e._z})}
+      encBkDone=true;
+    }
+  }catch(e){}
+  finally{encMigBusy=false}
+}
+function renderLock(){
+  var app=$("#app");$("#nav").innerHTML="";applyBrand();
+  var k=S.lock,h='<div class="login"><img src="'+esc(brandLogo())+'" alt=""><h2>'+esc(brandName())+'</h2><div class="card" style="text-align:right;margin-top:16px">';
+  if(k==="offline")h+='<div class="sect" style="margin-top:0">📶 محتاجين نت</div><div class="sub" style="margin-bottom:12px">أول مرة تفتح البرنامج على الجهاز ده لازم يكون فيه نت، عشان نفتح بياناتك المتشفرة. بعد كده هيشتغل من غير نت عادي.</div><button class="btn" id="lkRetry">جرّب تاني</button>';
+  else{
+    h+=k==="setup"?'<div class="sect" style="margin-top:0">🔒 تأمين بياناتك</div><div class="sub" style="margin-bottom:12px">بياناتك من النهارده هتتحفظ على السيرفر متشفرة، ومحدش يقدر يقراها غيرك واللي معاهم الباسورد، ولا حتى صاحب البرنامج. اكتب الباسورد بتاعك مرة واحدة عشان نكمّل.</div>'
+      :'<div class="sect" style="margin-top:0">🔒 بياناتك متشفرة</div><div class="sub" style="margin-bottom:12px">اكتب الباسورد عشان تفتح بياناتك على الجهاز ده. هتكتبه مرة واحدة بس.</div>';
+    h+='<label class="fld"><span>الباسورد</span><input id="lkPw" type="password" dir="ltr" autocomplete="current-password"></label>'+
+      '<label class="fld" id="lkRcF" style="display:none"><span>كود الاسترجاع</span><input id="lkRc" dir="ltr" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" style="letter-spacing:1px;font-weight:700"></label>'+
+      '<div class="err" id="lkErr" style="color:var(--bad);font-size:14px;min-height:20px;margin:0 0 8px"></div><button class="btn" id="lkBtn">'+(k==="setup"?"تأمين البيانات":"فتح البيانات")+'</button>';
+  }
+  h+='</div><button class="btn danger" style="margin-top:12px" id="lkOut">تسجيل خروج</button></div>';
+  app.innerHTML=h;
+  $("#lkOut").onclick=function(){keyDel(ENC.uid).then(function(){return FBA.auth().signOut()}).then(function(){location.reload()})};
+  if(k==="offline"){$("#lkRetry").onclick=function(){location.reload()};return}
+  var rcMode=false;
+  $("#lkBtn").onclick=async function(){
+    var b=this,er=$("#lkErr"),pw=$("#lkPw").value,u=FBA.auth().currentUser;
+    if(!pw){er.textContent="اكتب الباسورد";return}
+    b.disabled=true;er.textContent="";b.textContent="لحظة…";
+    function fail(t){er.textContent=t;b.disabled=false;b.textContent=k==="setup"?"تأمين البيانات":"فتح البيانات"}
+    try{
+      if(k==="setup"){
+        try{await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email,pw))}catch(e){return fail(/network/.test(e&&e.code||"")?"مفيش نت، اتأكد من الاتصال":/too-many/.test(e&&e.code||"")?"محاولات كتير، استنى شوية":"الباسورد غلط")}
+        if(await cryptoSetup(u.uid,pw))return location.reload();
+        return fail("حصلت مشكلة، جرّب تاني");
+      }
+      var doc=ENC.doc;
+      if(rcMode){
+        var rc=$("#lkRc").value;if(normRC(rc).length!==20)return fail("اكتب كود الاسترجاع كامل (20 حرف ورقم)");
+        try{await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email,pw))}catch(e){return fail(/network/.test(e&&e.code||"")?"مفيش نت، اتأكد من الاتصال":"الباسورد الحالي غلط")}
+        if(await cryptoUnlockRC(u.uid,rc,pw,doc))return location.reload();
+        return fail("كود الاسترجاع غلط");
+      }
+      if(await cryptoUnlockPw(u.uid,pw,doc))return location.reload();
+      /* الباسورد مافتحش المفتاح: يا إما غلط، يا إما اتغيّر من «نسيت الباسورد» */
+      try{await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email,pw))}catch(e){return fail(/network/.test(e&&e.code||"")?"مفيش نت، اتأكد من الاتصال":/too-many/.test(e&&e.code||"")?"محاولات كتير، استنى شوية":"الباسورد غلط")}
+      rcMode=true;$("#lkRcF").style.display="block";
+      fail("الباسورد اتغيّر بعد ما البيانات اتشفرت. اكتب كود الاسترجاع اللي اتحفظ عندك وقت التأمين، وبعدها البيانات هتفتح بالباسورد الجديد.");
+    }catch(e){fail("حصلت مشكلة، اتأكد من النت وجرّب تاني")}
+  };
+}
+async function rcGet(){var d=ENC.doc;if(!d||!d.rcView){try{d=ENC.doc=await cryptoDoc(ENC.uid)}catch(e){d=null}}if(!d||!d.rcView)return null;try{return TD.decode(await aesDec(ENC.key,d.rcView))}catch(e){return null}}
+async function rcShow(first){
+  var rc=await rcGet();if(!rc)return toast("مقدرناش نجيب الكود، اتأكد من النت");
+  modal={type:"rc"};
+  openSheet(sheetHead("🔑 كود الاسترجاع")+'<div class="sub" style="margin-bottom:12px">'+(first?"بياناتك اتأمنت ✔ ومن هنا ورايح بتتحفظ متشفرة. ":"")+'احتفظ بالكود ده في مكان آمن (صوّره أو اكتبه في ورقة). لو نسيت الباسورد وغيّرته من «نسيت الباسورد»، هتحتاج الكود ده عشان تفتح بياناتك.</div>'+
+    '<div class="card" style="text-align:center"><div dir="ltr" id="rcTxt" style="font-size:22px;font-weight:800;letter-spacing:2px;color:var(--primary);word-break:break-all">'+esc(rc)+'</div></div>'+
+    '<div class="banner" style="margin:10px 0">⚠️ لو الباسورد والكود الاتنين ضاعوا، البيانات مش هترجع خالص، ولا حتى صاحب البرنامج يقدر يرجّعها.</div>'+
+    '<button class="btn sec" data-act="rcCopy" style="margin-bottom:10px">📋 انسخ الكود</button><button class="btn" data-act="rcDone">'+(first?"احتفظت بيه ✔":"تمام")+'</button>');
+}
+function encCard(){if(DEMO)return "";return '<div class="card"><div class="sect" style="margin-top:0">🔒 تشفير البيانات</div><div class="sub" style="margin-bottom:10px">'+(ENC.on?"شغال ✔ بياناتك متشفرة على السيرفر، ومحدش يقدر يقراها غير اللي معاهم الباسورد.":"مش شغال لسه.")+'</div>'+(ENC.on?'<button class="btn sec" data-act="rcShow">🔑 عرض كود الاسترجاع</button>':'')+'</div>'}
+function rcBoot(){if(rcBoot.t||DEMO||!ENC.on||!allLoaded()||modal||!lsGet("hb_rcshow_"+ENC.uid))return;rcBoot.t=1;rcShow(true)}
+
 /* ---------- db writes ---------- */
 async function create(coll,data){
-  try{var ref=db.collection(coll).doc();await ref.set(Object.assign({},data,{createdAt:Date.now()}));return ref.id}
+  try{var ref=db.collection(coll).doc(),o=Object.assign({},data,{createdAt:Date.now()});await ref.set(await toStore(coll+"/"+ref.id,o));return ref.id}
   catch(e){toast("تعذر الحفظ، جرّب تاني");return null}
 }
-async function patch(path,data){try{await db.doc(path).update(data);return true}catch(e){toast("تعذر الحفظ، جرّب تاني");return false}}
+async function patch(path,data){try{if(ENC.on&&encPath(path)){var cur=PLAIN[path];if(!cur){var d0=await db.doc(path).get();cur=d0.exists?await plainOf(d0.data()):null}if(!cur)throw new Error("missing");var nx=Object.assign({},cur,data);PLAIN[path]=nx;await db.doc(path).set(await encObj(nx))}else await db.doc(path).update(data);return true}catch(e){toast("تعذر الحفظ، جرّب تاني");return false}}
 async function removeDoc(path){try{await db.doc(path).delete();return true}catch(e){toast("تعذر الحذف");return false}}
 
 /* ---------- rendering ---------- */
@@ -925,7 +1070,7 @@ function renderSet(){
     '<div class="row" style="justify-content:flex-start;margin-bottom:12px"><img src="'+esc(brandLogo())+'" alt="" style="width:64px;height:64px;border-radius:14px;object-fit:cover;border:1px solid var(--line)"><div style="flex:1"><button class="btn sec small" data-act="brandLogo">📷 اختار لوجو</button>'+((S.brand&&S.brand.logo)?' <button class="btn sec small" data-act="brandLogoDel">شيل اللوجو</button>':'')+'</div></div>'+
     '<label class="fld"><span>اسم المعرض</span><input id="brandName" maxlength="40" value="'+esc((S.brand&&S.brand.name)||"")+'" placeholder="حسابات المعرض"></label>'+
     '<button class="btn" data-act="brandSave">حفظ الاسم</button></div>'+
-    '<div class="card"><div class="kv"><span>اسم المستخدم</span><b>'+(DEMO?"حساب تجريبي":esc((S.account&&S.account.username)||lsGet("hb_user")||""))+'</b></div>'+(!DEMO&&isLinked()?'<div class="kv"><span>الجيميل</span><b dir="ltr">'+esc(S.user.email)+'</b></div>':'')+'<div class="sub" style="margin-top:8px">'+(DEMO?'':'اسم المستخدم والباسورد دول تقدر تديهم للي شغالين معاك، وكل حاجة هتظهر عندكم كلكم في نفس اللحظة.')+'</div>'+(!DEMO&&!isLinked()?'<div class="sub" style="margin-top:8px">الحساب ده مش مربوط بجيميل، فلو نسيت الباسورد مش هتعرف ترجعه.</div><button class="btn" style="margin-top:10px" data-act="linkMail">🔐 اربط حسابك بالجيميل</button>':'')+(DEMO?'<button class="btn" style="margin-top:12px" data-act="demoSignup">اعمل حسابك دلوقتي</button>':'')+'<button class="btn danger" style="margin-top:12px" data-act="logout">'+(DEMO?"خروج من التجربة":"تسجيل خروج")+'</button></div>'+
+    encCard()+'<div class="card"><div class="kv"><span>اسم المستخدم</span><b>'+(DEMO?"حساب تجريبي":esc((S.account&&S.account.username)||lsGet("hb_user")||""))+'</b></div>'+(!DEMO&&isLinked()?'<div class="kv"><span>الجيميل</span><b dir="ltr">'+esc(S.user.email)+'</b></div>':'')+'<div class="sub" style="margin-top:8px">'+(DEMO?'':'اسم المستخدم والباسورد دول تقدر تديهم للي شغالين معاك، وكل حاجة هتظهر عندكم كلكم في نفس اللحظة.')+'</div>'+(!DEMO&&!isLinked()?'<div class="sub" style="margin-top:8px">الحساب ده مش مربوط بجيميل، فلو نسيت الباسورد مش هتعرف ترجعه.</div><button class="btn" style="margin-top:10px" data-act="linkMail">🔐 اربط حسابك بالجيميل</button>':'')+(DEMO?'<button class="btn" style="margin-top:12px" data-act="demoSignup">اعمل حسابك دلوقتي</button>':'')+'<button class="btn danger" style="margin-top:12px" data-act="logout">'+(DEMO?"خروج من التجربة":"تسجيل خروج")+'</button></div>'+
     '<div class="card sub">الربح الصافي = سعر البيع − (سعر الشراء + كل المصاريف). في الشراكة: المصاريف بتتخصم من الربح الأول، وبعدين الباقي بيتقسم على حسب مبلغ كل واحد من سعر الشراء.</div>';
 }
 
@@ -1063,6 +1208,7 @@ function renderLogin(){
       if(!(await unameSet(u,mail,cr.user.uid)))alert("الحساب اتعمل ✔ بس مؤقتًا ادخل بالجيميل بدل اسم المستخدم، وكلّم الدعم");
       try{await claimInvite(code,u)}catch(e){alert("الحساب اتعمل ✔ بس التفعيل مكملش. ادخل تاني واكتب كود الدعوة")}
       try{await FS.doc("users/"+cr.user.uid+"/settings/account").set({username:u,email:mail})}catch(e){}
+      btn.textContent="جاري تأمين البيانات…";await encAfterLogin(p);
       lsSet("hb_user",u);location.reload();return;
     }
     hbHold=true;
@@ -1073,6 +1219,7 @@ function renderLogin(){
         if(mp&&mp.email){try{await FBA.auth().signInWithEmailAndPassword(mp.email,p);ok=true}catch(err){last=err;if(/network|too-many/.test(err&&err.code||""))throw err}}
         if(!ok){var legacy=await userEmail(u);if(!mp||mp.email!==legacy){var r=await FBA.auth().signInWithEmailAndPassword(legacy,p);if(!mp)await unameSet(u,legacy,r.user.uid)}else throw last}
       }
+      btn.textContent="جاري فتح البيانات…";await encAfterLogin(p);
       lsSet("hb_user",u);location.reload();
     }catch(err){fail(msg(err))}
   };
@@ -1097,6 +1244,7 @@ function renderGate(){
 }
 function render(){
   if(S.auth==="gate")return renderGate();
+  if(S.auth==="lock")return renderLock();
   if(S.auth!=="in")return renderLogin();
   var app=$("#app");
   if(S.noDb){app.innerHTML='<div class="banner">تعذر الاتصال بقاعدة البيانات. اتأكد من النت وافتح التطبيق تاني.</div>';$("#nav").innerHTML="";return}
@@ -1115,7 +1263,7 @@ function render(){
   renderNav();
 }
 function refresh(){
-  bkBoot();
+  bkBoot();rcBoot();encMigrate();
   var act=document.activeElement;
   if(act&&(act.id==="q")){renderListOnly();return}
   render();
@@ -1657,7 +1805,7 @@ async function submitForm(){
         else done({carId:dc2.id});
         toast("اتحفظ التقسيم ✔")}
     }else if(k==="settings"){
-      try{await db.doc("settings/main").set({capital:parseNum(val("capital")),fund:parseNum(val("fund")),fundEmp:val("fundEmp").trim()});closeSheet();toast("اتحفظت ✔")}
+      try{await db.doc("settings/main").set(await toStore("settings/main",{capital:parseNum(val("capital")),fund:parseNum(val("fund")),fundEmp:val("fundEmp").trim()}));closeSheet();toast("اتحفظت ✔")}
       catch(e){toast("تعذر الحفظ، جرّب تاني")}
     }
   }finally{submitting=false}
@@ -2652,6 +2800,7 @@ function importBackup(){
       var ops=[];
       Object.keys(j.data).forEach(function(c){(j.data[c]||[]).forEach(function(d){var o=Object.assign({},d),id=o.id;delete o.id;if(id)ops.push([c+"/"+id,o])})});
       if(j.settings)ops.push(["settings/main",j.settings]);if(j.brand)ops.push(["settings/brand",j.brand]);
+      for(var q=0;q<ops.length;q++)ops[q][1]=await toStore(ops[q][0],ops[q][1]);
       for(var i=0;i<ops.length;i+=400){var b=FS.batch();ops.slice(i,i+400).forEach(function(x){b.set(db.doc(x[0]),x[1])});await b.commit()}
       toast("اترجعت البيانات ✔");
     }catch(e){toast("تعذر الاسترجاع، جرّب تاني")}
@@ -2668,7 +2817,7 @@ function pickLogo(){
     im.onerror=function(){toast("الصورة دي مش مدعومة")};im.src=u};
   inp.click();
 }
-function logout(){if(DEMO){if(confirm("تخرج من النسخة التجريبية؟"))exitDemo(false);return}if(confirm("تسجيل خروج من التطبيق؟")){lsSet("hb_name");lsSet("hb_logo");lsSet("hb_user")}else return;FBA.auth().signOut().then(function(){location.reload()})}
+function logout(){if(DEMO){if(confirm("تخرج من النسخة التجريبية؟"))exitDemo(false);return}if(confirm("تسجيل خروج من التطبيق؟")){lsSet("hb_name");lsSet("hb_logo");lsSet("hb_user")}else return;keyDel(S.user&&S.user.uid).then(function(){return FBA.auth().signOut()}).then(function(){location.reload()})}
 /* ---------- export ---------- */
 async function exportCsv(){
   var dl=dlShim();
@@ -2769,6 +2918,9 @@ document.addEventListener("click",async function(e){
   else if(a==="backup")exportBackup();
   else if(a==="restore")importBackup();
   else if(a==="logout")logout();
+  else if(a==="rcShow")rcShow(false);
+  else if(a==="rcCopy"){var rct=$("#rcTxt")&&$("#rcTxt").textContent;try{await navigator.clipboard.writeText(rct);toast("اتنسخ ✔")}catch(err){toast("انسخه يدوي")}}
+  else if(a==="rcDone"){lsSet("hb_rcshow_"+ENC.uid);closeSheet()}
   else if(a==="demoSignup")exitDemo(true);
   else if(a==="linkMail")openLinkMail();
   else if(a==="linkSave")linkSave(t);
@@ -2867,10 +3019,11 @@ async function cloudBackup(reason,force){
     if(reason==="open"&&now-last<6*3600e3)return false;
     if(reason==="close"&&(core===bkLastJson||now-last<20*60e3))return false;
   }
-  var str=JSON.stringify(j);if(str.length>900000){if(force)toast("البيانات كبيرة على النسخة السحابية، خد نسخة على الموبايل");return false}
+  var str=JSON.stringify(j);if(!ENC.on&&str.length>900000){if(force)toast("البيانات كبيرة على النسخة السحابية، خد نسخة على الموبايل");return false}
   bkBusy=true;
   try{
-    await db.collection("backups").doc().set({at:now,reason:reason,cars:S.cars.length,size:str.length,json:str});
+    var bd={at:now,reason:reason,cars:S.cars.length,size:str.length};if(ENC.on){var be=await encText(str);if(be._e.length>1000000){if(force)toast("البيانات كبيرة على النسخة السحابية، خد نسخة على الموبايل");return false}bd._e=be._e;bd._z=be._z}else bd.json=str;
+    await db.collection("backups").doc().set(bd);
     lsSet(lk,String(now));bkLastJson=core;
     var snap=await db.collection("backups").orderBy("at","desc").get();
     snap.docs.slice(BK_KEEP).forEach(function(d){d.ref.delete().catch(function(){})});
@@ -2896,7 +3049,7 @@ async function openCloud(){
   }catch(e){$("#sheet").innerHTML=sheetHead("☁️ النسخ الاحتياطية")+'<div class="banner">تعذر تحميل النسخ، اتأكد من النت.</div>'}
 }
 async function cloudRestore(id){
-  try{var d=await db.doc("backups/"+id).get();var j=JSON.parse(d.data().json)}catch(e){return toast("تعذر قراءة النسخة")}
+  try{var d=await db.doc("backups/"+id).get(),bx=d.data();var j=JSON.parse(isEnc(bx)?await decText(bx):bx.json)}catch(e){return toast("تعذر قراءة النسخة")}
   confirmBox("هترجّع بياناتك لـ "+bkWhen(d.data().at)+". أي حاجة اتسجلت بعدها هتتشال (وهنعمل نسخة من الوضع الحالي قبل الاسترجاع عشان لو غيّرت رأيك). متأكد؟",async function(){
     await cloudBackup("prerestore",true);
     try{
@@ -2907,6 +3060,7 @@ async function cloudRestore(id){
       });
       ops.push(j.settings?["set","settings/main",j.settings]:["del","settings/main"]);
       ops.push(j.brand?["set","settings/brand",j.brand]:["del","settings/brand"]);
+      for(var q=0;q<ops.length;q++)if(ops[q][0]==="set")ops[q][2]=await toStore(ops[q][1],ops[q][2]);
       for(var i=0;i<ops.length;i+=400){var b=FS.batch();ops.slice(i,i+400).forEach(function(x){if(x[0]==="set")b.set(db.doc(x[1]),x[2]);else b.delete(db.doc(x[1]))});await b.commit()}
       closeSheet();toast("اترجعت البيانات ✔");
     }catch(e){toast("تعذر الاسترجاع، جرّب تاني")}
@@ -3030,11 +3184,28 @@ async function boot(){
   }
   var base="users/"+user.uid+"/";
   db={collection:function(c){return FS.collection(base+c)},doc:function(p){return FS.doc(base+p)}};
+  if(!(await encBoot(user)))return;
   render();
+  /* كل مستند بيتفك تشفيره هنا قبل ما يوصل للبرنامج، والقديم اللي لسه مش متشفر بيتقري زي ما هو */
+  async function openDoc(p,r,cache){
+    if(isEnc(r)){
+      var c=cache[p],o=c&&c.e===r._e?c.o:await decObj(r);cache[p]={e:r._e,o:o};
+      /* نسخة قديمة على جهاز تاني عدّلت حقول عادية فوق المستند المتشفر: ندمجها ونرجع نشفّرها */
+      var ex=Object.keys(r).filter(function(k){return k!=="_e"&&k!=="_v"});
+      if(!ex.length){delete NEEDENC[p];return o}
+      o=Object.assign({},o);ex.forEach(function(k){o[k]=r[k]});if(ENC.on)NEEDENC[p]=1;return o;
+    }
+    if(ENC.on&&encPath(p))NEEDENC[p]=1;return r;
+  }
   function sub(coll,key){
-    db.collection(coll).onSnapshot(function(snap){
-      S[key]=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())});
-      S.loaded[key]=true;refresh();
+    var seq=0,cache={};
+    db.collection(coll).onSnapshot(async function(snap){
+      var my=++seq;
+      var arr=await Promise.all(snap.docs.map(async function(d){var p=coll+"/"+d.id;try{var o=await openDoc(p,d.data(),cache);PLAIN[p]=o;return Object.assign({id:d.id},o)}catch(e){return null}}));
+      if(my!==seq)return;
+      var have={};snap.docs.forEach(function(d){have[coll+"/"+d.id]=1});
+      Object.keys(NEEDENC).forEach(function(k){if(k.indexOf(coll+"/")===0&&!have[k])delete NEEDENC[k]});
+      S[key]=arr.filter(Boolean);S.loaded[key]=true;refresh();
     },function(err){S.err=err;refresh()});
   }
   sub("cars","cars");sub("expenses","expenses");sub("collections","cols");sub("capital","cap");sub("payouts","pay");sub("transfers","transfers");sub("ledger","ledger");sub("external","ext");sub("investors","inv");sub("invmoves","invmov");
@@ -3043,8 +3214,12 @@ async function boot(){
     if(mem&&S.brand&&S.brand.name&&mem.shop!==S.brand.name){mem.shop=S.brand.name;memRef.update({shop:S.brand.name}).catch(function(){})}lsSet("hb_logo",S.brand&&S.brand.logo);applyBrand();refresh();
   },function(){});
   db.doc("settings/account").get().then(function(d){S.account=d.exists?d.data():null;refresh()}).catch(function(){});
-  db.doc("settings/main").onSnapshot(function(snap){
-    S.settings=snap.exists?snap.data():null;S.loaded.settings=true;refresh();
+  var mseq=0,mcache={};
+  db.doc("settings/main").onSnapshot(async function(snap){
+    var my=++mseq,o=null;
+    if(snap.exists){try{o=await openDoc("settings/main",snap.data(),mcache);PLAIN["settings/main"]=o}catch(e){o=null}}else delete NEEDENC["settings/main"];
+    if(my!==mseq)return;
+    S.settings=o;S.loaded.settings=true;refresh();
   },function(err){S.err=err;refresh()});
 }
 boot();
