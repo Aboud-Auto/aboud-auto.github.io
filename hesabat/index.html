@@ -1225,9 +1225,23 @@ function openForm(kind,o){
       '<div class="card" style="margin:4px 0 12px"><div class="sub" style="margin-bottom:8px">لو رجّعته: اكتب رجّعت كام ومنين (ممكن ترجّع جزء والباقي يفضل عربون).</div><div class="two">'+fld("رجّعت كاش",minp("cash",xc.cashIn>0?xc.cashIn:""))+fld("رجّعت إنستاباي",minp("insta",xc.instaIn>0?xc.instaIn:""))+'</div></div>'+
       fld("التاريخ",dinp("date"))+fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+
       '<button class="btn" data-act="submit">تأكيد</button>';
+  }else if(kind==="collect"&&!o.carId&&o.sub!=="all"){
+    /* اختيار: هتحصّل من مين؟ عربيات عليها باقي / سلف ليك عند الناس / تحصيل تاني */
+    var dueC=T.cars.filter(function(c){return c.sold&&c.remaining>0.5}),
+        dueL=loansCalc().filter(function(l){return l.dir==="out"&&l.remaining>0.5}),
+        anySold=T.cars.some(function(c){return c.sold}),anyStock=T.cars.some(function(c){return !c.sold});
+    function prow(act,t,d,v){return '<div class="item car" '+act+' style="cursor:pointer"><div style="flex:1"><div class="t">'+t+'</div><div class="d">'+d+'</div></div><span class="num warn" style="font-weight:700">'+v+'</span></div>'}
+    h=sheetHead("💰 تحصيل فلوس")+'<div class="sub" style="margin:0 2px 10px">اختار هتحصّل من إيه</div>';
+    if(dueC.length)h+='<div class="sect">🚗 عربيات باقي على مشتريها</div><div class="card" style="padding:6px 16px">'+dueC.map(function(c){return prow('data-act="form" data-kind="collect" data-car="'+c.id+'"',esc(c.name),'اتباعت بـ '+fmt(c.sellPrice)+' · '+fdate(c.sellDate),fmt(c.remaining))}).join("")+'</div>';
+    if(dueL.length)h+='<div class="sect">🤝 سلف ليك عند الناس</div><div class="card" style="padding:6px 16px">'+dueL.map(function(l){return prow('data-act="form" data-kind="loanpay" data-loan="'+l.id+'"',esc(l.person||"بدون اسم"),'سلفته '+fmt(l.amount)+' · '+fdate(l.date),fmt(l.remaining))}).join("")+'</div>';
+    if(!dueC.length&&!dueL.length)h+='<div class="empty">مفيش حد عليه فلوس ليك دلوقتي ✔</div>';
+    h+='<div class="sect">تحصيل تاني</div><div class="actions">'+
+      (anySold?'<button class="abtn" data-act="form" data-kind="collect" data-sub="all"><span class="ic">🚗</span>عربية متباعة</button>':'')+
+      (anyStock?'<button class="abtn" data-act="form" data-kind="dep"><span class="ic">🔖</span>عربون على عربية</button>':'')+
+      '<button class="abtn" data-act="form" data-kind="loan" data-sub="in"><span class="ic">📥</span>استلمت فلوس من حد</button></div>';
   }else if(kind==="collect"){
     var sold=T.cars.filter(function(c){return c.sold});
-    if(!sold.length)return toast("مفيش عربيات اتباعت لسه");
+    if(!sold.length){modal=prevModal;return toast("مفيش عربيات اتباعت لسه")}
     sold.sort(function(a,b){return (b.remaining>0)-(a.remaining>0)});
     var s3=o.carId||sold[0].id;
     h=sheetHead("تحصيل فلوس")+fld("العربية",carSel("carId",sold,s3))+
