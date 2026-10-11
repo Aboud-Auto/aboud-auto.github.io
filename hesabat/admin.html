@@ -297,7 +297,7 @@ function renderSettings(){
   var c=S.cfg||{};
   return brandHead("الإعدادات","")+
     '<div class="card"><div class="sect" style="margin-top:0">💬 رقم الواتساب بتاعك</div><div class="sub" style="margin-bottom:10px">بيظهر للناس في صفحة التسجيل عشان يطلبوا منك كود دعوة، وللعميل اللي حسابه متوقف.</div>'+
-    '<label class="fld"><span>الرقم</span><input id="cfgWa" inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" value="'+esc(c.whatsapp||"")+'"></label>'+
+    '<label class="fld"><span>الرقم</span><input id="cfgWa" inputmode="tel" dir="ltr" placeholder="201xxxxxxxxx" value="'+esc(c.whatsapp||"")+'"></label>'+
     '<label class="fld"><span>الاسم اللي يظهر</span><input id="cfgName" placeholder="عبود أوتو" value="'+esc(c.name||"")+'"></label><button class="btn" data-act="saveCfg">حفظ</button></div>'+
     '<div class="card"><div class="sect" style="margin-top:0">🔒 قفل التسجيل (قواعد Firebase)</div><div class="sub">دي اللي بتمنع أي حد يسجّل أو يفتح البرنامج من غير دعوة منك، حتى لو حد عنده اللينك. اعملها مرة واحدة بس:</div>'+
     '<ol class="steps"><li>اضغط «نسخ القواعد» تحت.</li><li>افتح <a style="color:var(--primary)" target="_blank" rel="noopener" href="https://console.firebase.google.com/project/aboud-auto/firestore/rules">Firebase → Firestore → Rules</a>.</li><li>امسح كل اللي مكتوب والصق القواعد مكانه.</li><li>اضغط <b>Publish</b>.</li></ol>'+
@@ -424,7 +424,7 @@ document.addEventListener("click",async function(e){
   else if(a==="rLife")doRenew("lifetime",t);
   else if(a==="rDate")doRenew("date",t);
   else if(a==="copyRules")copy(rulesText(ME.uid));
-  else if(a==="saveCfg"){try{await FS.doc("config/public").set({whatsapp:$("#cfgWa").value.trim(),name:$("#cfgName").value.trim()});toast("اتحفظ ✔")}catch(err){toast(/permission/.test(code(err))?"ركّب القواعد الأول":"تعذر الحفظ")}}
+  else if(a==="saveCfg"){try{await FS.doc("config/public").set({whatsapp:waNum($("#cfgWa").value),name:$("#cfgName").value.trim()});toast("اتحفظ ✔")}catch(err){toast(/permission/.test(code(err))?"ركّب القواعد الأول":"تعذر الحفظ")}}
   else if(a==="logout"){if(confirm("تسجيل خروج؟"))FBA.auth().signOut().then(function(){location.reload()})}
 });
 document.addEventListener("input",function(e){if(e.target.id==="q"){S.q=e.target.value;render()}});
@@ -446,7 +446,7 @@ FBA.auth().onAuthStateChanged(function(u){
   FS.collection("members").onSnapshot(function(s){S.err=null;S.members=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});S.loaded.members=true;fixSerials();
     if(S.pending)S.pending=S.pending.filter(function(p){return !S.members.some(function(m){return m.id===p.uid})});render()},onErr);
   FS.collection("invites").onSnapshot(function(s){S.invites=s.docs.map(function(d){return Object.assign({code:d.id},d.data())});render()},onErr);
-  FS.doc("config/public").get().then(function(d){S.cfg=d.exists?d.data():{};render()}).catch(function(){});
+  FS.doc("config/public").get().then(function(d){S.cfg=d.exists?d.data():{};var w=S.cfg.whatsapp,f=waNum(w);if(w&&f&&f!==w){S.cfg.whatsapp=f;FS.doc("config/public").set({whatsapp:f},{merge:true}).catch(function(){})}render()}).catch(function(){});
   loadPending();
 });
 })();
