@@ -72,6 +72,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--text
 .nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));z-index:20}
 .nav button{flex:1;border:0;background:none;padding:6px 1px;color:var(--muted);font-weight:600;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
 .nav button .ic{font-size:20px}
+.nav button{text-align:center;line-height:1.15}
 .nav button.on{color:var(--primary)}
 .ov{position:fixed;inset:0;background:rgba(5,10,20,.5);z-index:40;display:none;align-items:flex-end;justify-content:center}
 .ov.show{display:flex}
@@ -513,7 +514,7 @@ function carCard(c){
 }
 
 function renderNav(){
-  var tabs=[["home","🏠","الرئيسية"],["cars","🚗","العربيات"],["day","📅","اليوم"],["kash","📒","الكشكول"],["cap","🏦","رأس المال"],["led","🤝","السلف"],["inv","💼","مستثمرين"],["set","⚙️","الإعدادات"]];
+  var tabs=[["home","🏠","الرئيسية"],["cars","🚗","العربيات"],["day","📅","اليوم"],["kash","📒","الكشكول"],["cap","🏦","رأس المال"],["led","🤝","السلف"],["inv","💼","مستثمرين"],["acc","🧾","تقفيل حسابات"],["set","⚙️","الإعدادات"]];
   $("#nav").innerHTML='<div class="nbrand"><img src="icon-180.png" alt=""><b>ABOUD AUTO</b><span>حسابات المعرض</span></div>'+tabs.map(function(t){return '<button class="'+(S.tab===t[0]?"on":"")+'" data-act="tab" data-tab="'+t[0]+'"><span class="ic">'+t[1]+'</span>'+t[2]+'</button>'}).join("")+'<div class="nfoot">'+fdate(todayStr())+'</div>';
 }
 
@@ -531,17 +532,10 @@ function renderHome(){
      tile("💵 الخزنة (كاش)",m(T.safeBal,T.safeBal<0?"bad":""),"")+
      tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"لسه ماتحوّلش للخزنة")+'</div>'+
      '<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="transfer">🔁 تحويل بين إنستاباي والخزنة</button>';
-  h+='<div class="actions">'+
-    '<button class="abtn" data-act="form" data-kind="buy"><span class="ic">🚗</span>شراء عربية</button>'+
-    '<button class="abtn" data-act="form" data-kind="sell"><span class="ic">✅</span>بيع عربية</button>'+
-    '<button class="abtn" data-act="form" data-kind="expense"><span class="ic">💸</span>تسجيل مصروف</button>'+
-    '<button class="abtn" data-act="form" data-kind="collect"><span class="ic">💰</span>تحصيل فلوس</button></div>';
+  h+='<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف</button>';
   h+='<button class="btn" style="margin-bottom:12px" data-act="tab" data-tab="kash">📒 افتح الكشكول (مدين / دائن)</button>';
   h+='<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="dep">🔖 تسجيل عربون على عربية</button>';
   h+='<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="ext">🤝 تسجيل عمولة خارجية</button>';
-  h+='<button class="btn sec" style="margin-bottom:12px" data-act="jard">📋 جرد الشركاء والمستثمرين</button>';
-  h+='<button class="btn" style="margin-bottom:12px" data-act="report" data-kind="settle">🧾 تقفيل (عربيات / أسبوع / شهر)</button>';
-  h+='<button class="btn sec" style="margin-bottom:12px" data-act="report" data-kind="day">📄 تقرير وكشف حساب (صورة / PDF)</button>';
   h+='<div class="card row" data-act="tab" data-tab="day" style="cursor:pointer"><div><div class="tl">النهاردة</div><div style="font-weight:700">مصاريف '+m(D.expT)+' · تحصيل '+m(D.cashT+D.instaT)+'</div></div><span class="sub">تقفيل اليوم ‹</span></div>';
   h+='<div class="grid2">'+
     tapTile(tile("عربيات في المعرض",'<span class="num">'+T.stockN+'</span>',"تكلفتها "+m(T.stockCost)),"stock")+
@@ -826,6 +820,13 @@ function sellerBox(){
   return '<div class="sect">عليك لبايعي العربيات</div><div class="card" style="padding:6px 16px">'+a.map(function(c){
     return '<div class="item car" data-act="car" data-id="'+c.id+'" style="cursor:pointer"><div style="flex:1"><div class="t">'+esc(c.name)+'</div><div class="d">السعر '+fmt(c.buyPrice)+' · اتدفع '+fmt(paidNow(c)+c.sellerPaid)+' · '+fdate(c.buyDate)+'</div></div><span class="num bad" style="font-weight:700">'+fmt(c.sellerRem)+'</span></div>'}).join("")+'</div>';
 }
+function renderAcc(){
+  function big(act,kind,ic,t,d){return '<div class="card row" data-act="'+act+'"'+(kind?' data-kind="'+kind+'"':'')+' style="cursor:pointer;align-items:center;gap:12px"><span style="font-size:30px">'+ic+'</span><div style="flex:1"><div style="font-weight:800;font-size:17px">'+t+'</div><div class="sub">'+d+'</div></div><span class="sub">‹</span></div>'}
+  return '<div class="top"><h1>تقفيل حسابات</h1></div>'+
+    big("report","settle","🧾","تقفيل","عربيات متباعة / أسبوع / شهر · نصيب كل شريك واللي يرجع للعهدة")+
+    big("jard","","📋","جرد الشركاء والمستثمرين","كل شخص والعربيات اللي داخل فيها وتقريره")+
+    big("report","day","📄","تقرير وكشف حساب","يومي أو شهري · صورة أو PDF تبعتها واتساب");
+}
 function renderLed(){
   var T=calc(),L=loansCalc();
   var oo=L.filter(function(l){return l.dir==="out"&&l.remaining>0.5}),oi=L.filter(function(l){return l.dir==="in"&&l.remaining>0.5}),dn=L.filter(function(l){return l.remaining<=0.5});
@@ -927,6 +928,7 @@ function render(){
   else if(S.tab==="kash")h=renderKash();
   else if(S.tab==="cap")h=renderCap();
   else if(S.tab==="led")h=renderLed();
+  else if(S.tab==="acc")h=renderAcc();
   else if(S.tab==="inv")h=renderInv();
   else h=renderSet();
   app.innerHTML=h;
@@ -1214,6 +1216,9 @@ function qfill(kind){
   if(!done)return;
   var sv=$("#sheet select[name='src']");if(sv&&Array.prototype.some.call(sv.options,function(o){return o.value===s}))sv.value=s;
   var hw=$("#sheet select[name='how']");if(hw&&kind==="ext")hw.value=s;
+  if(QF.inv){var IV=QF.inv,io=calc().inv.list.find(function(x){return x.id===IV.iid});
+    if(io&&kind==="buy"){var il=$("#ilist");if(il){il.insertAdjacentHTML("beforeend",invRow({iid:io.id,name:io.name,amount:IV.a,pct:io.pct,mode:"mine"}));}}
+    else if(io&&kind==="loan"){var ll=$("#lilist");if(ll){ll.insertAdjacentHTML("beforeend",liRow());var r=ll.lastElementChild;r.querySelector(".liv").value=io.id;r.querySelector(".lia").value=fmtIn(String(IV.a))}}}
   QF=null;
 }
 function openQuick(dir){
@@ -1242,6 +1247,9 @@ function openQuick(dir){
   QF=null;modal={type:"quick",dir:dir};
   var h=sheetHead(inn?"⬇️ فلوس داخلة":"⬆️ فلوس خارجة")+
     '<div class="two">'+fld("المبلغ",minp("qamt"))+fld(inn?"دخلت في":"خرجت من",'<select name="qsrc"><option value="cash">الخزنة - كاش</option><option value="insta">إنستاباي</option></select>')+'</div>'+
+    (!inn&&T.inv.list.length?fld("الفلوس دي من فلوس مين؟",'<select name="qwho" onchange="var b=document.getElementById(\'qinv\'),p=document.getElementById(\'qipart\');b.style.display=this.value===\'mine\'?\'none\':\'\';p.style.display=this.value===\'both\'?\'\':\'none\'"><option value="mine">👤 من فلوسي</option><option value="inv">💼 من مستثمر</option><option value="both">🤝 أنا والمستثمر</option></select>')+
+      '<div id="qinv" style="display:none"><div class="two">'+fld("المستثمر",'<select name="qiid">'+T.inv.list.map(function(x){return '<option value="'+esc(x.id)+'">'+esc(x.name)+' (كاش '+fmt(x.free)+')</option>'}).join("")+'</select>')+
+      '<div id="qipart" style="display:none">'+fld("نصيب المستثمر",minp("qia"))+'</div></div><div class="sub" style="margin:-4px 2px 10px">💼 فلوس المستثمر بتنفع مع شراء عربية أو سلفة لحد. ولو داخل أكتر من مستثمر تقدر تضيفهم جوه الفورم.</div></div>':'')+
     '<div class="sect">'+(inn?"الفلوس دي جت من إيه؟":"الفلوس دي راحت في إيه؟")+'</div>'+
     '<div class="actions qcats">'+L.map(function(x){return '<button class="abtn" data-act="qgo" data-kind="'+x[2]+'" data-sub="'+(x[3]||"")+'"><span class="ic">'+x[0]+'</span>'+x[1]+'</button>'}).join("")+'</div>'+
     (inn?'':'<div class="sub" style="margin:10px 2px 0">💸 مصاريف العربيات بتتسجل زي ما هي من «تسجيل مصروف».</div>');
@@ -1252,6 +1260,15 @@ function quickGo(kind,sub){
   var a=parseNum(val("qamt"));
   if(!(a>0)){toast("اكتب المبلغ الأول");var e=$("#sheet [name='qamt']");if(e)e.focus();return}
   QF={a:a,s:val("qsrc")==="insta"?"insta":"cash"};
+  var who=val("qwho")||"mine";
+  if(who!=="mine"){
+    if(!(kind==="buy"||(kind==="loan"&&sub==="out"))){QF=null;return toast("فلوس المستثمر بتنفع مع شراء عربية أو سلفة لحد بس")}
+    var ia=who==="inv"?a:parseNum(val("qia"));
+    if(!(ia>0)){QF=null;toast("اكتب نصيب المستثمر");var qe=$("#sheet [name='qia']");if(qe)qe.focus();return}
+    if(ia>a){QF=null;return toast("نصيب المستثمر أكبر من المبلغ كله")}
+    if(who==="both"&&ia>=a){QF=null;return toast("لو المبلغ كله من المستثمر اختار «من مستثمر»")}
+    QF.inv={iid:val("qiid"),a:ia};
+  }
   if(kind==="qpick")return quickPick(sub);
   openForm(kind,{sub:sub||undefined});
 }
