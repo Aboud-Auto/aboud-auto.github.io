@@ -893,7 +893,7 @@ function kashEntries(T){
   Object.keys(dpm).forEach(function(id){var c=cm[id];if(c&&c.sold)add({d:c.sellDate,c:(c.soldAt||c.createdAt||0)-0.1,a:dpm[id],t:"عربون "+c.name,k:"اتحسب من سعر البيع",car:id})});
   Object.keys(dfm).forEach(function(k){var o=dfm[k];add({d:o.d,c:o.c,a:o.a,t:"عربون اتصادر - "+nm(o.id),k:"بقى ربح للمعرض",car:o.id})});
   S.cols.forEach(function(x){if(!cm[x.carId]||x.trade||x.dep)return;var a=(+x.cash||0)+(+x.insta||0);add({d:x.date,c:x.createdAt||0,a:a,t:(x.refund?"مرتجع - رد فلوس ":a<0?"رد فلوس ":"تحصيل ")+nm(x.carId),k:"كاش "+fmt(Math.abs(+x.cash||0))+" · إنستاباي "+fmt(Math.abs(+x.insta||0)),car:x.carId})});
-  S.cap.forEach(function(x){var a=+x.amount||0;if(capOut(x.kind))add({d:x.date,c:x.createdAt||0,a:-a,t:capLabel(x).replace(/^\S+\s/,""),k:x.note||"رأس المال"});else if(capIn(x.kind))add({d:x.date,c:x.createdAt||0,a:a,t:"زيادة رأس المال",k:x.note||"رأس المال",cap:1})});
+  S.cap.forEach(function(x){var a=+x.amount||0;if(x.kind==="jam")add({d:x.date,c:x.createdAt||0,a:-a,t:capLabel(x).replace(/^\S+\s/,""),k:x.note||"اتخصم من أصل رأس المال",cap:1});else if(capOut(x.kind))add({d:x.date,c:x.createdAt||0,a:-a,t:capLabel(x).replace(/^\S+\s/,""),k:x.note||"رأس المال"});else if(capIn(x.kind))add({d:x.date,c:x.createdAt||0,a:a,t:"زيادة رأس المال",k:x.note||"رأس المال",cap:1})});
   S.ext.forEach(function(x){add({d:x.date,c:x.createdAt||0,a:+x.amount||0,t:"عمولة خارجية"+(x.desc?" - "+x.desc:""),k:"اتضافت لرأس المال",cap:1})});
   var lm=lmapOf();
   /* السلف: باند واحد لكل سلفة. الزيادة والفلوس اللي بترجع بيتعدّلوا في نفس الباند من غير سطر جديد.

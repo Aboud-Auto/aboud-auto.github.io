@@ -533,7 +533,7 @@ function heroHtml(T){
   function hb(ic,l,v,s,cls){return '<div class="hb '+(cls||"")+'"><div class="hl">'+ic+' '+l+'</div><div class="hv">'+v+'</div>'+(s?'<div class="hs">'+s+'</div>':'')+'</div>'}
   var h='<div class="hero"><div class="l">💵 السيولة الحالية (كاش + إنستاباي)</div><div class="v">'+m(T.cashNow)+'</div>';
   h+='<div class="hg">'+
-    hb("🏦","رأس المال الحالي",m(T.capNow),"الأصلي "+m(T.capital)+(T.addcap>0.5?" · زيادات "+m(T.addcap):"")+(T.extTot>0.5?" · عمولات "+m(T.extTot):"")+"<br>"+"للشغل "+m(T.capNow-T.fund)+"<br>منه عهدة "+m(T.fund))+
+    hb("🏦","رأس المال الحالي",m(T.capNow),"الأصلي "+m(T.capital)+(T.addcap>0.5?" · زيادات "+m(T.addcap):"")+(T.extTot>0.5?" · عمولات "+m(T.extTot):"")+(T.jam>0.5?" · جمعية −"+m(T.jam):"")+"<br>"+"للشغل "+m(T.capNow-T.fund)+"<br>منه عهدة "+m(T.fund))+
     hb("📊","قيمة البيزنس كله",m(T.value),"رأس المال + الأرباح المتاحة")+
     hb("📥","ليك عند الناس",m(T.recv),"سلف لسه مارجعتش",T.recv>0.5?"pos":"")+
     hb("📤","عليك للناس",m(T.owe),T.sOwe>0.5?"منها لبايعي عربيات "+m(T.sOwe):"سلف وأمانات",T.owe>0.5?"neg":"")+
@@ -711,7 +711,7 @@ function kashEntries(T){
   Object.keys(dpm).forEach(function(id){var c=cm[id];if(c&&c.sold)add({d:c.sellDate,c:(c.soldAt||c.createdAt||0)-0.1,a:dpm[id],t:"عربون "+c.name,k:"اتحسب من سعر البيع",car:id})});
   Object.keys(dfm).forEach(function(k){var o=dfm[k];add({d:o.d,c:o.c,a:o.a,t:"عربون اتصادر - "+nm(o.id),k:"بقى ربح للمعرض",car:o.id})});
   S.cols.forEach(function(x){if(!cm[x.carId]||x.trade||x.dep)return;var a=(+x.cash||0)+(+x.insta||0);add({d:x.date,c:x.createdAt||0,a:a,t:(x.refund?"مرتجع - رد فلوس ":a<0?"رد فلوس ":"تحصيل ")+nm(x.carId),k:"كاش "+fmt(Math.abs(+x.cash||0))+" · إنستاباي "+fmt(Math.abs(+x.insta||0)),car:x.carId})});
-  S.cap.forEach(function(x){var a=+x.amount||0;if(capOut(x.kind))add({d:x.date,c:x.createdAt||0,a:-a,t:capLabel(x).replace(/^\S+\s/,""),k:x.note||"رأس المال"});else if(capIn(x.kind))add({d:x.date,c:x.createdAt||0,a:a,t:"زيادة رأس المال",k:x.note||"رأس المال",cap:1})});
+  S.cap.forEach(function(x){var a=+x.amount||0;if(x.kind==="jam")add({d:x.date,c:x.createdAt||0,a:-a,t:capLabel(x).replace(/^\S+\s/,""),k:x.note||"اتخصم من أصل رأس المال",cap:1});else if(capOut(x.kind))add({d:x.date,c:x.createdAt||0,a:-a,t:capLabel(x).replace(/^\S+\s/,""),k:x.note||"رأس المال"});else if(capIn(x.kind))add({d:x.date,c:x.createdAt||0,a:a,t:"زيادة رأس المال",k:x.note||"رأس المال",cap:1})});
   S.ext.forEach(function(x){add({d:x.date,c:x.createdAt||0,a:+x.amount||0,t:"عمولة خارجية"+(x.desc?" - "+x.desc:""),k:"اتضافت لرأس المال",cap:1})});
   var lm=lmapOf();
   /* السلف: باند واحد لكل سلفة. الزيادة والفلوس اللي بترجع بيتعدّلوا في نفس الباند من غير سطر جديد.
