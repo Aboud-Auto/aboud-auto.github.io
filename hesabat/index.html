@@ -704,7 +704,7 @@ function heroHtml(T){
   function hb(ic,l,v,s,cls){return '<div class="hb '+(cls||"")+'"><div class="hl">'+ic+' '+l+'</div><div class="hv">'+v+'</div>'+(s?'<div class="hs">'+s+'</div>':'')+'</div>'}
   var h='<div class="hero"><div class="l">💵 السيولة الحالية (كاش + إنستاباي)</div><div class="v">'+m(T.cashNow)+'</div>';
   h+='<div class="hg">'+
-    hb("🏦","رأس المال الحالي",m(T.capNow),"للشغل "+m(T.capNow-T.fund)+"<br>منه عهدة "+m(T.fund))+
+    hb("🏦","رأس المال الحالي",m(T.capNow),"الأصلي "+m(T.capital)+(T.addcap>0.5?" · زيادات "+m(T.addcap):"")+(T.extTot>0.5?" · عمولات "+m(T.extTot):"")+(T.jam>0.5?" · جمعية −"+m(T.jam):"")+"<br>"+"للشغل "+m(T.capNow-T.fund)+"<br>منه عهدة "+m(T.fund))+
     hb("📊","قيمة البيزنس كله",m(T.value),"رأس المال + الأرباح المتاحة")+
     hb("📥","ليك عند الناس",m(T.recv),"سلف لسه مارجعتش",T.recv>0.5?"pos":"")+
     hb("📤","عليك للناس",m(T.owe),T.sOwe>0.5?"منها لبايعي عربيات "+m(T.sOwe):"سلف وأمانات",T.owe>0.5?"neg":"")+
