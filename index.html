@@ -42,6 +42,17 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--text
 .hero{background:linear-gradient(135deg,#e6c15a 0%,#c39a2c 55%,#a67f1f 100%);color:#17110a;border-radius:22px;padding:20px;margin-bottom:12px;box-shadow:var(--shadow)}
 .hero .l{opacity:.8;font-size:14px}
 .hero .v{font-size:34px;font-weight:800;margin:2px 0}
+.hero .hg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.hero .hb{background:rgba(23,17,10,.13);border:1px solid rgba(23,17,10,.18);border-radius:14px;padding:9px 11px;min-width:0}
+.hero .hb.w{grid-column:1/-1}
+.hero .hb .hl{font-size:12px;opacity:.75;font-weight:700}
+.hero .hb .hv{font-size:18px;font-weight:800;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero .hb .hs{font-size:11.5px;opacity:.75;margin-top:2px;line-height:1.45}
+.hero .hb.pos{background:rgba(16,80,36,.16);border-color:rgba(16,80,36,.35)}.hero .hb.pos .hv{color:#0e4a22}
+.hero .hb.neg{background:rgba(130,25,15,.14);border-color:rgba(130,25,15,.35)}.hero .hb.neg .hv{color:#7a170d}
+.hero .hc{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.hero .hc span{background:rgba(23,17,10,.12);border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:700}
+.hero .hs.top{margin-top:2px}
 .hero .s{opacity:.8;font-size:13px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .tile{background:var(--card);border-radius:16px;padding:14px;box-shadow:var(--shadow)}
@@ -518,14 +529,26 @@ function renderNav(){
   $("#nav").innerHTML='<div class="nbrand"><img src="icon-180.png" alt=""><b>ABOUD AUTO</b><span>حسابات المعرض</span></div>'+tabs.map(function(t){return '<button class="'+(S.tab===t[0]?"on":"")+'" data-act="tab" data-tab="'+t[0]+'"><span class="ic">'+t[1]+'</span>'+t[2]+'</button>'}).join("")+'<div class="nfoot">'+fdate(todayStr())+'</div>';
 }
 
+function heroHtml(T){
+  function hb(ic,l,v,s,cls){return '<div class="hb '+(cls||"")+'"><div class="hl">'+ic+' '+l+'</div><div class="hv">'+v+'</div>'+(s?'<div class="hs">'+s+'</div>':'')+'</div>'}
+  var h='<div class="hero"><div class="l">💵 السيولة الحالية (كاش + إنستاباي)</div><div class="v">'+m(T.cashNow)+'</div>';
+  h+='<div class="hg">'+
+    hb("🏦","رأس المال الحالي",m(T.capNow),"الأصلي "+m(T.capital)+(T.addcap>0.5?" · زيادات "+m(T.addcap):"")+(T.extTot>0.5?" · عمولات "+m(T.extTot):"")+"<br>"+"للشغل "+m(T.capNow-T.fund)+"<br>منه عهدة "+m(T.fund))+
+    hb("📊","قيمة البيزنس كله",m(T.value),"رأس المال + الأرباح المتاحة")+
+    hb("📥","ليك عند الناس",m(T.recv),"سلف لسه مارجعتش",T.recv>0.5?"pos":"")+
+    hb("📤","عليك للناس",m(T.owe),T.sOwe>0.5?"منها لبايعي عربيات "+m(T.sOwe):"سلف وأمانات",T.owe>0.5?"neg":"")+
+    (T.inv.list.length?hb("💼","فلوس المستثمرين",m(T.inv.bal),"حرة في الخزنة "+m(T.inv.free)+" · في عربيات "+m(T.inv.working),"w"):"")+
+  '</div>';
+  var ch=[];
+  if(Math.abs(T.pOwed)>=0.5)ch.push("🤝 مستحق للشركاء "+m(T.pOwed));
+  if(T.deposits>0.5)ch.push("🔖 عرابين "+m(T.deposits));
+  if(ch.length)h+='<div class="hc">'+ch.map(function(x){return '<span>'+x+'</span>'}).join("")+'</div>';
+  return h+'</div>';
+}
 function renderHome(){
   var T=calc(),D=dayCalc(todayStr()),h="";
   if(!S.settings)h+='<div class="card"><div class="sect" style="margin-top:0">ابدأ من هنا 👋</div><div class="sub" style="margin-bottom:12px">حدّد رأس المال والعهدة الأول عشان الحسابات تظبط.</div><button class="btn" data-act="form" data-kind="settings">تحديد رأس المال والعهدة</button></div>';
-  h+='<div class="hero"><div class="l">السيولة الحالية (كاش + إنستاباي)</div><div class="v">'+m(T.cashNow)+'</div><div class="s">إجمالي قيمة البيزنس: '+m(T.value)+'</div>'+
-     '<div class="s">رأس المال الأصلي (اللي دخل): '+m(T.capital)+(T.addcap>0.5?' · + زيادات '+m(T.addcap):'')+(T.extTot>0.5?' · + عمولات '+m(T.extTot):'')+'</div>'+
-     '<div class="s">رأس المال الحالي: '+m(T.capNow)+' · منه عهدة '+m(T.fund)+' · للشغل '+m(T.capNow-T.fund)+'</div>'+
-     (Math.abs(T.pOwed)>=0.5?'<div class="s">منها مستحق للشركاء: '+m(T.pOwed)+'</div>':'')+(T.inv.list.length?'<div class="s">💼 فلوس مستثمرين: '+m(T.inv.bal)+' · حرة '+m(T.inv.free)+' · في عربيات '+m(T.inv.working)+'</div>':'')+
-     (T.deposits>0.5?'<div class="s">🔖 منها عرابين على عربيات لسه ماتباعتش: '+m(T.deposits)+'</div>':'')+(T.recv>0.5?'<div class="s">ليك عند الناس (سلف): '+m(T.recv)+'</div>':'')+(T.owe>0.5?'<div class="s">عليك للناس: '+m(T.owe)+'</div>':'')+(T.sOwe>0.5?'<div class="s">منها باقي لبايعي عربيات: '+m(T.sOwe)+'</div>':'')+'</div>';
+  h+=heroHtml(T);
   h+='<div class="qio"><button class="qin" data-act="qio" data-dir="in"><span class="ic">⬇️</span>داخل</button><button class="qout" data-act="qio" data-dir="out"><span class="ic">⬆️</span>خارج</button></div>';
   h+=cashSplit(T);
   h+='<div class="grid2" style="margin-bottom:10px">'+
