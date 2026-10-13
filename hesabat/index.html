@@ -365,9 +365,9 @@ function calc(){
       myProfit:mp,lossActive:lossActive,lossAmt:lossAmt,lossPaid:lossPaid,lossRem:lossAmt-lossPaid});
   }).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)});
   var capital=+(S.settings&&S.settings.capital)||0, fund=+(S.settings&&S.settings.fund)||0;
-  var withdraw=0,repay=0,pw=0;
+  var withdraw=0,repay=0,pw=0,ew=0;
   var jam=0,addcap=0;
-  S.cap.forEach(function(x){var a=+x.amount||0;if(x.kind==="withdraw")withdraw+=a;else if(x.kind==="repay")repay+=a;else if(x.kind==="pwithdraw")pw+=a;else if(x.kind==="jam")jam+=a;else if(x.kind==="addcap")addcap+=a});
+  S.cap.forEach(function(x){var a=+x.amount||0;if(x.kind==="withdraw")withdraw+=a;else if(x.kind==="repay")repay+=a;else if(x.kind==="pwithdraw"){var ea=pwExt(x);pw+=a-ea;ew+=ea}else if(x.kind==="jam")jam+=a;else if(x.kind==="addcap")addcap+=a});
   var profit=0,profitEx=0,lossDef=0,lossPaid=0,soldN=0,stockN=0,stockCost=0,debts=0,deposits=0,unre=0,cashTot=0,instaTot=0,pOwed=0;
   cars.forEach(function(c){
     cashTot+=c.cashIn;instaTot+=c.instaIn;
@@ -384,11 +384,11 @@ function calc(){
   var sOwe=0;cars.forEach(function(c){sOwe+=c.sellerRem});owe+=sOwe;
   var extTot=0;S.ext.forEach(function(x){extTot+=+x.amount||0});
   var F=flowsOf(cars),fundBal=fund+F.fund,safeBal=capital-fund+F.cash,instaBal=F.insta,cashNow=safeBal+instaBal;
-  var lossRem=lossDef-lossPaid,wDef=withdraw-repay,deficit=wDef+lossRem,capNow=capital+addcap+extTot-jam-deficit;
+  var lossRem=lossDef-lossPaid,wDef=withdraw-repay,deficit=wDef+lossRem,capNow=capital+addcap+extTot-ew-jam-deficit;
   var undist=profitEx-repay-lossPaid-pw,value=capNow+undist;
   var IS=invStats(cars);
   var check=Math.round(cashNow+fundBal+stockCost+debts+recv-owe-deposits-pOwed-IS.bal-value)===0;
-  return {deposits:deposits,forfT:forfT,jam:jam,addcap:addcap,extTot:extTot,cars:cars,capital:capital,fund:fund,withdraw:withdraw,repay:repay,pw:pw,wDef:wDef,deficit:deficit,capNow:capNow,undist:undist,value:value,
+  return {ew:ew,extAvail:extTot-ew,deposits:deposits,forfT:forfT,jam:jam,addcap:addcap,extTot:extTot,cars:cars,capital:capital,fund:fund,withdraw:withdraw,repay:repay,pw:pw,wDef:wDef,deficit:deficit,capNow:capNow,undist:undist,value:value,
     profit:profit,profitEx:profitEx,recv:recv,owe:owe,sOwe:sOwe,lossDef:lossDef,lossPaid:lossPaid,lossRem:lossRem,
     soldN:soldN,stockN:stockN,stockCost:stockCost,debts:debts,cashNow:cashNow,safeBal:safeBal,instaBal:instaBal,
     cashTot:cashTot,instaTot:instaTot,fundBal:fundBal,fundEmp:(S.settings&&S.settings.fundEmp)||"",unre:unre,pOwed:pOwed,inv:IS,check:check};
@@ -422,11 +422,12 @@ function dayCalc(d){
 function sgn(n){return n<0?"bad":(n>0?"good":"")}
 function lossCars(){return calc().cars.filter(function(c){return c.lossActive&&c.lossRem>0.5})}
 function capOut(k){return k==="withdraw"||k==="pwithdraw"||k==="jam"}
+function pwExt(x){var a=+x.amount||0;return x.from==="ext"?a:x.from==="both"?Math.max(0,Math.min(+x.extAmt||0,a)):0}
 function capIn(k){return k==="addcap"}
 function capMove(k){return capOut(k)||capIn(k)}
 function capLabel(x){
   if(x.kind==="withdraw")return "👤 سحب من رأس المال";
-  if(x.kind==="pwithdraw")return "💵 سحب أرباح";
+  if(x.kind==="pwithdraw")return "💵 سحب أرباح"+(x.from==="ext"?" (من العمولات)":x.from==="both"?" (عربيات "+fmt((+x.amount||0)-pwExt(x))+" + عمولات "+fmt(pwExt(x))+")":"");
   if(x.kind==="lossrepay"){var cr=S.cars.find(function(c){return c.id===x.carId});return "📉 سداد خسارة "+esc(cr?cr.name:"عربية")}
   if(x.kind==="jam")return "🤝 قسط جمعية"+(x.jname?" - "+esc(x.jname):"");
   if(x.kind==="addcap")return "➕ زيادة رأس المال";
@@ -625,7 +626,7 @@ function tileTap(k){
     cs=T.cars.filter(function(c){return c.lossActive&&c.lossRem>0.5});
     h+=cs.length?cs.map(function(c){return tkv("📉 خسارة "+esc(c.name),m(c.lossRem,"bad"),c.id,"الخسارة "+m(c.lossAmt)+" · اتسدد "+m(c.lossPaid))}).join(""):tkv("خسائر عربيات",m(0));
     h+=ttot("إجمالي العجز",m(T.deficit,T.deficit>0.5?"bad":""));
-    h+=tsec("رأس المال")+tkv("رأس المال الأصلي",m(T.capital))+(T.addcap>0.5?tkv("+ زيادات",m(T.addcap,"good")):"")+(T.extTot>0.5?tkv("+ عمولات خارجية",m(T.extTot,"good")):"")+(T.jam>0.5?tkv("− أقساط جمعية",m(T.jam,"bad")):"")+tkv("− العجز",m(T.deficit,T.deficit>0.5?"bad":""))+ttot("رأس المال الحالي",m(T.capNow));
+    h+=tsec("رأس المال")+tkv("رأس المال الأصلي",m(T.capital))+(T.addcap>0.5?tkv("+ زيادات",m(T.addcap,"good")):"")+(T.extTot>0.5?tkv("+ عمولات خارجية",m(T.extTot,"good")):"")+(T.ew>0.5?tkv("− سحبت من العمولات",m(T.ew,"bad")):"")+(T.jam>0.5?tkv("− أقساط جمعية",m(T.jam,"bad")):"")+tkv("− العجز",m(T.deficit,T.deficit>0.5?"bad":""))+ttot("رأس المال الحالي",m(T.capNow));
     if(capRecs("withdraw").length)h+=tsec("👤 السحوبات من رأس المال")+capRecRows("withdraw");
     if(capRecs("repay").length)h+=tsec("✅ السداد")+capRecRows("repay");
   }else if(k==="fund"){
@@ -645,6 +646,7 @@ function tileTap(k){
     t="🤝 أرباح خارجية";cs=S.ext.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"")});
     h+=cs.length?cs.map(function(x){var p=[x.seller?"البايع: "+esc(x.seller):"",x.buyer?"المشتري: "+esc(x.buyer):"",fdate(x.date)].filter(Boolean).join(" · ");return tkv(esc(x.desc||"عمولة"),m(+x.amount||0,"good")+' <button class="del" data-act="delitem" data-coll="external" data-id="'+x.id+'" aria-label="حذف">🗑</button>',null,p+(x.note?"<br>"+esc(x.note):""))}).join(""):tnone("لسه مفيش عمولات خارجية");
     h+=ttot("الإجمالي",m(T.extTot,"good"));
+    if(T.ew>0.5){h+=tkv("− سحبت منها",m(T.ew,"bad"))+ttot("الباقي من العمولات",m(T.extAvail,"good"));var ews=capRecs("pwithdraw").filter(function(x){return pwExt(x)>0.5});h+=tsec("💵 سحوبات من العمولات")+ews.map(function(x){return tkv(fdate(x.date)+(x.note?" · "+esc(x.note):""),m(pwExt(x)))}).join("")}
   }else if(k==="outs"){
     t="💰 فلوسك بره";var OU=outsOf(T);
     [["c","🚗 عملاء (باقي تمن عربيات)"],["l","🤝 سلف ادتها لناس"]].forEach(function(G){
@@ -677,7 +679,7 @@ function tileTap(k){
 function itEsc(x){return esc(x).replace(/&lt;(\/?)bdi&gt;/g,"<$1bdi>")}
 function hbtn(l,k){return '<button class="btn sec small" style="margin-top:10px" data-act="tinfo" data-k="'+k+'">'+l+'</button>'}
 function heroTap(k,T){
-  var h="",t="",cs,base=T.capital+T.addcap-T.jam-T.wDef,prof=T.undist+T.extTot-T.lossRem;
+  var h="",t="",cs,base=T.capital+T.addcap-T.jam-T.wDef,prof=T.undist+T.extAvail-T.lossRem;
   function grp(OL,G,sign,cls){return OL.list.filter(function(o){return o.ty===G[0]}).sort(function(a,b){return b.tot-a.tot}).map(function(o){return tkv((sign||"")+esc(o.n),m(o.tot,cls),o.car||null,o.it.map(itEsc).join("<br>"))}).join("")}
   if(k==="hcash"){
     t="💵 الفلوس اللي معاك";
@@ -711,7 +713,7 @@ function heroTap(k,T){
     h+=hbtn("💼 تفاصيل العهدة","fund");
   }else if(k==="hprof"){
     t="💰 الأرباح";
-    h+=tkv("🚗 أرباح عربيات متاحة",m(T.undist,T.undist<0?"bad":"good"),null,"بعد سحب الأرباح وسداد العجز")+tkv("🤝 عمولات خارجية",m(T.extTot,"good"),null,'<span class="num">'+S.ext.length+'</span> عمولة');
+    h+=tkv("🚗 أرباح عربيات متاحة",m(T.undist,T.undist<0?"bad":"good"),null,"بعد سحب الأرباح وسداد العجز")+tkv("🤝 عمولات خارجية متاحة",m(T.extAvail,"good"),null,'<span class="num">'+S.ext.length+'</span> عمولة بـ '+m(T.extTot)+(T.ew>0.5?" · سحبت منها "+m(T.ew):""));
     cs=T.cars.filter(function(c){return c.lossActive&&c.lossRem>0.5});
     if(cs.length)h+=tsec("📉 خسائر لسه بتتسدد")+cs.map(function(c){return tkv(esc(c.name),"−"+m(c.lossRem,"bad"),c.id,"الخسارة "+m(c.lossAmt)+" · اتسدد "+m(c.lossPaid))}).join("");
     h+=ttot("الإجمالي",m(prof,prof<0?"bad":"good"));
@@ -786,12 +788,12 @@ function renderNav(){
 
 function heroHtml(T){
   function hb(ic,l,v,s,cls,k){return '<div class="hb '+(cls||"")+'"'+(k?' data-act="tinfo" data-k="'+k+'"':'')+'><div class="hl">'+ic+' '+l+(k?'<span class="hgo">‹</span>':'')+'</div><div class="hv">'+v+'</div>'+(s?'<div class="hs">'+s+'</div>':'')+'</div>'}
-  var base=T.capital+T.addcap-T.jam-T.wDef,prof=T.undist+T.extTot-T.lossRem,mv=[];
+  var base=T.capital+T.addcap-T.jam-T.wDef,prof=T.undist+T.extAvail-T.lossRem,mv=[];
   if(T.addcap>0.5)mv.push("زيادات +"+m(T.addcap));if(T.jam>0.5)mv.push("جمعية −"+m(T.jam));if(T.wDef>0.5)mv.push("سحب −"+m(T.wDef));
   var h='<div class="hero"><div class="htop" data-act="tinfo" data-k="hcash"><div class="l">💵 الفلوس اللي معاك (خزنة + إنستاباي)<span class="hgo">‹</span></div><div class="v">'+m(T.cashNow)+'</div><div class="s">الخزنة '+m(T.safeBal)+' · إنستاباي '+m(T.instaBal)+'</div></div>';
   h+='<div class="hg">'+
     hb("🏦","أصل رأس المال",m(base),"منه عهدة "+m(T.fund)+"<br>والباقي للشغل "+m(base-T.fund)+(mv.length?"<br>بدأت بـ "+m(T.capital)+" · "+mv.join(" · "):""),"","hbase")+
-    hb("💰","الأرباح",m(prof),"أرباح عربيات "+m(T.undist)+"<br>عمولات خارجية "+m(T.extTot)+(T.lossRem>0.5?"<br>خسائر لسه −"+m(T.lossRem):""),prof<-0.5?"neg":"pos","hprof")+
+    hb("💰","الأرباح",m(prof),"أرباح عربيات "+m(T.undist)+"<br>عمولات خارجية "+m(T.extAvail)+(T.lossRem>0.5?"<br>خسائر لسه −"+m(T.lossRem):""),prof<-0.5?"neg":"pos","hprof")+
     hb("📥","ليك عند الناس",m(T.recv),"سلف لسه مارجعتش",T.recv>0.5?"pos":"","hrecv")+
     hb("📤","عليك للناس",m(T.owe),T.sOwe>0.5?"منها لبايعي عربيات "+m(T.sOwe):"سلف وأمانات",T.owe>0.5?"neg":"","howe")+
     (T.inv.list.length?hb("💼","فلوس المستثمرين",m(T.inv.bal),"حرة في الخزنة "+m(T.inv.free)+" · في عربيات "+m(T.inv.working),"w","hinv"):"")+
@@ -826,7 +828,7 @@ function renderHome(){
     tapTile(tile("عجز رأس المال",m(T.deficit,T.deficit>0?"bad":""),"رأس المال الحالي "+m(T.capNow)+(T.lossRem>0.5?"<br>منها خسائر عربيات "+m(T.lossRem):"")),"deficit")+
     tile("🧾 العهدة مع "+esc(T.fundEmp||"الموظف"),m(T.fundBal,T.fundBal<0?"bad":""),"من "+m(T.fund)+(T.unre>0.5?" · مستني يترد "+m(T.unre):"")+" ‹").replace('<div class="tile"','<div class="tile" data-act="fund" style="cursor:pointer"')+
     tapTile(tile("أرباح متاحة",m(T.undist),"للسحب أو لسداد العجز"),"undist")+
-    tapTile(tile("🤝 أرباح خارجية",m(T.extTot,"good"),"عمولات · دخلت رأس المال"),"ext").replace('style="cursor:pointer"','style="cursor:pointer;grid-column:1/-1"')+
+    tapTile(tile("🤝 أرباح خارجية",m(T.extTot,"good"),T.ew>0.5?"سحبت منها "+m(T.ew)+" · الباقي "+m(T.extAvail):"عمولات · دخلت رأس المال"),"ext").replace('style="cursor:pointer"','style="cursor:pointer;grid-column:1/-1"')+
     (function(){var O=outsOf(T);return tapTile(tile("💰 فلوسك بره",m(O.tot,O.tot>0.5?"warn":""),O.list.length?'عند <span class="num">'+O.list.length+'</span> '+(O.list.length===1?"حد":"أشخاص"):"مفيش حاجة بره"),"outs")})()+
     (function(){var O=owesOf(T);return tapTile(tile("💳 فلوس عليك",m(O.tot,O.tot>0.5?"bad":""),O.list.length?'لـ <span class="num">'+O.list.length+'</span> '+(O.list.length===1?"حد":"أشخاص"):"مفيش حاجة عليك"),"owes")})()+'</div>';
   return h;
@@ -945,7 +947,7 @@ function renderCap(){
     '<div class="hero"><div class="l">عجز رأس المال</div><div class="v">'+m(T.deficit)+'</div><div class="s">رأس المال الأصلي '+m(T.capital)+' · الحالي '+m(T.capNow)+'</div></div>'+
     capSplit(T)+
     '<div class="grid2">'+tile("سحب من رأس المال",m(T.withdraw),"سددت منه "+m(T.repay))+tile("خسائر عربيات متبقية",m(T.lossRem,T.lossRem>0.5?"warn":""),"اتسدد "+m(T.lossPaid)+" من "+m(T.lossDef))+'</div>'+
-    '<div class="grid2">'+tile("أرباح متاحة (حصتك بس)",m(T.undist),"للسحب أو لسداد العجز")+tile("أرباح اتسحبت",m(T.pw),"")+'</div>'+
+    '<div class="grid2">'+tile("أرباح متاحة (حصتك بس)",m(T.undist),"للسحب أو لسداد العجز")+tile("أرباح اتسحبت",m(T.pw+T.ew),T.ew>0.5?"عربيات "+m(T.pw)+" · عمولات "+m(T.ew):"")+'</div>'+
     '<div class="grid2">'+tile("أقساط جمعية مدفوعة",m(T.jam),"اتخصمت من رأس المال")+tile("زيادات رأس المال",m(T.addcap),"اتضافت لرأس المال")+'</div>'+
     '<div class="actions">'+
       '<button class="abtn" data-act="form" data-kind="capital" data-sub="pwithdraw"><span class="ic">💵</span>سحب أرباح</button>'+
@@ -1090,7 +1092,7 @@ function extRow(x){
 function extBox(T){
   var L=extSorted();
   return '<div class="sect">🤝 أرباح خارجية (عمولات)</div><div class="card">'+
-    '<div class="kv"><span>إجمالي العمولات</span><b>'+m(T.extTot,"good")+'</b></div>'+
+    '<div class="kv"><span>إجمالي العمولات</span><b>'+m(T.extTot,"good")+'</b></div>'+(T.ew>0.5?'<div class="kv"><span>سحبت منها</span><b>'+m(T.ew,"bad")+'</b></div><div class="kv"><span>الباقي من العمولات</span><b>'+m(T.extAvail,"good")+'</b></div>':'')+
     '<div class="kv"><span>عدد العمولات</span><b class="num">'+L.length+'</b></div>'+
     '<div class="sub" style="margin-top:8px">الأرباح الخارجية عمولات من بيعات أو شروات من غير ما المعرض يدفع فلوس. أي عمولة بتتسجل بتدخل الخزنة (أو إنستاباي) وبتتضاف لرأس المال على طول.</div>'+
     '<button class="btn sec" style="margin-top:12px" data-act="form" data-kind="ext">+ تسجيل عمولة خارجية</button></div>'+
@@ -1200,7 +1202,7 @@ function renderSet(){
     '<button class="btn sec" style="margin-top:12px" data-act="form" data-kind="settings">تعديل</button></div>'+
     '<div class="card"><div class="tog"><div><div style="font-weight:800">📒 وضع الكشكول</div><div class="sub">بيضيف صفحة «الكشكول» بشكل المدين والدائن زي الدفتر الورق، وفوقها أصل رأس المال وخرج كام وباقي كام. بتتملى لوحدها من الحركات اللي بتسجلها.</div></div><button class="sw'+(kashOn()?" on":"")+'" data-act="kashToggle" role="switch" aria-checked="'+kashOn()+'" aria-label="وضع الكشكول"></button></div></div>'+
     '<div class="card"><div class="kv"><span>إجمالي المحصّل كاش</span><b>'+m(T.cashTot)+'</b></div><div class="kv"><span>إجمالي المحصّل إنستاباي</span><b>'+m(T.instaTot)+'</b></div>'+
-    '<div class="kv"><span>إجمالي أرباح اتسحبت</span><b>'+m(T.pw)+'</b></div>'+
+    '<div class="kv"><span>إجمالي أرباح اتسحبت</span><b>'+m(T.pw+T.ew)+'</b></div>'+
     '<div class="kv"><span>مستحق للشركاء</span><b>'+m(T.pOwed)+'</b></div>'+
     '<div class="kv"><span>مصاريف لسه ما اتردّتش للعهدة</span><b>'+m(T.unre)+'</b></div>'+
     '<div class="kv"><span>مراجعة الحسابات</span><b>'+(T.check?'<span class="ok">✔ متطابقة</span>':'<span class="bad">راجع الأرقام</span>')+'</b></div></div>'+
@@ -1557,7 +1559,12 @@ function openForm(kind,o){
     if(sub==="addcap")srcField=fld("الفلوس دخلت",srcSel("src"));
     if(sub==="jam"){var jn=[];S.cap.forEach(function(x){if(x.kind==="jam"&&x.jname&&jn.indexOf(x.jname)<0)jn.push(x.jname)});carField=fld("اسم الجمعية (اختياري)",'<input name="jname" autocomplete="off" list="jamnames" value="'+esc(jn[0]||"")+'"><datalist id="jamnames">'+jn.map(function(n){return '<option value="'+esc(n)+'">'}).join("")+'</datalist>')}
     if(sub==="withdraw")hint="السحب من رأس المال بيعمل عجز بتسدده بعدين من الأرباح. عجز السحب الحالي: "+m(T.wDef);
-    else if(sub==="pwithdraw")hint="أرباح متاحة للسحب: <b>"+m(T.undist)+"</b>"+(T.deficit>0.5?" · لسه عليك عجز في رأس المال "+m(T.deficit):"");
+    else if(sub==="pwithdraw"){
+      var pf=o.pfrom==="ext"||o.pfrom==="both"?o.pfrom:"car";
+      carField=fld("هتسحب منين",'<div class="seg">'+[["car","🚗 أرباح العربيات"],["ext","🤝 العمولات"],["both","الاتنين"]].map(function(k){return '<button data-act="pfrom" data-k="'+k[0]+'" class="'+(pf===k[0]?"on":"")+'">'+k[1]+'</button>'}).join("")+'</div><input type="hidden" name="pfrom" value="'+pf+'">');
+      if(pf==="both")srcField=fld("منهم كام من العمولات",minp("pext"))+srcField;
+      hint=(pf!=="ext"?"متاح من أرباح العربيات: <b>"+m(T.undist)+"</b>":"")+(pf==="both"?"<br>":"")+(pf!=="car"?"متاح من العمولات: <b>"+m(T.extAvail)+"</b>":"")+(pf==="both"?"<br>اكتب المبلغ كله، واكتب تحت كام منه من العمولات والباقي يتخصم من أرباح العربيات":"")+(T.deficit>0.5?"<br>لسه عليك عجز في رأس المال "+m(T.deficit):"");
+    }
     else if(sub==="repay")hint="عجز السحب الحالي: "+m(T.wDef)+" · أرباح متاحة: "+m(T.undist);
     else if(sub==="jam")hint="قسط الجمعية بيتخصم من رأس المال مباشرة (مش من الأرباح). رأس المال الحالي: "+m(T.capNow)+" · اتدفع أقساط لحد دلوقتي: "+m(T.jam);
     else if(sub==="addcap")hint="المبلغ بيتضاف لرأس المال وللخزنة (مثلاً قبض جمعية أو فلوس من بره). رأس المال الحالي: "+m(T.capNow);
@@ -1926,7 +1933,13 @@ async function submitForm(){QF=null;
       var rec={kind:ck,amount:am,date:val("date")||todayStr(),note:val("note").trim()};
       if(ck==="withdraw"||ck==="pwithdraw"||ck==="jam"||ck==="addcap")rec.src=srcVal();
       if(ck==="jam"&&val("jname").trim())rec.jname=val("jname").trim();
-      if(ck==="pwithdraw"&&am>T2.undist+0.5)return toast("المبلغ أكبر من الأرباح المتاحة ("+fmt(T2.undist)+"). للسحب من رأس المال اختار «سحب من رأس المال»");
+      if(ck==="pwithdraw"){
+        var pf2=val("pfrom")||"car",pe=pf2==="ext"?am:pf2==="both"?parseNum(val("pext")):0;
+        if(pf2==="both"&&(pe<=0||pe>=am))return toast("اكتب كام من العمولات (أقل من المبلغ كله)");
+        if(pe>T2.extAvail+0.5)return toast("المبلغ أكبر من المتاح في العمولات ("+fmt(T2.extAvail)+")");
+        if(am-pe>T2.undist+0.5)return toast("المبلغ أكبر من أرباح العربيات المتاحة ("+fmt(T2.undist)+"). للسحب من رأس المال اختار «سحب من رأس المال»");
+        if(pf2!=="car"){rec.from=pf2;if(pf2==="both")rec.extAmt=pe}
+      }
       if(ck==="repay"&&am>T2.wDef+0.5)return toast("السداد أكبر من عجز السحب ("+fmt(T2.wDef)+")");
       if(ck==="lossrepay"){
         var lcar=carById(val("carId"));
@@ -3091,6 +3104,11 @@ document.addEventListener("click",async function(e){
     var ev=Math.floor(10000/(er.length+1))/100;
     er.forEach(function(r){r.querySelector(".pp").value=ev});
     updatePreview();
+  }
+  else if(a==="pfrom"){
+    var keep2={amount:val("amount"),date:val("date"),note:val("note"),src:val("src")};
+    openForm("capital",{sub:"pwithdraw",pfrom:t.dataset.k});
+    Object.keys(keep2).forEach(function(n){var el=$("#sheet [name='"+n+"']");if(el&&keep2[n])el.value=keep2[n]});
   }
   else if(a==="capkind"){
     var nk=t.dataset.k;
