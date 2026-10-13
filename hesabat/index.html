@@ -448,7 +448,40 @@ function srcVal(){var v=val("src");return v==="insta"?"insta":v==="fund"?"fund":
 var ENC={key:null,on:false,doc:null,uid:null};
 var ENC_COLLS={cars:1,expenses:1,collections:1,capital:1,payouts:1,transfers:1,ledger:1,external:1,investors:1,invmoves:1};
 function encPath(p){var a=String(p).split("/");return !!((a.length===2&&ENC_COLLS[a[0]])||p==="settings/main")}
-var PLAIN={},NEEDENC={};
+var PLAIN={},NEEDENC={},COMPACT={};
+/* كل تعديل بيتحفظ كحقل متشفر لوحده جوه المستند (_p…) من غير ما يعيد كتابة المستند كله،
+   فلو موبايلين عدّلوا نفس العربية، أو موبايل كان من غير نت، التعديلات بتتجمع ومحدش يمسح شغل التاني.
+   بعدين البرنامج بيدمجها في المستند الأساسي جوه transaction على السيرفر (لما يكون فيه نت). */
+var PSEQ=0;
+function pKey(){return "_p"+Date.now().toString(36).padStart(9,"0")+(++PSEQ%1296).toString(36).padStart(2,"0")+Array.prototype.map.call(rnd(4),function(x){return (x%36).toString(36)}).join("")}
+function isPK(k){return k.slice(0,2)==="_p"}
+var PCACHE={};
+async function decPatch(s){if(PCACHE[s])return PCACHE[s];var o=JSON.parse(TD.decode(await aesDec(ENC.key,s)));PCACHE[s]=o;return o}
+async function readDoc(p,r,cache){
+  var ks=Object.keys(r),pk=ks.filter(isPK).sort(),ex=ks.filter(function(k){return k!=="_e"&&k!=="_v"&&!isPK(k)}),o;
+  if(isEnc(r)){
+    var c=cache[p],b=c&&c.e===r._e?c.o:await decObj(r);cache[p]={e:r._e,o:b};
+    o=Object.assign({},b);Object.keys(o).forEach(function(k){if(isPK(k))delete o[k]});
+    /* نسخة قديمة على جهاز تاني عدّلت حقول عادية فوق المستند المتشفر: ندمجها ونرجع نشفّرها */
+    if(ex.length){ex.forEach(function(k){o[k]=r[k]});if(ENC.on)NEEDENC[p]=1}else delete NEEDENC[p];
+  }else{
+    o={};ex.forEach(function(k){o[k]=r[k]});
+    if(ENC.on&&encPath(p))NEEDENC[p]=1;else delete NEEDENC[p];
+  }
+  for(var i=0;i<pk.length;i++){try{Object.assign(o,await decPatch(r[pk[i]]))}catch(e){}}
+  if(pk.length&&ENC.on)COMPACT[p]=1;else delete COMPACT[p];
+  return o;
+}
+/* دمج المستند في نسخة واحدة متشفرة: بيقرا آخر نسخة من السيرفر جوه transaction، فلو حصل تعديل في نفس اللحظة بيعيد من الأول */
+async function foldDoc(p){
+  var ref=db.doc(p);
+  await FS.runTransaction(async function(t){
+    var d=await t.get(ref);if(!d.exists)return;
+    var r=d.data();if(isEnc(r)&&!Object.keys(r).some(function(k){return k!=="_e"&&k!=="_v"}))return;
+    t.set(ref,await encObj(await readDoc(p,r,{})));
+  });
+  delete NEEDENC[p];delete COMPACT[p];
+}
 var TE=new TextEncoder(),TD=new TextDecoder(),KDF_IT=210000;
 function b64(u8){u8=new Uint8Array(u8);var s="";for(var i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
 function unb64(s){var b=atob(s),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
@@ -516,13 +549,12 @@ async function encBoot(user){
 var encMigBusy=false,encBkDone=false;
 async function encMigrate(){
   if(!ENC.on||DEMO||S.expired||encMigBusy||!allLoaded())return;
-  var paths=Object.keys(NEEDENC);if(!paths.length&&encBkDone)return;
+  var all={};Object.keys(NEEDENC).forEach(function(k){all[k]=1});Object.keys(COMPACT).forEach(function(k){all[k]=1});
+  var paths=Object.keys(all);if(!paths.length&&encBkDone)return;
+  if(navigator.onLine===false)return;
   encMigBusy=true;
   try{
-    for(var i=0;i<paths.length;i+=300){var b=FS.batch(),n=0;
-      for(var j=i;j<Math.min(i+300,paths.length);j++){var p=paths[j];if(!PLAIN[p]||!NEEDENC[p])continue;b.set(db.doc(p),await encObj(PLAIN[p]));n++}
-      if(n)await b.commit();
-    }
+    for(var i=0;i<paths.length&&i<200;i++){try{await foldDoc(paths[i])}catch(e){if(navigator.onLine===false)break}}
     if(!encBkDone){
       var snap=await db.collection("backups").get();
       for(var q=0;q<snap.docs.length;q++){var d=snap.docs[q],x=d.data();if(typeof x.json!=="string")continue;var e=await encText(x.json);
@@ -591,7 +623,7 @@ async function create(coll,data){
   try{var ref=db.collection(coll).doc(),o=Object.assign({},data,{createdAt:Date.now()});await ref.set(await toStore(coll+"/"+ref.id,o));return ref.id}
   catch(e){toast("تعذر الحفظ، جرّب تاني");return null}
 }
-async function patch(path,data){try{if(ENC.on&&encPath(path)){var cur=PLAIN[path];if(!cur){var d0=await db.doc(path).get();cur=d0.exists?await plainOf(d0.data()):null}if(!cur)throw new Error("missing");var nx=Object.assign({},cur,data);PLAIN[path]=nx;await db.doc(path).set(await encObj(nx))}else await db.doc(path).update(data);return true}catch(e){toast("تعذر الحفظ، جرّب تاني");return false}}
+async function patch(path,data){try{if(ENC.on&&encPath(path)){var up={};up[pKey()]=await aesEnc(ENC.key,TE.encode(JSON.stringify(data)));if(PLAIN[path])PLAIN[path]=Object.assign({},PLAIN[path],data);await db.doc(path).update(up)}else await db.doc(path).update(data);return true}catch(e){toast("تعذر الحفظ، جرّب تاني");return false}}
 async function removeDoc(path){try{await db.doc(path).delete();return true}catch(e){toast("تعذر الحذف");return false}}
 
 /* ---------- rendering ---------- */
@@ -3438,16 +3470,7 @@ async function boot(){
   if(!(await encBoot(user)))return;
   render();
   /* كل مستند بيتفك تشفيره هنا قبل ما يوصل للبرنامج، والقديم اللي لسه مش متشفر بيتقري زي ما هو */
-  async function openDoc(p,r,cache){
-    if(isEnc(r)){
-      var c=cache[p],o=c&&c.e===r._e?c.o:await decObj(r);cache[p]={e:r._e,o:o};
-      /* نسخة قديمة على جهاز تاني عدّلت حقول عادية فوق المستند المتشفر: ندمجها ونرجع نشفّرها */
-      var ex=Object.keys(r).filter(function(k){return k!=="_e"&&k!=="_v"});
-      if(!ex.length){delete NEEDENC[p];return o}
-      o=Object.assign({},o);ex.forEach(function(k){o[k]=r[k]});if(ENC.on)NEEDENC[p]=1;return o;
-    }
-    if(ENC.on&&encPath(p))NEEDENC[p]=1;return r;
-  }
+  function openDoc(p,r,cache){return readDoc(p,r,cache)}
   function sub(coll,key){
     var seq=0,cache={};
     db.collection(coll).onSnapshot(async function(snap){
@@ -3455,7 +3478,7 @@ async function boot(){
       var arr=await Promise.all(snap.docs.map(async function(d){var p=coll+"/"+d.id;try{var o=await openDoc(p,d.data(),cache);PLAIN[p]=o;return Object.assign({id:d.id},o)}catch(e){return null}}));
       if(my!==seq)return;
       var have={};snap.docs.forEach(function(d){have[coll+"/"+d.id]=1});
-      Object.keys(NEEDENC).forEach(function(k){if(k.indexOf(coll+"/")===0&&!have[k])delete NEEDENC[k]});
+      Object.keys(NEEDENC).forEach(function(k){if(k.indexOf(coll+"/")===0&&!have[k])delete NEEDENC[k]});Object.keys(COMPACT).forEach(function(k){if(k.indexOf(coll+"/")===0&&!have[k])delete COMPACT[k]});
       S[key]=arr.filter(Boolean);S.loaded[key]=true;refresh();
     },function(err){S.err=err;refresh()});
   }
@@ -3468,7 +3491,7 @@ async function boot(){
   var mseq=0,mcache={};
   db.doc("settings/main").onSnapshot(async function(snap){
     var my=++mseq,o=null;
-    if(snap.exists){try{o=await openDoc("settings/main",snap.data(),mcache);PLAIN["settings/main"]=o}catch(e){o=null}}else delete NEEDENC["settings/main"];
+    if(snap.exists){try{o=await openDoc("settings/main",snap.data(),mcache);PLAIN["settings/main"]=o}catch(e){o=null}}else{delete NEEDENC["settings/main"];delete COMPACT["settings/main"]}
     if(my!==mseq)return;
     S.settings=o;S.loaded.settings=true;refresh();
   },function(err){S.err=err;refresh()});
