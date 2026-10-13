@@ -619,12 +619,141 @@ function encCard(){if(DEMO)return "";return '<div class="card"><div class="sect"
 function rcBoot(){if(rcBoot.t||DEMO||!ENC.on||!allLoaded()||modal||!lsGet("hb_rcshow_"+ENC.uid))return;rcBoot.t=1;rcShow(true)}
 
 /* ---------- db writes ---------- */
+/* ---------- سجل الحركات ----------
+   كل إضافة أو تعديل أو حذف بيتسجل هنا لوحده: إيه اللي اتعمل، القيمة قبل وبعد، إمتى، ومن أنهي جهاز.
+   السجل بيتكتب بس، والبرنامج مفيهوش أي زرار يمسحه أو يعدّل فيه. */
+var HL_COLL={cars:"cars",expenses:"expenses",collections:"cols",capital:"cap",payouts:"pay",transfers:"transfers",ledger:"ledger",external:"ext",investors:"inv",invmoves:"invmov"};
+var HL_AR={cars:"عربية",expenses:"مصروف",collections:"تحصيل",capital:"رأس المال",payouts:"صرف لشريك",transfers:"تحويل",ledger:"دفتر الفلوس",external:"عمولة خارجية",investors:"مستثمر",invmoves:"حركة مستثمر","settings/main":"الإعدادات",restore:"استرجاع نسخة"};
+var HL_KIND={withdraw:"سحب من رأس المال",addcap:"زيادة رأس المال",jam:"قسط جمعية",lossrepay:"سداد خسارة",pwithdraw:"سحب أرباح",pwd:"سحب أرباح",dep:"إيداع",loan:"سلفة",pay:"سداد",ladd:"زيادة سلفة",spay:"سداد للبايع"};
+var HL_F={name:"الاسم",buyPrice:"سعر الشراء",buyPaid:"المدفوع وقت الشراء",buyDate:"تاريخ الشراء",buySrc:"دفع الشراء من",sellPrice:"سعر البيع",sellDate:"تاريخ البيع",
+  amount:"المبلغ",date:"التاريخ",note:"ملاحظة",type:"النوع",cash:"كاش",insta:"إنستاباي",src:"من",reimbursed:"اترد للعهدة",reimbDate:"تاريخ الرد للعهدة",
+  partners:"الشركاء",investors:"المستثمرين",pct:"النسبة",capital:"رأس المال",fund:"العهدة",fundEmp:"مسؤول العهدة",lossDeferred:"سداد الخسارة على مراحل",
+  returns:"المرتجعات",desc:"الوصف",seller:"البايع",buyer:"المشتري",person:"الشخص",kind:"النوع",dname:"اسم العميل",invDebt:"دين المستثمر",tradeIn:"عربية البدل",sellerPaid:"اتدفع للبايع"};
+function hlRand(n){var a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",r=crypto.getRandomValues(new Uint8Array(n)),s="";for(var i=0;i<n;i++)s+=a[r[i]&31];return s}
+function hlLs(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){return null}}
+function hlDevType(){var u=navigator.userAgent||"";return /iPhone|iPod/.test(u)?"آيفون":/iPad/.test(u)?"آيباد":/Android/.test(u)?"أندرويد":/Macintosh/.test(u)?"ماك":/Windows/.test(u)?"ويندوز":"جهاز"}
+function hlDevId(){var d=hlLs("hl_dev");if(!d){d=hlRand(4);hlLs("hl_dev",d)}return d}
+function hlDevLabel(){return hlLs("hl_devn")||(hlDevType()+" · "+hlDevId())}
+function hlFind(path){var a=String(path).split("/"),k=HL_COLL[a[0]];if(path==="settings/main")return S.settings||null;if(!k||!S[k])return null;for(var i=0;i<S[k].length;i++)if(S[k][i].id===a[1])return S[k][i];return null}
+function hlCarOf(coll,id,o){if(coll==="cars")return id;return (o&&(o.carId||o.toCar))||null}
+function hlVal(v){
+  if(v===null||v===undefined||v==="")return "—";
+  if(v===true)return "أيوه";if(v===false)return "لأ";
+  if(typeof v==="number")return Math.abs(v)>=100?Math.round(v).toLocaleString("en-US"):String(v);
+  if(typeof v==="string")return v.length>60?v.slice(0,60)+"…":v;
+  if(Array.isArray(v))return v.length?v.length+" بند":"مفيش";
+  return "اتعدّل";
+}
+function hlSame(a,b){return JSON.stringify(a===undefined?null:a)===JSON.stringify(b===undefined?null:b)}
+function hlCarName(id){var c=id&&hlFind("cars/"+id);return c&&c.name||""}
+/* وصف بالعربي للحركة */
+function hlDesc(coll,o){
+  o=o||{};var amt=function(x){return Math.round(x||0).toLocaleString("en-US")};
+  if(coll==="cars")return "عربية "+(o.name||"");
+  if(coll==="expenses")return "مصروف"+(o.type?" "+o.type:"")+" "+amt(o.amount);
+  if(coll==="collections"){var t=(o.cash||0)+(o.insta||0);
+    if(o.refund)return "مرتجع "+amt(-t);if(o.depRef)return "رد عربون "+amt(-t);if(o.dep)return "عربون "+amt(t);
+    if(o.trade)return "عربية داخلة في البدل"+(o.tradeName?": "+o.tradeName:"");return "تحصيل "+amt(t)}
+  if(coll==="investors")return "مستثمر "+(o.name||"");
+  if(o.kind&&HL_KIND[o.kind])return HL_KIND[o.kind]+" "+amt(o.amount);
+  if(coll==="transfers")return (o.dir==="toInsta"?"تحويل من الخزنة لإنستاباي ":"تحويل من إنستاباي للخزنة ")+amt(o.amount);
+  if(coll==="external")return "عمولة "+(o.desc||"")+" "+amt(o.amount);
+  return (HL_AR[coll]||coll)+(o.amount!=null?" "+amt(o.amount):"");
+}
+/* بيكتب سطر في السجل ومايعطّلش البرنامج لو فشل */
+function hlWrite(e){
+  try{
+    if(typeof DEMO!=="undefined"&&DEMO)return;if(!db||!db.collection)return;
+    var id=Date.now().toString(36).padStart(9,"0")+hlRand(6);
+    e.at=Date.now();e.dev=hlDevLabel();e.devId=hlDevId();if(typeof hlWho==="function"){var w=hlWho();if(w)e.who=w}
+    var car=e.car||null;delete e.car;
+    Promise.resolve(hlStore("history/"+id,e)).then(function(x){if(car)x.c=car;return db.doc("history/"+id).set(x)}).catch(function(){});
+  }catch(err){}
+}
+function hlAdd(coll,id,data){var c=hlCarOf(coll,id,data);hlWrite({act:"add",coll:coll,id:id,car:c,carName:coll==="cars"?data.name:hlCarName(c),title:hlDesc(coll,data),data:hlSlim(data)})}
+function hlEdit(path,data,before){
+  var a=String(path).split("/"),coll=path==="settings/main"?"settings/main":a[0],ch=[];
+  Object.keys(data).forEach(function(k){if(k==="createdAt")return;var b=before?before[k]:undefined;if(!hlSame(b,data[k]))ch.push({k:k,b:hlSlimV(b),a:hlSlimV(data[k])})});
+  if(!ch.length)return;
+  var after=Object.assign({},before||{},data),c=hlCarOf(coll,a[1],after),t;
+  if(coll==="cars"&&before&&before.sellPrice==null&&data.sellPrice!=null)t="بيع "+(after.name||"")+" بـ "+Math.round(data.sellPrice).toLocaleString("en-US");
+  else if(coll==="cars"&&before&&before.sellPrice!=null&&"sellPrice" in data&&data.sellPrice==null)t="إلغاء بيع / رجوع "+(after.name||"");
+  else t="تعديل "+(coll==="settings/main"?"رأس المال والعهدة":hlDesc(coll,after));
+  hlWrite({act:"edit",coll:coll,id:a[1]||"",car:c,carName:coll==="cars"?after.name:hlCarName(c),title:t,ch:ch});
+}
+function hlDel(path,before){var a=String(path).split("/"),c=hlCarOf(a[0],a[1],before);hlWrite({act:"del",coll:a[0],id:a[1],car:c,carName:a[0]==="cars"?(before&&before.name):hlCarName(c),title:"حذف "+hlDesc(a[0],before),data:hlSlim(before)})}
+function hlSlimV(v){if(Array.isArray(v)||(v&&typeof v==="object"))return JSON.parse(JSON.stringify(v));return v===undefined?null:v}
+function hlSlim(o){if(!o)return null;var r={};Object.keys(o).forEach(function(k){if(k!=="id")r[k]=hlSlimV(o[k])});return r}
+
+/* ---------- شاشة السجل ---------- */
+var HL={list:[],last:null,more:false,car:null,busy:false};
+function hlTime(t){var d=new Date(t);return String(d.getHours()%12||12)+":"+String(d.getMinutes()).padStart(2,"0")+(d.getHours()<12?" ص":" م")}
+function hlDay(t){var d=new Date(t),n=new Date(),y=new Date(Date.now()-864e5),f=function(x){return x.toDateString()};
+  if(f(d)===f(n))return "النهارده";if(f(d)===f(y))return "امبارح";
+  return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear()}
+function hlIcon(e){return e.act==="del"?"🗑️":e.act==="add"?"➕":/^بيع/.test(e.title)?"💰":/^إلغاء بيع/.test(e.title)?"↩️":e.coll==="restore"?"♻️":"✏️"}
+function hlRow(e){
+  var h='<div class="card" style="padding:12px 14px;margin-bottom:8px"><div style="display:flex;gap:10px;align-items:flex-start"><div style="font-size:20px;line-height:1.2">'+hlIcon(e)+'</div><div style="flex:1;min-width:0">'+
+    '<div style="font-weight:700">'+esc(e.title||"")+'</div>'+
+    (e.carName&&e.coll!=="cars"&&!HL.car?'<div class="sub">العربية: '+esc(e.carName)+'</div>':'');
+  if(e.ch&&e.ch.length){h+='<div style="margin-top:6px">';e.ch.forEach(function(x){
+    h+='<div class="sub" style="display:flex;gap:6px;flex-wrap:wrap"><span>'+esc(HL_F[x.k]||"تفاصيل تانية")+':</span><bdi style="text-decoration:line-through;opacity:.7">'+esc(hlVal(x.b))+'</bdi><span>←</span><bdi style="color:var(--text);font-weight:700">'+esc(hlVal(x.a))+'</bdi></div>'});h+='</div>'}
+  h+='<div class="sub" style="margin-top:6px">🕒 <bdi>'+hlTime(e.at)+'</bdi> · 📱 '+esc(e.dev||"جهاز")+(e.who?' · 👤 '+esc(e.who):'')+(e.devId&&e.devId===hlDevId()?' <span style="color:var(--primary)">(الجهاز ده)</span>':'')+'</div>'+
+    '</div></div></div>';
+  return h;
+}
+function hlRender(){
+  if(!modal||modal.type!=="hist")return;
+  var car=HL.car?hlFind("cars/"+HL.car):null;
+  var h=sheetHead(HL.car?"📜 سجل "+esc(car&&car.name||"العربية"):"📜 سجل الحركات");
+  if(HL.car)h+='<button class="btn sec small" data-act="car" data-id="'+esc(HL.car)+'" style="margin-bottom:12px">‹ رجوع للعربية</button>';
+  h+='<div class="card sub" style="margin-bottom:12px">كل حركة بتتسجل هنا لوحدها: إيه اللي اتعمل، القيمة قبل وبعد، الساعة كام، ومن أنهي جهاز. السجل مايتمسحش ومايتعدلش.'+
+     '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>الجهاز ده: <b style="color:var(--text)">'+esc(hlDevLabel())+'</b></span><button class="btn sec small" data-act="hlname">تسمية الجهاز</button></div></div>';
+  if(!HL.list.length&&HL.busy)h+='<div class="empty">جاري التحميل…</div>';
+  else if(!HL.list.length)h+='<div class="empty">'+(HL.err?"تعذر تحميل السجل، اتأكد من النت":"لسه مفيش حركات متسجلة. السجل بيبدأ من النهارده.")+'</div>';
+  var day="";HL.list.forEach(function(e){var d=hlDay(e.at);if(d!==day){day=d;h+='<div class="sect">'+esc(d)+'</div>'}h+=hlRow(e)});
+  if(HL.more)h+='<button class="btn sec" data-act="hlmore" style="margin-top:6px"'+(HL.busy?' disabled':'')+'>'+(HL.busy?"جاري التحميل…":"عرض أقدم")+'</button>';
+  var sc=$("#sheet").scrollTop;$("#sheet").innerHTML=h;$("#sheet").scrollTop=sc;
+}
+async function hlDocs(snap){
+  var out=[];for(var i=0;i<snap.docs.length;i++){var d=snap.docs[i];try{var o=await hlOpen(d.data());if(o&&o.at)out.push(o)}catch(e){}}return out;
+}
+async function hlLoad(more){
+  if(HL.busy)return;HL.busy=true;HL.err=false;hlRender();
+  try{
+    var col=db.collection("history"),snap;
+    if(HL.car){
+      snap=await col.where("c","==",HL.car).get();
+      HL.list=(await hlDocs(snap)).sort(function(a,b){return b.at-a.at});HL.more=false;
+    }else{
+      var q=col.orderBy(firebase.firestore.FieldPath.documentId(),"desc").limit(60);
+      if(more&&HL.last)q=q.startAfter(HL.last);
+      snap=await q.get();
+      var got=await hlDocs(snap);
+      HL.list=more?HL.list.concat(got):got;
+      HL.last=snap.docs.length?snap.docs[snap.docs.length-1]:HL.last;HL.more=snap.docs.length===60;
+    }
+  }catch(e){HL.err=true}
+  HL.busy=false;hlRender();
+}
+function openHist(carId){
+  if(typeof DEMO!=="undefined"&&DEMO)return toast("السجل مش متاح في النسخة التجريبية");
+  modal={type:"hist"};HL={list:[],last:null,more:false,car:carId||null,busy:false};
+  openSheet("");hlRender();hlLoad(false);
+}
+function hlNameDev(){
+  var n=prompt("اكتب اسم للجهاز ده عشان تعرفه في السجل (مثلًا: موبايل علاء، لاب المعرض)",hlLs("hl_devn")||"");
+  if(n===null)return;n=n.trim().slice(0,30);hlLs("hl_devn",n||null);toast(n?"اتسمّى ✔":"رجع للاسم العادي");hlRender();
+}
+function hlStore(p,e){return ENC.on?encObj(e):e}
+async function hlOpen(d){return isEnc(d)?await decObj(d):d}
+function hlWho(){return (S.mem&&S.mem.username)||lsGet("hb_user")||""}
 async function create(coll,data){
-  try{var ref=db.collection(coll).doc(),o=Object.assign({},data,{createdAt:Date.now()});await ref.set(await toStore(coll+"/"+ref.id,o));return ref.id}
+  try{var ref=db.collection(coll).doc(),o=Object.assign({},data,{createdAt:Date.now()});await ref.set(await toStore(coll+"/"+ref.id,o));hlAdd(coll,ref.id,data);return ref.id}
   catch(e){toast("تعذر الحفظ، جرّب تاني");return null}
 }
-async function patch(path,data){try{if(ENC.on&&encPath(path)){var up={};up[pKey()]=await aesEnc(ENC.key,TE.encode(JSON.stringify(data)));if(PLAIN[path])PLAIN[path]=Object.assign({},PLAIN[path],data);await db.doc(path).update(up)}else await db.doc(path).update(data);return true}catch(e){toast("تعذر الحفظ، جرّب تاني");return false}}
-async function removeDoc(path){try{await db.doc(path).delete();return true}catch(e){toast("تعذر الحذف");return false}}
+async function patch(path,data){var hb=hlSlim(hlFind(path));try{if(ENC.on&&encPath(path)){var up={};up[pKey()]=await aesEnc(ENC.key,TE.encode(JSON.stringify(data)));if(PLAIN[path])PLAIN[path]=Object.assign({},PLAIN[path],data);await db.doc(path).update(up)}else await db.doc(path).update(data);hlEdit(path,data,hb);return true}catch(e){toast("تعذر الحفظ، جرّب تاني");return false}}
+async function removeDoc(path){var hb=hlSlim(hlFind(path));try{await db.doc(path).delete();hlDel(path,hb);return true}catch(e){toast("تعذر الحذف");return false}}
 
 /* ---------- rendering ---------- */
 function tile(l,v,s,cls){return '<div class="tile"><div class="tl">'+l+'</div><div class="tv '+(cls||"")+'">'+v+'</div>'+(s?'<div class="ts">'+s+'</div>':"")+'</div>'}
@@ -1238,7 +1367,7 @@ function renderSet(){
     '<div class="kv"><span>مستحق للشركاء</span><b>'+m(T.pOwed)+'</b></div>'+
     '<div class="kv"><span>مصاريف لسه ما اتردّتش للعهدة</span><b>'+m(T.unre)+'</b></div>'+
     '<div class="kv"><span>مراجعة الحسابات</span><b>'+(T.check?'<span class="ok">✔ متطابقة</span>':'<span class="bad">راجع الأرقام</span>')+'</b></div></div>'+
-    '<div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">تصدير العربيات (ملف CSV)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">بياناتك محفوظة على السيرفر، وبتتعمل منها نسخة لوحدها كل ما تفتح البرنامج وتقفله. تقدر ترجع لأي نسخة من هنا.</div><button class="btn" data-act="cloudList" style="margin-bottom:10px">☁️ النسخ المحفوظة والاسترجاع</button><div class="sub" style="margin:4px 0 10px">وكمان تقدر تحفظ نسخة على موبايلك أو تبعتها لنفسك واتساب:</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="sect" style="margin-top:0">شكل التطبيق</div><div class="sub" style="margin-bottom:12px">اكتب اسم المعرض بتاعك وحط اللوجو، وهيظهروا في التطبيق والتقارير.</div>'+
+    '<div class="card"><button class="btn sec" data-act="hist">📜 سجل الحركات (مين عمل إيه وإمتى)</button></div><div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">تصدير العربيات (ملف CSV)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">بياناتك محفوظة على السيرفر، وبتتعمل منها نسخة لوحدها كل ما تفتح البرنامج وتقفله. تقدر ترجع لأي نسخة من هنا.</div><button class="btn" data-act="cloudList" style="margin-bottom:10px">☁️ النسخ المحفوظة والاسترجاع</button><div class="sub" style="margin:4px 0 10px">وكمان تقدر تحفظ نسخة على موبايلك أو تبعتها لنفسك واتساب:</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="sect" style="margin-top:0">شكل التطبيق</div><div class="sub" style="margin-bottom:12px">اكتب اسم المعرض بتاعك وحط اللوجو، وهيظهروا في التطبيق والتقارير.</div>'+
     '<div class="row" style="justify-content:flex-start;margin-bottom:12px"><img src="'+esc(brandLogo())+'" alt="" style="width:64px;height:64px;border-radius:14px;object-fit:cover;border:1px solid var(--line)"><div style="flex:1"><button class="btn sec small" data-act="brandLogo">📷 اختار لوجو</button>'+((S.brand&&S.brand.logo)?' <button class="btn sec small" data-act="brandLogoDel">شيل اللوجو</button>':'')+'</div></div>'+
     '<label class="fld"><span>اسم المعرض</span><input id="brandName" maxlength="40" value="'+esc((S.brand&&S.brand.name)||"")+'" placeholder="حسابات المعرض"></label>'+
     '<button class="btn" data-act="brandSave">حفظ الاسم</button></div>'+
@@ -2076,7 +2205,7 @@ async function submitForm(){QF=null;
         else done({carId:dc2.id});
         toast("اتحفظ التقسيم ✔")}
     }else if(k==="settings"){
-      try{await db.doc("settings/main").set(await toStore("settings/main",{capital:parseNum(val("capital")),fund:parseNum(val("fund")),fundEmp:val("fundEmp").trim()}));closeSheet();toast("اتحفظت ✔")}
+      try{var hsb=hlSlim(S.settings),hsn={capital:parseNum(val("capital")),fund:parseNum(val("fund")),fundEmp:val("fundEmp").trim()};await db.doc("settings/main").set(await toStore("settings/main",hsn));hlEdit("settings/main",hsn,hsb);closeSheet();toast("اتحفظت ✔")}
       catch(e){toast("تعذر الحفظ، جرّب تاني")}
     }
   }finally{submitting=false}
@@ -2088,7 +2217,7 @@ function renderDetail(){
   var cols=S.cols.filter(function(x){return x.carId===c.id}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"")});
   var pays=S.pay.filter(function(x){return x.carId===c.id}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"")});
   var hasP=c.parts.length>0;
-  var h=sheetHead(esc(c.name))+'<div style="margin:-4px 0 10px">'+statusBadge(c)+(hasP?'<span class="ptag">🤝 شراكة</span>':'')+((c.returns||[]).length?'<span class="ptag">↩️ رجعت قبل كده</span>':'')+'</div>';
+  var h=sheetHead(esc(c.name))+'<div style="margin:-4px 0 10px">'+statusBadge(c)+(hasP?'<span class="ptag">🤝 شراكة</span>':'')+((c.returns||[]).length?'<span class="ptag">↩️ رجعت قبل كده</span>':'')+'<span class="ptag" data-act="hist" data-id="'+c.id+'" style="cursor:pointer">📜 سجل العربية</span></div>';
   h+='<div class="card"><div class="kv"><span>تاريخ الشراء</span><b>'+fdate(c.buyDate)+'</b></div><div class="kv"><span>سعر الشراء</span><b>'+m(c.buyPrice)+'</b></div>'+tradeInKv(c)+
      (c.owedSeller>0.5?'<div class="kv"><span>اتدفع للبايع</span><b>'+m(paidNow(c)+c.sellerPaid)+'</b></div><div class="kv"><span>'+(c.tradeFrom?"باقي للعميل (فرق البدل)":"باقي للبايع")+'</span><b class="'+(c.sellerRem>0.5?"warn":"good")+'">'+(c.sellerRem>0.5?m(c.sellerRem):"اتسدد بالكامل ✔")+'</b></div>':'')+'<div class="kv"><span>المصاريف</span><b>'+m(c.exp)+'</b></div><div class="kv"><span>التكلفة الإجمالية</span><b>'+m(c.cost)+'</b></div>';
   if(c.sold){
@@ -3078,7 +3207,7 @@ function importBackup(){
       if(j.settings)ops.push(["settings/main",j.settings]);if(j.brand)ops.push(["settings/brand",j.brand]);
       for(var q=0;q<ops.length;q++)ops[q][1]=await toStore(ops[q][0],ops[q][1]);
       for(var i=0;i<ops.length;i+=400){var b=FS.batch();ops.slice(i,i+400).forEach(function(x){b.set(db.doc(x[0]),x[1])});await b.commit()}
-      toast("اترجعت البيانات ✔");
+      hlWrite({act:"edit",coll:"restore",id:"",title:"استرجاع نسخة احتياطية"});toast("اترجعت البيانات ✔");
     }catch(e){toast("تعذر الاسترجاع، جرّب تاني")}
   };
   inp.click();
@@ -3120,6 +3249,9 @@ document.addEventListener("click",async function(e){
   else if(a==="knew"){var KL=kashPend();if(KL.length)openSheet(kashCloseSheet(KL));else confirmBox("تقفل الصفحة دي؟ هتتقفل بحساباتها وتبدأ صفحة جديدة فاضية، وتقدر ترجع للصفحة المقفولة في أي وقت بالأسهم فوق.",function(){kashNewPage([])})}
   else if(a==="kclose"){var kp=[];document.querySelectorAll('#sheet select[name="kc"]').forEach(function(x){if(x.value==="base")kp.push(x.dataset.key)});closeSheet();kashNewPage(kp)}
   else if(a==="kashToggle"){var kon=!kashOn();await saveBrand({kashkol:kon});S.brand=Object.assign({},S.brand||{},{kashkol:kon});if(kon){S.tab="kash";window.scrollTo(0,0)}render()}
+  else if(a==="hist")openHist(t.dataset.id||null);
+  else if(a==="hlmore")hlLoad(true);
+  else if(a==="hlname")hlNameDev();
   else if(a==="car")openDetail(t.dataset.id);
   else if(a==="tinfo")tileTap(t.dataset.k);
   else if(a==="close")closeSheet();
@@ -3345,7 +3477,7 @@ async function cloudRestore(id){
       ops.push(j.brand?["set","settings/brand",j.brand]:["del","settings/brand"]);
       for(var q=0;q<ops.length;q++)if(ops[q][0]==="set")ops[q][2]=await toStore(ops[q][1],ops[q][2]);
       for(var i=0;i<ops.length;i+=400){var b=FS.batch();ops.slice(i,i+400).forEach(function(x){if(x[0]==="set")b.set(db.doc(x[1]),x[2]);else b.delete(db.doc(x[1]))});await b.commit()}
-      closeSheet();toast("اترجعت البيانات ✔");
+      closeSheet();hlWrite({act:"edit",coll:"restore",id:"",title:"استرجاع نسخة احتياطية"});toast("اترجعت البيانات ✔");
     }catch(e){toast("تعذر الاسترجاع، جرّب تاني")}
   });
 }
