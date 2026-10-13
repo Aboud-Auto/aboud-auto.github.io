@@ -2862,6 +2862,21 @@ async function boot(){
 boot();
 })();
 </script>
-<script>if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js",{scope:"./"}).catch(function(){})})}</script>
+<script>
+if("serviceWorker" in navigator){
+  /* البرنامج بيفتح فورًا من النسخة المحفوظة على الموبايل، ولو نزل تحديث جديد بيظهر شريط صغير للتحديث بضغطة */
+  navigator.serviceWorker.addEventListener("message",function(e){
+    if(!e.data||e.data.type!=="app-updated"||document.getElementById("updBar"))return;
+    var b=document.createElement("div");b.id="updBar";
+    b.style.cssText="position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:9999;background:#d4af37;color:#0a0804;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:10px;font:700 15px Cairo,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.5)";
+    b.innerHTML='<span style="flex:1">في تحديث جديد للبرنامج</span><button style="border:0;border-radius:10px;padding:8px 14px;background:#0a0804;color:#d4af37;font:700 14px Cairo,sans-serif">تحديث</button><button aria-label="إغلاق" style="border:0;background:none;color:#0a0804;font-size:20px;padding:0 4px">×</button>';
+    var bt=b.getElementsByTagName("button");
+    bt[0].onclick=function(){location.reload()};
+    bt[1].onclick=function(){b.remove()};
+    document.body.appendChild(b);
+  });
+  window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js",{scope:"./"}).catch(function(){})});
+}
+</script>
 </body>
 </html>

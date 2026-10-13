@@ -1,5 +1,5 @@
 // Customer app (hesabat) — offline support for the app page only (not admin)
-var CACHE = "hesabat-v41";
+var CACHE = "hesabat-v42";
 var CORE = [
   "./",
   "./index.html",
@@ -40,22 +40,72 @@ function isMainAppPage(url) {
   return p === "/hesabat/" || p === "/hesabat" || p === "/hesabat/index.html";
 }
 
+// Tell the open app page that a newer version was saved. The page may still be loading,
+// so keep trying for a few seconds until it is ready to hear it.
+function tellPage(id) {
+  var tries = 0;
+  function attempt() {
+    tries++;
+    return (id ? self.clients.get(id) : Promise.resolve(null)).then(function (w) {
+      if (w) { w.postMessage({ type: "app-updated" }); return; }
+      if (tries >= 20) {
+        return self.clients.matchAll({ type: "window" }).then(function (cl) {
+          cl.forEach(function (x) { x.postMessage({ type: "app-updated" }); });
+        });
+      }
+      return new Promise(function (r) { setTimeout(r, 500); }).then(attempt);
+    });
+  }
+  return attempt();
+}
+
 self.addEventListener("fetch", function (e) {
   var req = e.request;
   if (req.method !== "GET") return;
   var url = new URL(req.url);
 
-  // The app page: try the network first (so updates arrive), fall back to the saved copy offline
+  // The app page: open instantly from the saved copy, and check for a newer version in the background.
+  // If a newer version arrived, the page is told so it can offer a one-tap update.
   if (req.mode === "navigate" && isMainAppPage(url)) {
     e.respondWith(
-      fetch(req).then(function (r) {
-        if (r.ok) {
-          var copy = r.clone();
-          caches.open(CACHE).then(function (c) { c.put("./index.html", copy); });
-        }
-        return r;
-      }).catch(function () {
-        return caches.match("./index.html").then(function (m) { return m || caches.match("./"); });
+      caches.open(CACHE).then(function (c) {
+        return c.match("./index.html").then(function (saved) {
+          var savedText = saved ? saved.clone().text() : Promise.resolve(null);
+          var fresh = fetch(req.url, { cache: "no-cache", credentials: "same-origin" }).then(function (r) {
+            if (!r.ok) return r;
+            var copy = r.clone();
+            var check = Promise.all([copy.clone().text(), savedText])
+              .then(function (t) {
+                return c.put("./index.html", copy).then(function () {
+                  if (saved && t[0] !== t[1]) return tellPage(e.resultingClientId);
+                });
+              }).catch(function () {});
+            try { e.waitUntil(check); } catch (x) {}
+            return r;
+          });
+          if (saved) {
+            fresh.catch(function () {});
+            return saved;
+          }
+          return fresh.catch(function () { return caches.match("./"); });
+        });
+      })
+    );
+    return;
+  }
+
+  // Google Fonts: saved copy first, so a slow network never holds up the screen
+  if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com") {
+    e.respondWith(
+      caches.open(CACHE).then(function (c) {
+        return c.match(req.url).then(function (m) {
+          var net = fetch(req).then(function (r) {
+            if (r.ok || r.type === "opaque") c.put(req.url, r.clone());
+            return r;
+          });
+          if (m) { net.catch(function () {}); return m; }
+          return net;
+        });
       })
     );
     return;
