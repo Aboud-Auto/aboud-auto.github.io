@@ -1883,7 +1883,9 @@ function renderDetail(){
   }
   h+='<div class="two" style="margin-bottom:10px"><button class="btn sec" data-act="form" data-kind="expense" data-car="'+c.id+'">+ مصروف</button>'+
      (c.sold?'<button class="btn sec" data-act="form" data-kind="collect" data-car="'+c.id+'">+ تحصيل</button>':'<button class="btn" data-act="form" data-kind="sell" data-car="'+c.id+'">بيع العربية</button>')+'</div>';
-  if(c.exp>0)h+='<div class="card row"><span>المصاريف اتردّت للعهدة؟</span><button class="btn small '+(c.reimbursed?"":"sec")+'" data-act="reimb" data-id="'+c.id+'">'+(c.reimbursed?"✔ نعم":"لأ")+'</button></div>';
+  if(c.exp>0)h+=c.reimbursed
+    ?'<div class="card row"><span class="good">✔ مصاريفها ('+fmt(c.exp)+') اترجّعت للعهدة'+(c.reimbDate?'<br><span class="sub">'+fdate(c.reimbDate)+'</span>':'')+'</span><button class="btn small sec" data-act="reimb" data-id="'+c.id+'">تراجع</button></div>'
+    :'<button class="btn'+(c.sold?'':' sec')+'" style="margin-bottom:10px" data-act="reimb" data-id="'+c.id+'">💼 رجّعت مصاريفها ('+fmt(c.exp)+') للعهدة</button>';
   if(exps.length){h+='<div class="sect">المصاريف</div><div class="card" style="padding:6px 16px">'+exps.map(function(e){
     return '<div class="item"><div style="flex:1"><div class="t">'+esc(e.type||"مصروف")+'</div><div class="d">'+fdate(e.date)+(dline(srcNote(e),esc(e.note||""))?" · "+dline(srcNote(e),esc(e.note||"")):"")+'</div></div><span class="num" style="font-weight:700">'+fmt(e.amount)+'</span><button class="del" data-act="delitem" data-coll="expenses" data-id="'+e.id+'" aria-label="حذف">🗑</button></div>'}).join("")+'</div>'}
   if(cols.length){h+='<div class="sect">التحصيلات</div><div class="card" style="padding:6px 16px">'+cols.map(function(x){
@@ -2909,7 +2911,10 @@ document.addEventListener("click",async function(e){
   }
   else if(a==="dayprev"){S.day=addDays(S.day,-1);render()}
   else if(a==="daynext"){S.day=addDays(S.day,1);render()}
-  else if(a==="reimb"){var c=carById(t.dataset.id);if(c)patch("cars/"+c.id,{reimbursed:!c.reimbursed})}
+  else if(a==="reimb"){var c=carById(t.dataset.id);if(c){
+    if(c.reimbursed){if(confirm("هتلغي رد مصاريف "+c.name+" ("+fmt(c.exp)+")؟ المبلغ هيرجع يتخصم من العهدة."))patch("cars/"+c.id,{reimbursed:false,reimbDate:null})}
+    else{if(confirm("تأكيد: رجّعت "+fmt(c.exp)+" مصاريف "+c.name+" للعهدة؟"))patch("cars/"+c.id,{reimbursed:true,reimbDate:todayStr()})}
+  }}
   else if(a==="report")openReport(t.dataset.kind,t.dataset.name,t.dataset.car);
   else if(a==="rkind"){modal.kind=t.dataset.k;drawReportSheet()}
   else if(a==="stlsp"){modal.sp=t.dataset.v;if(modal.sp==="range"&&!modal.sf){modal.sf=todayStr().slice(0,8)+"01";modal.st=todayStr()}stlSelectAll();drawReportSheet()}
