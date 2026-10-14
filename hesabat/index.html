@@ -917,7 +917,7 @@ function outsOf(T){
   function g(n,ty,car){var k=ty+"|"+n;if(!P[k]){P[k]={n:n,ty:ty,tot:0,it:[],car:car};ord.push(k)}return P[k]}
   function put(o,a,txt){o.tot+=a;tot+=a;o.it.push(txt+": "+fmt(a))}
   T.cars.forEach(function(c){if(c.sold&&c.remaining>0.5){var iv=(c.invs||[]).filter(function(v){return v.debtLeft>0.5});put(g("مشتري "+c.name,"c",c.id),c.remaining,"باقي تمن العربية"+(c.sellDate?" (اتباعت "+fdate(c.sellDate)+")":"")+(iv.length?" · منها على "+iv.map(function(v){return (v.name||"مستثمر")+" "+fmt(v.debtLeft)}).join(" و "):""))}});
-  loansCalc().forEach(function(l){if(l.dir==="out"&&l.remaining>0.5)put(g(l.person||"بدون اسم","l"),l.remaining,"سلفة"+(l.date?" ("+fdate(l.date)+")":"")+(l.invLeft>0.5?" · منها فلوس مستثمر "+fmt(l.invLeft):""))});
+  loansCalc().forEach(function(l){if(l.dir==="out"&&l.remaining>0.5)put(g(l.person||"بدون اسم","l"),l.remaining,"سلفة"+(l.date?" ("+fdate(l.date)+")":"")+(l.invLeft>0.5?" · منها "+(l.myLeft>0.5?"منك "+fmt(l.myLeft)+" و":"")+l.invs.filter(function(v){return v.left>0.5}).map(function(v){return "من فلوس "+(v.name||"مستثمر")+" "+fmt(v.left)}).join(" و "):""))});
   return {tot:tot,list:ord.map(function(k){return P[k]})};
 }
 function owesOf(T){
@@ -1283,9 +1283,18 @@ function loansCalc(){
     l.pays.sort(srt);l.moves.sort(srt)});
   return list.sort(srt);
 }
+/* تفصيل السلفة المتقسمة: منك كام ومن كل مستثمر كام (المتبقي لو لسه مفتوحة) */
+function loanSplit(l){
+  if(!l.invs||!l.invs.length)return "";
+  var open=l.remaining>0.5,part=l.paid>0.5&&open;
+  function ln(n,a,lf){return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2px 10px 0 0"><span class="sub">· '+n+'</span><b style="font-weight:600">'+fmt(a)+(part?' <span class="sub">(فاضل '+fmt(Math.max(0,lf))+')</span>':'')+'</b></div>'}
+  return '<div style="margin-top:4px;border-right:2px solid var(--primary)">'+
+    (l.myAmount>0.5?ln("منك",l.myAmount,l.myLeft):"")+
+    l.invs.map(function(v){return ln("من فلوس "+esc(v.name||"مستثمر"),v.amount,v.left)}).join("")+'</div>';
+}
 function loanRow(l){
   var out=l.dir==="out",open=l.remaining>0.5;
-  return '<div class="item car" data-act="loan" data-id="'+l.id+'" style="cursor:pointer"><div style="flex:1"><div class="t">'+esc(l.person||"بدون اسم")+'</div><div class="d">'+(out?"سلفته ":"استلمت منه ")+fmt(l.amount)+' · '+fdate(l.date)+(l.paid>0?' · '+(out?"رجّع ":"سددت ")+fmt(l.paid):'')+'</div></div><span class="num '+(open?(out?"warn":"bad"):"good")+'" style="font-weight:700">'+(open?fmt(l.remaining):'✔')+'</span></div>';
+  return '<div class="item car" data-act="loan" data-id="'+l.id+'" style="cursor:pointer"><div style="flex:1"><div class="t">'+esc(l.person||"بدون اسم")+'</div><div class="d">'+(out?"سلفته ":"استلمت منه ")+fmt(l.amount)+' · '+fdate(l.date)+(l.paid>0?' · '+(out?"رجّع ":"سددت ")+fmt(l.paid):'')+'</div>'+loanSplit(l)+'</div><span class="num '+(open?(out?"warn":"bad"):"good")+'" style="font-weight:700">'+(open?fmt(l.remaining):'✔')+'</span></div>';
 }
 function sellerBox(){
   var a=calc().cars.filter(function(c){return c.sellerRem>0.5});if(!a.length)return "";
