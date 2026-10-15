@@ -323,13 +323,14 @@ function flowsOf(cars,d){
   S.ledger.forEach(function(x){if(ok(x.date))add(x.src,lsigned(x,lm))});
   return {cash:cash,insta:insta};
 }
+var NOFUND=true; /* العهدة متشالة من برنامج عبود أوتو: كل المصاريف من الخزنة مباشرة */
 function rbTot(c){return typeof c.fexp==="number"?c.fexp:(+c.exp||0)}
 function rbList(c){if(Array.isArray(c.reimbs))return c.reimbs.map(function(r){return{amt:+r.amt||0,date:r.date||""}});return c.reimbursed&&rbTot(c)>0?[{amt:rbTot(c),date:c.reimbDate||c.sellDate||c.buyDate||""}]:[]}
 function rbPaid(c){return rbList(c).reduce(function(a,r){return a+r.amt},0)}
 function rbSplit(a){var T=calc(),cap=Math.min(a,T.fundOver);return{cap:cap,fund:a-cap}}
 function rbPreview(){var el=$("#rbpv");if(!el)return;var a=parseNum(val("amt"));if(a<=0){el.innerHTML="";return}var sp=rbSplit(a);
   el.innerHTML=(sp.cap>0.5?"↩️ لرأس المال: <b>"+fmt(sp.cap)+"</b>"+(sp.fund>0.5?"<br>":""):"")+(sp.fund>0.5?"💼 للعهدة: <b>"+fmt(sp.fund)+"</b>":"")}
-function rbLeft(c){return Math.max(0,rbTot(c)-rbPaid(c))}
+function rbLeft(c){if(NOFUND)return 0;return Math.max(0,rbTot(c)-rbPaid(c))}
 function calc(){
   var exp={},cash={},insta={},paidBy={},rolledBy={},lossPd={},spd={};
   var fxp={};S.expenses.forEach(function(e){exp[e.carId]=(exp[e.carId]||0)+(+e.amount||0);if(!e.nf)fxp[e.carId]=(fxp[e.carId]||0)+(+e.amount||0)});
@@ -361,7 +362,7 @@ function calc(){
       dep:sold?0:Math.max(0,ca+ins),forfAmt:fft[c.id]||0,tradeGot:trd[c.id]||0,remaining:sold?c.sellPrice-ca-ins-(trd[c.id]||0):null,parts:parts,pTotal:pTotal,pCash:pCash,invs:invs,iTotal:iTotal,iDebt:iDebt,iDebtLeft:iDebtLeft,ownerCap:ownerCap,ownerShare:ownerShare,
       myProfit:mp,lossActive:lossActive,lossAmt:lossAmt,lossPaid:lossPaid,lossRem:lossAmt-lossPaid});
   }).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)});
-  var capital=+(S.settings&&S.settings.capital)||0, fund=+(S.settings&&S.settings.fund)||0;
+  var capital=+(S.settings&&S.settings.capital)||0, fund=NOFUND?0:(+(S.settings&&S.settings.fund)||0);
   var withdraw=0,repay=0,pw=0,ew=0;
   var jam=0,addcap=0;
   S.cap.forEach(function(x){var a=+x.amount||0;if(x.kind==="withdraw")withdraw+=a;else if(x.kind==="repay")repay+=a;else if(x.kind==="pwithdraw"){var ea=pwExt(x);pw+=a-ea;ew+=ea}else if(x.kind==="jam")jam+=a;else if(x.kind==="addcap")addcap+=a});
@@ -432,7 +433,7 @@ function capLabel(x){
   return "🏦 سداد عجز السحب";
 }
 function srcNote(x){return x&&x.src==="insta"?"من إنستاباي":""}
-function expNote(e){return dline(e.nf?"🏦 من الخزنة (مش من العهدة)":"💼 من العهدة",srcNote(e))}
+function expNote(e){if(NOFUND)return srcNote(e);return dline(e.nf?"🏦 من الخزنة (مش من العهدة)":"💼 من العهدة",srcNote(e))}
 function dline(){var a=[],i;for(i=0;i<arguments.length;i++)if(arguments[i])a.push(arguments[i]);return a.join(" · ")}
 function srcSel(n,sel){
   var T=calc();
@@ -504,7 +505,7 @@ function hlEdit(path,data,before){
   var after=Object.assign({},before||{},data),c=hlCarOf(coll,a[1],after),t;
   if(coll==="cars"&&before&&before.sellPrice==null&&data.sellPrice!=null)t="بيع "+(after.name||"")+" بـ "+Math.round(data.sellPrice).toLocaleString("en-US");
   else if(coll==="cars"&&before&&before.sellPrice!=null&&"sellPrice" in data&&data.sellPrice==null)t="إلغاء بيع / رجوع "+(after.name||"");
-  else t="تعديل "+(coll==="settings/main"?"رأس المال والعهدة":hlDesc(coll,after));
+  else t="تعديل "+(coll==="settings/main"?(NOFUND?"رأس المال":"رأس المال والعهدة"):hlDesc(coll,after));
   hlWrite({act:"edit",coll:coll,id:a[1]||"",car:c,carName:coll==="cars"?after.name:hlCarName(c),title:t,ch:ch});
 }
 function hlDel(path,before){var a=String(path).split("/"),c=hlCarOf(a[0],a[1],before);hlWrite({act:"del",coll:a[0],id:a[1],car:c,carName:a[0]==="cars"?(before&&before.name):hlCarName(c),title:"حذف "+hlDesc(a[0],before),data:hlSlim(before)})}
@@ -695,12 +696,12 @@ function heroTap(k,T){
     t="🏦 أصل رأس المال";
     h+=tkv("رأس المال اللي بدأت بيه",m(T.capital))+(T.addcap>0.5?tkv("+ زيادات رأس المال",m(T.addcap,"good")):"")+(T.jam>0.5?tkv("− أقساط جمعية",m(T.jam,"bad")):"")+(T.wDef>0.5?tkv("− سحب لسه مارجعش",m(T.wDef,"bad"),null,"سحبت "+m(T.withdraw)+" · رجّعت "+m(T.repay)):"");
     h+=ttot("أصل رأس المال",m(base));
-    h+=tsec("متقسم إزاي")+tkv("💼 العهدة",m(T.fund))+tkv("🚗 الباقي للشغل",m(base-T.fund));
+    if(!NOFUND)h+=tsec("متقسم إزاي")+tkv("💼 العهدة",m(T.fund))+tkv("🚗 الباقي للشغل",m(base-T.fund));
     if(capRecs("addcap").length)h+=tsec("➕ زيادات رأس المال")+capRecRows("addcap");
     if(capRecs("jam").length)h+=tsec("🔄 أقساط الجمعية")+capRecRows("jam");
     if(capRecs("withdraw").length)h+=tsec("👤 السحوبات")+capRecRows("withdraw");
     if(capRecs("repay").length)h+=tsec("✅ اللي رجّعته")+capRecRows("repay");
-    h+=hbtn("💼 تفاصيل العهدة","fund");
+    if(!NOFUND)h+=hbtn("💼 تفاصيل العهدة","fund");
   }else if(k==="hprof"){
     t="💰 الأرباح";
     h+=tkv("🚗 أرباح عربيات متاحة",m(T.undist,T.undist<0?"bad":"good"),null,"بعد سحب الأرباح وسداد العجز")+tkv("🤝 عمولات خارجية متاحة",m(T.extAvail,"good"),null,'<span class="num">'+S.ext.length+'</span> عمولة بـ '+m(T.extTot)+(T.ew>0.5?" · سحبت منها "+m(T.ew):""));
@@ -782,7 +783,7 @@ function heroHtml(T){
   if(T.addcap>0.5)mv.push("زيادات +"+m(T.addcap));if(T.jam>0.5)mv.push("جمعية −"+m(T.jam));if(T.wDef>0.5)mv.push("سحب −"+m(T.wDef));
   var h='<div class="hero"><div class="htop" data-act="tinfo" data-k="hcash"><div class="l">💵 الفلوس اللي معاك (خزنة + إنستاباي)<span class="hgo">‹</span></div><div class="v">'+m(T.cashNow)+'</div><div class="s">الخزنة '+m(T.safeBal)+' · إنستاباي '+m(T.instaBal)+'</div></div>';
   h+='<div class="hg">'+
-    hb("🏦","أصل رأس المال",m(base),"منه عهدة "+m(T.fund)+"<br>والباقي للشغل "+m(base-T.fund)+(mv.length?"<br>بدأت بـ "+m(T.capital)+" · "+mv.join(" · "):""),"","hbase")+
+    hb("🏦","أصل رأس المال",m(base),NOFUND?(mv.length?"بدأت بـ "+m(T.capital)+"<br>"+mv.join(" · "):"اللي بدأت بيه"):"منه عهدة "+m(T.fund)+"<br>والباقي للشغل "+m(base-T.fund)+(mv.length?"<br>بدأت بـ "+m(T.capital)+" · "+mv.join(" · "):""),"","hbase")+
     hb("💰","الأرباح",m(prof),"أرباح عربيات "+m(T.undist)+"<br>عمولات خارجية "+m(T.extAvail)+(T.lossRem>0.5?"<br>خسائر لسه −"+m(T.lossRem):""),prof<-0.5?"neg":"pos","hprof")+
     hb("📥","ليك عند الناس",m(T.recv),"سلف لسه مارجعتش",T.recv>0.5?"pos":"","hrecv")+
     hb("📤","عليك للناس",m(T.owe),T.sOwe>0.5?"منها لبايعي عربيات "+m(T.sOwe):"سلف وأمانات",T.owe>0.5?"neg":"","howe")+
@@ -797,7 +798,7 @@ function heroHtml(T){
 }
 function renderHome(){
   var T=calc(),D=dayCalc(todayStr()),h="";
-  if(!S.settings)h+='<div class="card"><div class="sect" style="margin-top:0">ابدأ من هنا 👋</div><div class="sub" style="margin-bottom:12px">حدّد رأس المال والعهدة الأول عشان الحسابات تظبط.</div><button class="btn" data-act="form" data-kind="settings">تحديد رأس المال والعهدة</button></div>';
+  if(!S.settings)h+='<div class="card"><div class="sect" style="margin-top:0">ابدأ من هنا 👋</div><div class="sub" style="margin-bottom:12px">حدّد رأس المال الأول عشان الحسابات تظبط.</div><button class="btn" data-act="form" data-kind="settings">تحديد رأس المال</button></div>';
   h+=heroHtml(T);
   h+='<div class="qio"><button class="qin" data-act="qio" data-dir="in"><span class="ic">⬇️</span>داخل</button><button class="qout" data-act="qio" data-dir="out"><span class="ic">⬆️</span>خارج</button></div>';
   h+=cashSplit(T);
@@ -815,7 +816,7 @@ function renderHome(){
     tapTile(tile("🚗 أرباح العربيات",m(T.profit,T.profit>=0?"good":"bad"),'نصيبك من <span class="num">'+T.soldN+'</span> عربية'+(carsNet(T)!==T.profit?' · الصافي كله '+m(carsNet(T)):'')),"profit")+
     tapTile(tile("مديونيات العملاء",m(T.debts,T.debts>0?"warn":""),""),"debts")+
     tapTile(tile("عجز رأس المال",m(T.deficit,T.deficit>0?"bad":""),"رأس المال الحالي "+m(T.capNow)+(T.lossRem>0.5?"<br>منها خسائر عربيات "+m(T.lossRem):"")),"deficit")+
-    tapTile(tile("رصيد العهدة",m(T.fundLeft),"من "+m(T.fund)+" (جزء من رأس المال)"+(T.fundOver>0.5?"<br>اتصرف فوقها من رأس المال "+m(T.fundOver,"bad"):"")),"fund")+
+    (NOFUND?"":tapTile(tile("رصيد العهدة",m(T.fundLeft),"من "+m(T.fund)+" (جزء من رأس المال)"+(T.fundOver>0.5?"<br>اتصرف فوقها من رأس المال "+m(T.fundOver,"bad"):"")),"fund"))+
     tapTile(tile("أرباح متاحة",m(T.undist),"للسحب أو لسداد العجز"),"undist")+
     tapTile(tile("🤝 أرباح خارجية",m(T.extTot,"good"),T.ew>0.5?"سحبت منها "+m(T.ew)+" · الباقي "+m(T.extAvail):"عمولات · دخلت رأس المال"),"ext").replace('style="cursor:pointer"','style="cursor:pointer;grid-column:1/-1"')+
     (function(){var O=outsOf(T);return tapTile(tile("💰 فلوسك بره",m(O.tot,O.tot>0.5?"warn":""),O.list.length?'عند <span class="num">'+O.list.length+'</span> '+(O.list.length===1?"حد":"أشخاص"):"مفيش حاجة بره"),"outs")})()+
@@ -893,10 +894,10 @@ function capSplit(T){
     '<div class="kv"><span>رأس المال الحالي</span><b>'+m(cap)+'</b></div>'+
     '<div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin:8px 0 10px;background:var(--line)"><div style="width:'+(100-pf)+'%;background:var(--primary)"></div><div style="width:'+pf+'%;background:var(--silver)"></div></div>'+
     '<div class="kv"><span>🚗 للشغل (شراء عربيات)</span><b>'+m(rest,rest<0?"bad":"")+'</b></div>'+
-    '<div class="kv"><span>🧾 منه عهدة للمصاريف</span><b>'+m(fund)+'</b></div>'+
+    (NOFUND?'</div>':'<div class="kv"><span>🧾 منه عهدة للمصاريف</span><b>'+m(fund)+'</b></div>'+
     '<div class="kv" style="padding-right:14px"><span class="sub">· اتصرف منها ولسه ما اترديش</span><b>'+m(T.unre)+'</b></div>'+
     '<div class="kv" style="padding-right:14px"><span class="sub">· الباقي في العهدة</span><b>'+m(T.fundLeft)+'</b></div>'+(T.fundOver>0.5?'<div class="kv" style="padding-right:14px"><span class="sub">· اتصرف فوق العهدة من رأس المال</span><b>'+m(T.fundOver,"bad")+'</b></div>':'')+
-    '<div class="sub" style="margin-top:8px">العهدة جزء من رأس المال مش خصم منه — الفلوس لسه بتاعتك، بس متخصصة للمصاريف.</div></div>';
+    '<div class="sub" style="margin-top:8px">العهدة جزء من رأس المال مش خصم منه — الفلوس لسه بتاعتك، بس متخصصة للمصاريف.</div></div>');
 }
 function renderCap(){
   var T=calc();
@@ -981,7 +982,7 @@ function kashEntries(T){
     if(k.closed&&Math.abs(k.result)>0.5)add({d:k.closeDate||k.date,c:(k.createdAt||0)+1,a:k.result,t:(k.result>=0?"ربح ":"خسارة ")+k.car+" مع "+k.person,k:"رجعلك "+fmt(k.ret)+" من "+fmt(k.amount)});
     if(k.date&&(!first||k.date<first))first=k.date});
   if(T.capital)E.push({d:first||todayStr(),c:-1,a:T.capital,t:"رأس المال الأول",k:"أصل رأس المال",cap:1});
-  if(T.fund>0.5)E.push({d:first||todayStr(),c:-0.5,a:0,side:"d",info:fmt(T.fund),t:"منه عهدة للمصاريف",k:"رقم ثابت · جزء من رأس المال",ki:1});
+  if(!NOFUND&&T.fund>0.5)E.push({d:first||todayStr(),c:-0.5,a:0,side:"d",info:fmt(T.fund),t:"منه عهدة للمصاريف",k:"رقم ثابت · جزء من رأس المال",ki:1});
   E.sort(function(a,b){return (a.d||"").localeCompare(b.d||"")||a.c-b.c});
   return E;
 }
@@ -1046,7 +1047,7 @@ function renderKash(){
       '<button class="abtn" data-act="form" data-kind="capital" data-sub="addcap"><span class="ic">➕</span>زيادة رأس المال</button>'+
       '<button class="abtn" data-act="form" data-kind="loan" data-sub="out"><span class="ic">📤</span>سلفة لحد</button>'+
       '<button class="abtn" data-act="form" data-kind="loan" data-sub="in"><span class="ic">📥</span>فلوس من حد</button></div>'+
-    '<div class="sub" style="margin:0 2px 12px">الكشكول بيتملى لوحده من كل حاجة بتسجلها في البرنامج. مدين = اللي دخل، دائن = اللي خرج. العربية بتتكتب بتمنها في الدائن، واللي باقي عليها في المدين جنبها وبيقل لوحده لما تدفع. العهدة رقم ثابت، والمصاريف مش بتتكتب هنا (تفاصيلها في كل عربية وفي التقارير). الأرقام هنا فلوسك انت بس (الخزنة بالعهدة اللي فيها + إنستاباي)، وفلوس الشركا والمستثمرين بتتشال منها وتفضل في حساباتهم.</div>';
+    '<div class="sub" style="margin:0 2px 12px">الكشكول بيتملى لوحده من كل حاجة بتسجلها في البرنامج. مدين = اللي دخل، دائن = اللي خرج. العربية بتتكتب بتمنها في الدائن، واللي باقي عليها في المدين جنبها وبيقل لوحده لما تدفع. المصاريف مش بتتكتب هنا (تفاصيلها في كل عربية وفي التقارير). الأرقام هنا فلوسك انت بس (الخزنة + إنستاباي)، وفلوس الشركا والمستثمرين بتتشال منها وتفضل في حساباتهم.</div>';
   return h;
 }
 
@@ -1153,7 +1154,7 @@ function sellerBox(){
 function renderAcc(){
   function big(act,kind,ic,t,d){return '<div class="card row" data-act="'+act+'"'+(kind?' data-kind="'+kind+'"':'')+' style="cursor:pointer;align-items:center;gap:12px"><span style="font-size:30px">'+ic+'</span><div style="flex:1"><div style="font-weight:800;font-size:17px">'+t+'</div><div class="sub">'+d+'</div></div><span class="sub">‹</span></div>'}
   return '<div class="top"><h1>تقفيل حسابات</h1></div>'+
-    big("report","settle","🧾","تقفيل","عربيات متباعة / أسبوع / شهر · نصيب كل شريك واللي يرجع للعهدة")+
+    big("report","settle","🧾","تقفيل","عربيات متباعة / أسبوع / شهر · نصيب كل شريك"+(NOFUND?"":" واللي يرجع للعهدة"))+
     big("jard","","📋","جرد الشركاء والمستثمرين","كل شخص والعربيات اللي داخل فيها وتقريره")+
     big("report","day","📄","تقرير وكشف حساب","يومي أو شهري · صورة أو PDF تبعتها واتساب");
 }
@@ -1221,12 +1222,12 @@ function renderLoan(){
 function renderSet(){
   var T=calc();
   return '<div class="top"><h1>الإعدادات</h1></div>'+
-    '<div class="card"><div class="kv"><span>رأس المال الأصلي</span><b>'+m(T.capital)+'</b></div><div class="kv"><span>منه عهدة للمصاريف</span><b>'+m(T.fund)+'</b></div><div class="kv"><span>والباقي للشغل</span><b>'+m(T.capital-T.fund)+'</b></div>'+
+    '<div class="card"><div class="kv"><span>رأس المال الأصلي</span><b>'+m(T.capital)+'</b></div>'+(NOFUND?'':'<div class="kv"><span>منه عهدة للمصاريف</span><b>'+m(T.fund)+'</b></div><div class="kv"><span>والباقي للشغل</span><b>'+m(T.capital-T.fund)+'</b></div>')+
     '<button class="btn sec" style="margin-top:12px" data-act="form" data-kind="settings">تعديل</button></div>'+
     '<div class="card"><div class="kv"><span>إجمالي المحصّل كاش</span><b>'+m(T.cashTot)+'</b></div><div class="kv"><span>إجمالي المحصّل إنستاباي</span><b>'+m(T.instaTot)+'</b></div>'+
     '<div class="kv"><span>إجمالي أرباح اتسحبت</span><b>'+m(T.pw+T.ew)+'</b></div>'+
     '<div class="kv"><span>مستحق للشركاء</span><b>'+m(T.pOwed)+'</b></div>'+
-    '<div class="kv"><span>مصاريف لسه ما اتردّتش للعهدة</span><b>'+m(T.unre)+'</b></div>'+
+    (NOFUND?'':'<div class="kv"><span>مصاريف لسه ما اتردّتش للعهدة</span><b>'+m(T.unre)+'</b></div>')+
     '<div class="kv"><span>مراجعة الحسابات</span><b>'+(T.check?'<span class="ok">✔ متطابقة</span>':'<span class="bad">راجع الأرقام</span>')+'</b></div></div>'+
     '<div class="card"><button class="btn sec" data-act="hist">📜 سجل الحركات (مين عمل إيه وإمتى)</button></div><div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">تصدير العربيات (ملف CSV)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">خد نسخة من بياناتك كل فترة واحفظها في الملفات أو ابعتها لنفسك على واتساب.</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="kv"><span>الحساب</span><b class="num">'+esc((firebase.auth().currentUser||{}).email||"")+'</b></div><button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>'+
     '<div class="card sub">الربح الصافي = سعر البيع − (سعر الشراء + كل المصاريف). في الشراكة: المصاريف بتتخصم من الربح الأول، وبعدين الباقي بيتقسم على حسب مبلغ كل واحد من سعر الشراء.</div>';
@@ -1348,7 +1349,7 @@ function openForm(kind,o){
     h=sheetHead("تسجيل مصروف")+fld("العربية",carSel("carId",stockFirst(T),sel))+
       '<div class="two">'+fld("المبلغ",minp("amount"))+fld("التاريخ",dinp("date"))+'</div>'+
       fld("النوع",'<select name="type">'+EXP_TYPES.map(function(t){return '<option>'+t+'</option>'}).join("")+'</select>')+
-      fld("من العهدة ولا من الخزنة؟",expFromSel(T))+'<div class="sub" id="efw" style="margin:-4px 2px 10px"></div>'+
+      (NOFUND?'<input type="hidden" name="efrom" value="safe">':fld("من العهدة ولا من الخزنة؟",expFromSel(T))+'<div class="sub" id="efw" style="margin:-4px 2px 10px"></div>')+
       fld("اتدفع",'<select name="src"><option value="cash" selected>كاش</option><option value="insta">إنستاباي</option></select>')+
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+'<button class="btn" data-act="submit">حفظ المصروف</button>';
     setTimeout(expFromWarn,0);
@@ -1568,7 +1569,7 @@ function openForm(kind,o){
       dc.invs.map(function(v,i){return fld("على 💼 "+esc(v.name)+" (أقصى "+fmt(invDebtCap(v))+")",minp("idb"+i,v.debtLeft>0.5?Math.round(v.debtLeft):"","0 = مفيش عليه"))}).join("")+
       '<div class="preview" id="pv"></div><div class="two"><button class="btn" data-act="submit">حفظ</button>'+(o.fromSale?'<button class="btn sec" data-act="car" data-id="'+esc(dc.id)+'">مش دلوقتي</button>':'<button class="btn sec" data-act="close">إلغاء</button>')+'</div>';
   }else if(kind==="settings"){
-    h=sheetHead("رأس المال والعهدة")+fld("رأس المال الأصلي",minp("capital",T.capital||""))+fld("منه عهدة للمصاريف (جزء من رأس المال)",minp("fund",T.fund||""))+
+    h=sheetHead(NOFUND?"رأس المال":"رأس المال والعهدة")+fld("رأس المال الأصلي",minp("capital",T.capital||""))+(NOFUND?'<input type="hidden" name="fund" value="'+(+(S.settings&&S.settings.fund)||0)+'">':fld("منه عهدة للمصاريف (جزء من رأس المال)",minp("fund",T.fund||"")))+
       '<button class="btn" data-act="submit">حفظ</button>';
   }
   openSheet(h);
@@ -2007,7 +2008,7 @@ function renderDetail(){
   }
   h+='<div class="two" style="margin-bottom:10px"><button class="btn sec" data-act="form" data-kind="expense" data-car="'+c.id+'">+ مصروف</button>'+
      (c.sold?'<button class="btn sec" data-act="form" data-kind="collect" data-car="'+c.id+'">+ تحصيل</button>':'<button class="btn" data-act="form" data-kind="sell" data-car="'+c.id+'">بيع العربية</button>')+'</div>';
-  if(rbTot(c)>0.5){var rbt=rbTot(c),rbp=rbPaid(c),rbl=rbLeft(c),rbs=rbList(c);
+  if(!NOFUND&&rbTot(c)>0.5){var rbt=rbTot(c),rbp=rbPaid(c),rbl=rbLeft(c),rbs=rbList(c);
     h+='<div class="sect">💼 رد المصاريف للعهدة</div><div class="card">'+
       '<div class="kv"><span>المصاريف</span><b>'+m(rbt)+'</b></div>'+
       '<div class="kv"><span>رجّعت</span><b>'+m(rbp,rbp>0.5?"good":"")+'</b></div>'+
@@ -2777,9 +2778,10 @@ function rbSettle(){
   var kv=[["ليك انت (رأس مالك + ربحك)",rnum(myTot)+" ج",RK.gold2]];
   if(invDue>0.5)kv.push(["للمستثمرين (فلوسهم + نصيبهم) ترجع لرصيدهم",rnum(invDue)+" ج"]);
   if(order.length)kv.push(["للشركاء (فلوسهم + ربحهم)",rnum(pDue)+" ج"]);
+  if(NOFUND){if(expT>0.5)kv.push(["مصاريف العربيات (دفعتها من الخزنة وترجعلك)",rnum(expT)+" ج"])}else{
   if(fxOpen>0.5)kv.push(["رد للعهدة (مصاريف العربيات)",rnum(fxOpen)+" ج",RK.warn]);
   if(fxDone>0.5)kv.push(["اترد للعهدة قبل كده",rnum(fxDone)+" ج",RK.good]);
-  if(outExp>0.5)kv.push(["مصاريف دفعتها من برّه العهدة (ترجعلك)",rnum(outExp)+" ج"]);
+  if(outExp>0.5)kv.push(["مصاريف دفعتها من برّه العهدة (ترجعلك)",rnum(outExp)+" ج"]);}
   var sum=myTot+pDue+invDue+fx+outExp,diff=salesT-sum;
   if(Math.abs(diff)<1)kv.push(["المجموع","= إجمالي البيع ✔",RK.good,"rtl"]);
   else kv.push(["المجموع",rnum(sum)+" ج (فرق "+rnum(diff,true)+")",RK.warn]);
@@ -2800,12 +2802,12 @@ function rbSettle(){
   B.push({t:"table",cols:[{h:"العربية",w:.3},{h:"البيع",w:.18,k:"n"},{h:"الشراء",w:.18,k:"n"},{h:"المصاريف",w:.16,k:"n"},{h:"الربح",w:.18,k:"n",s:1}],
     rows:cars.map(function(c){return [c.name,c.sellPrice,c.cost-c.exp,c.exp,{v:c.profit,c:rcol(c.profit)}]}).concat([{cells:["الإجمالي",salesT,costT-expT,expT,{v:profT,c:rcol(profT)}]}])});
   /* 5) العهدة */
-  var fundAfter=T.fundBal+fxOpen,gap=T.fund-fundAfter;
+  if(!NOFUND){var fundAfter=T.fundBal+fxOpen,gap=T.fund-fundAfter;
   B.push({t:"sec",title:"العهدة"});
   var kv2=[["رصيدها دلوقتي",rnum(T.fundBal)+" ج"],["بعد ما ترد "+rnum(fxOpen),rnum(fundAfter)+" ج",gap>0.5?RK.warn:RK.good]];
   if(gap>0.5)kv2.push(["لسه ناقصها (مصاريف عربيات لسه متباعتش)",rnum(gap)+" ج",RK.warn]);
   else kv2.push(["الحالة","هترجع لرقمها كامل ("+rnum(T.fund)+") ✔",RK.good,"rtl"]);
-  B.push({t:"kv",rows:kv2});
+  B.push({t:"kv",rows:kv2});}
   B.push({t:"note",text:"الربح = البيع − (الشراء + المصاريف)، والربح بيتقسم بنسبة كل شريك بعد خصم المصاريف. التقرير ده للمراجعة بس ومش بيسجّل أي حركة."});
   var R=stlRange(),sp=modal.sp||"all",sub=cars.length+" عربية · "+(sp==="all"?"حتى "+rfd(todayStr()):"من "+rfd(R.f)+" إلى "+rfd(R.t));
   return {title:"تقفيل حساب",sub:sub,file:"ABOUD-AUTO-settle-"+todayStr(),blocks:B};
