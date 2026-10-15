@@ -12,15 +12,15 @@ const firebaseConfig = {
   appId: "1:927844663367:web:91e1cebadcc10a60d3b162"
 };
 if (!firebaseConfig.apiKey) { document.body.innerHTML = '<div style="min-height:100vh;display:grid;place-items:center;text-align:center;padding:24px;font-family:Cairo,sans-serif;color:#e7b53c"><div><img src="logo.jpg" style="max-width:280px;width:100%;border-radius:12px"><p style="margin-top:16px">البرنامج بيتجهّز — قريب جداً</p></div></div>'; throw new Error('no config'); }
-/* ====== الإيميلات المسموح لها تدخل (Gmail) ====== */
-const ALLOWED = ['diaakhan84@gmail.com', 'yousefabod10@gmail.com'];
+/* ====== أصحاب البرنامج (يدخلوا دايماً ويضيفوا مستخدمين) ====== */
+const OWNERS = ['diaakhan84@gmail.com', 'yousefabod10@gmail.com'];
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 
 /* ====== حالة البرنامج ====== */
-let DB = { customers: [], moves: [] };
+let DB = { customers: [], moves: [], members: [] };
 let ME = null, unsubs = [];
 let route = { v: 'home' }, filter = 'all', q = '';
 
@@ -30,7 +30,9 @@ const fmt = n => Math.round(n).toLocaleString('en-US');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10) };
 const dshow = d => { const [y, m, dd] = d.split('-'); return `${+dd}/${+m}/${y}` };
-const canEdit = () => ME && ME.role === 'acc';
+const canEdit = () => ME && (ME.role === 'owner' || ME.role === 'acc');
+const isOwner = () => ME && ME.role === 'owner';
+const ROLES = { owner: 'صاحب البرنامج', acc: 'يسجّل ويعدّل', view: 'مشاهدة بس' };
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.appendChild(e); setTimeout(() => e.remove(), 2000) }
 function parseAmt(v) { return Number(String(v).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,،\s]/g, '')) || 0 }
 function liveComma(el) { const p = parseAmt(el.value); el.value = p ? fmt(p) : '' }
@@ -42,7 +44,6 @@ function fail(e) { console.error(e); toast(e && e.code === 'permission-denied' ?
 /* ====== الدخول بحساب Gmail ====== */
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
-const isAllowed = u => u && u.email && ALLOWED.includes(u.email.toLowerCase());
 async function doLogin() {
   $('#lerr').textContent = 'جاري الدخول...';
   try { await signInWithPopup(auth, provider) }
@@ -54,18 +55,22 @@ async function doLogin() {
 getRedirectResult(auth).catch(e => { $('#lerr').textContent = 'حصلت مشكلة: ' + (e.code || '') });
 async function logout() { unsubs.forEach(f => f()); unsubs = []; ME = null; await signOut(auth); location.reload() }
 
+function denied(msg) {
+  unsubs.forEach(f => f()); unsubs = []; ME = null; signOut(auth);
+  $('#app').classList.add('hidden'); $('#splash').classList.add('hidden'); $('#login').classList.remove('hidden');
+  $('#lerr').textContent = msg;
+}
 onAuthStateChanged(auth, async user => {
   if (!user) { $('#splash').classList.add('hidden'); $('#login').classList.remove('hidden'); return }
-  if (!isAllowed(user)) {
-    await signOut(auth);
-    $('#splash').classList.add('hidden'); $('#login').classList.remove('hidden');
-    $('#lerr').textContent = 'الإيميل ده (' + user.email + ') مش مسموحله يدخل البرنامج';
-    return;
-  }
-  ME = { id: user.uid, name: user.displayName || user.email, email: user.email, role: 'acc' };
-  start();
+  const email = (user.email || '').toLowerCase();
+  if (OWNERS.includes(email)) { ME = { id: user.uid, name: user.displayName || email, email, role: 'owner' }; start(); return }
+  unsubs.push(onSnapshot(doc(fs, 'members', email), s => {
+    if (!s.exists()) return denied('الإيميل ده (' + email + ') مش مسموحله يدخل البرنامج');
+    const first = !ME; ME = { id: user.uid, email, ...s.data(), name: s.data().name || user.displayName || email };
+    if (first) start(); else { $('#who').textContent = whoText(); render() }
+  }, e => denied('الإيميل ده (' + email + ') مش مسموحله يدخل البرنامج')));
 });
-const whoText = () => ME.name;
+const whoText = () => ME.name + ' — ' + ROLES[ME.role];
 function start() {
   $('#splash').classList.add('hidden'); $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   $('#who').textContent = whoText();
@@ -75,6 +80,7 @@ function start() {
     render();
   }, fail));
   live('customers', 'customers'); live('moves', 'moves');
+  if (isOwner()) live('members', 'members');
   go('home');
 }
 
@@ -254,14 +260,47 @@ function viewLog() {
     <div class="a"><span class="num" style="color:${m.type === 'd' ? 'var(--red2)' : 'var(--green)'}">${m.type === 'd' ? '+' : '−'}${fmt(m.amt)}</span></div></div>`).join('') : '<div class="empty">لسه مفيش حركات</div>'}`;
 }
 
-/* ====== الإعدادات ====== */
+/* ====== الإعدادات والمستخدمين ====== */
 function viewMore() {
   $('#view').innerHTML = `
   <div class="cbox"><img src="logo.jpg" style="width:100%;max-width:280px;border-radius:12px">
-    <div style="margin-top:8px"><b>${esc(ME.name)}</b></div>
+    <div style="margin-top:8px"><b>${esc(ME.name)}</b> — ${ROLES[ME.role]}</div>
     <div class="num" style="color:var(--muted);font-size:13px">${esc(ME.email)}</div></div>
+  ${isOwner() ? `<div class="sec-t"><span>المستخدمين (${DB.members.length})</span><span class="chip on" onclick="openMember()">＋ إضافة مستخدم</span></div>
+  ${DB.members.length ? DB.members.map(m => `<div class="list-item"><div class="av" style="width:36px;height:36px">${esc((m.name || m.id)[0])}</div>
+    <div class="f"><b>${esc(m.name || '—')}</b><small class="num" style="text-align:right">${esc(m.id)}</small></div>
+    <span class="badge">${ROLES[m.role] || ''}</span>
+    <button class="iconbtn" onclick="openMember('${esc(m.id)}')">تعديل</button></div>`).join('') : '<div class="empty">مفيش مستخدمين غيرك. دوس «إضافة مستخدم» وحط إيميل Gmail بتاعه.</div>'}` : ''}
   <button class="btn btn-ghost" style="margin-top:12px" onclick="logout()">تسجيل خروج</button>`;
 }
+function openMember(id) {
+  const m = id ? DB.members.find(x => x.id === id) : null;
+  sheet(`<h3>${m ? 'تعديل مستخدم' : 'مستخدم جديد'}</h3>
+    <label class="field"><span>الاسم</span><input id="mbn" value="${esc(m?.name || '')}"></label>
+    ${m ? `<div class="note">الإيميل: <b class="num">${esc(m.id)}</b></div>` : `<label class="field"><span>إيميل Gmail بتاعه</span><input id="mbe" type="email" inputmode="email" class="num" style="text-align:left;direction:ltr" autocapitalize="none" placeholder="name@gmail.com"></label>`}
+    <label class="field"><span>الصلاحية</span><select id="mbr">
+      <option value="view" ${m?.role !== 'acc' ? 'selected' : ''}>مشاهدة بس</option>
+      <option value="acc" ${m?.role === 'acc' ? 'selected' : ''}>يسجّل ويعدّل</option></select></label>
+    <div class="err" id="mberr"></div>
+    <button class="btn btn-gold" onclick="saveMember('${m ? esc(m.id) : ''}')">حفظ</button>
+    ${m ? `<button class="btn btn-ghost" style="margin-top:8px;color:var(--red2)" onclick="delMember('${esc(m.id)}')">شيل المستخدم ده</button>` : ''}`);
+}
+function saveMember(id) {
+  once(async () => {
+    const name = $('#mbn').value.trim(), role = $('#mbr').value;
+    if (!name) return $('#mberr').textContent = 'اكتب الاسم';
+    let email = id;
+    if (!id) {
+      email = $('#mbe').value.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return $('#mberr').textContent = 'اكتب إيميل صحيح';
+      if (OWNERS.includes(email)) return $('#mberr').textContent = 'الإيميل ده صاحب البرنامج أصلاً';
+      if (DB.members.some(x => x.id === email)) return $('#mberr').textContent = 'الإيميل ده متضاف قبل كده';
+    }
+    setDoc(doc(fs, 'members', email), { name, role, by: ME.email, at: Date.now() }).catch(fail);
+    closeM(); toast(id ? 'تم الحفظ' : 'تمت الإضافة — يقدر يدخل بإيميله دلوقتي');
+  });
+}
+function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma });
+Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });

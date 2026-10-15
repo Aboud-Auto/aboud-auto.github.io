@@ -1,14 +1,38 @@
 rules_version = '2';
-// قواعد قاعدة بيانات «النور والفتح» — الدخول مسموح لإيميلات Gmail دي بس
 service cloud.firestore {
   match /databases/{database}/documents {
-    function allowed() {
-      return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email.lower() in ['diaakhan84@gmail.com', 'yousefabod10@gmail.com'];
+    function email() {
+      return request.auth.token.email.lower();
     }
-    match /{document=**} {
-      allow read, write: if allowed();
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function isOwner() {
+      return signedIn() && email() in ['diaakhan84@gmail.com', 'yousefabod10@gmail.com'];
+    }
+    function member() {
+      return get(/databases/$(database)/documents/members/$(email())).data;
+    }
+    function isMember() {
+      return signedIn() && exists(/databases/$(database)/documents/members/$(email()));
+    }
+    function canRead() {
+      return isOwner() || isMember();
+    }
+    function canWrite() {
+      return isOwner() || (isMember() && member().role == 'acc');
+    }
+    match /members/{id} {
+      allow read: if isOwner() || (signedIn() && id == email());
+      allow write: if isOwner();
+    }
+    match /customers/{id} {
+      allow read: if canRead();
+      allow write: if canWrite();
+    }
+    match /moves/{id} {
+      allow read: if canRead();
+      allow write: if canWrite();
     }
   }
 }
