@@ -3,7 +3,14 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRe
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* ====== إعدادات مشروع Firebase الخاص بالنور والفتح ====== */
-const firebaseConfig = {};
+const firebaseConfig = {
+  apiKey: "AIzaSyCwi-TlAeyCXV9APKNApt8q90szWXLGlIM",
+  authDomain: "elnour-elfath.firebaseapp.com",
+  projectId: "elnour-elfath",
+  storageBucket: "elnour-elfath.firebasestorage.app",
+  messagingSenderId: "927844663367",
+  appId: "1:927844663367:web:91e1cebadcc10a60d3b162"
+};
 if (!firebaseConfig.apiKey) { document.body.innerHTML = '<div style="min-height:100vh;display:grid;place-items:center;text-align:center;padding:24px;font-family:Cairo,sans-serif;color:#e7b53c"><div><img src="logo.jpg" style="max-width:280px;width:100%;border-radius:12px"><p style="margin-top:16px">البرنامج بيتجهّز — قريب جداً</p></div></div>'; throw new Error('no config'); }
 /* ====== الإيميلات المسموح لها تدخل (Gmail) ====== */
 const ALLOWED = ['diaakhan84@gmail.com', 'yousefabod10@gmail.com'];
