@@ -32,6 +32,10 @@ const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOff
 const dshow = d => { const [y, m, dd] = d.split('-'); return `${+dd}/${+m}/${y}` };
 const canEdit = () => ME && (ME.role === 'owner' || ME.role === 'acc');
 const isOwner = () => ME && ME.role === 'owner';
+const PAY = ['كاش في الخزنة', 'إنستاباي', 'فودافون كاش', 'اتصالات كاش'];
+const mdesc = m => [m.method, m.note].filter(Boolean).join(' — ');
+let payPick = PAY[0];
+function pickPay(i) { payPick = PAY[i]; document.querySelectorAll('#paybox .chip').forEach((e, j) => e.classList.toggle('on', i === j)) }
 const ROLES = { owner: 'صاحب البرنامج', acc: 'يسجّل ويعدّل', view: 'مشاهدة بس' };
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.appendChild(e); setTimeout(() => e.remove(), 2000) }
 function parseAmt(v) { return Number(String(v).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,،\s]/g, '')) || 0 }
@@ -169,7 +173,7 @@ function viewCust() {
     <div class="mv">
       <div class="dot ${m.type}">${m.type === 'd' ? '＋' : '－'}</div>
       <div class="i"><b>${m.type === 'd' ? 'سحب بضاعة / فلوس' : 'دفعة'}</b>
-        <small>${dshow(m.date)}${m.note ? ' — ' + esc(m.note) : ''}</small>
+        <small>${dshow(m.date)}${mdesc(m) ? ' — ' + esc(mdesc(m)) : ''}</small>
         <small>سجّلها: ${esc(m.by)}</small>
         ${canEdit() ? `<button class="x" onclick="delMove('${m.id}')">حذف الحركة</button>` : ''}</div>
       <div class="a"><span class="num" style="color:${m.type === 'd' ? 'var(--red2)' : 'var(--green)'}">${m.type === 'd' ? '+' : '−'}${fmt(m.amt)}</span>
@@ -221,19 +225,21 @@ function delCustomer(id) {
   b.commit().catch(fail); closeM(); go('home');
 }
 function openMove(cid, type) {
+  payPick = PAY[0];
   const c = DB.customers.find(x => x.id === cid);
   sheet(`<h3>${type === 'd' ? 'سحب جديد على' : 'دفعة من'} ${esc(c.name)}</h3>
     <div class="note">الرصيد الحالي: <b class="num">${fmt(balance(cid))}</b> ج — ${type === 'd' ? 'المبلغ ده هيتزوّد على رصيده' : 'المبلغ ده هيتخصم من رصيده'}</div>
     <label class="field"><span>المبلغ</span><input id="ma" inputmode="numeric" oninput="liveComma(this)" style="font-size:22px;font-weight:800"></label>
     <label class="field"><span>التاريخ</span><input id="md" type="date" value="${today()}"></label>
-    <label class="field"><span>${type === 'd' ? 'البيان (أخد إيه؟)' : 'ملاحظة (كاش / إنستاباي ...)'}</span><input id="mn" placeholder="${type === 'd' ? 'مثلاً: 20 مفتاح خام + جهاز' : 'مثلاً: كاش'}"></label>
+    ${type === 'p' ? `<div class="field"><span>طريقة الدفع</span><div class="chips" id="paybox" style="flex-wrap:wrap;gap:8px;margin-top:6px">${PAY.map((t, i) => `<span class="chip ${i === 0 ? 'on' : ''}" onclick="pickPay(${i})" style="padding:10px 14px;font-size:15px">${t}</span>`).join('')}</div></div>` : ''}
+    <label class="field"><span>${type === 'd' ? 'البيان (أخد إيه؟)' : 'ملاحظة (اختياري)'}</span><input id="mn" placeholder="${type === 'd' ? 'مثلاً: 20 مفتاح خام + جهاز' : ''}"></label>
     <button class="btn ${type === 'd' ? 'btn-red' : 'btn-green'}" onclick="saveMove('${cid}','${type}')">تسجيل</button>`);
   setTimeout(() => $('#ma').focus(), 50);
 }
 function saveMove(cid, type) {
   once(async () => {
     const amt = parseAmt($('#ma').value); if (amt <= 0) return toast('اكتب المبلغ');
-    setDoc(doc(fs, 'moves', uid()), { cid, type, amt, date: $('#md').value || today(), note: $('#mn').value.trim(), by: ME.name, ts: Date.now() + '' }).catch(fail);
+    setDoc(doc(fs, 'moves', uid()), { cid, type, amt, date: $('#md').value || today(), note: $('#mn').value.trim(), ...(type === 'p' ? { method: payPick } : {}), by: ME.name, ts: Date.now() + '' }).catch(fail);
     closeM(); toast(type === 'd' ? 'تم تسجيل السحب' : 'تم تسجيل الدفعة');
   });
 }
@@ -281,7 +287,7 @@ async function statementImage(c) {
     if (i % 2) { x.fillStyle = '#121214'; x.fillRect(P, y, W - 2 * P, RH) }
     const cy = y + 42;
     T(dshow(m.date), cols.date, cy, { s: 24, w: 400, ltr: false });
-    T(m.note || (m.type === 'd' ? 'سحب' : 'دفعة'), cols.note, cy, { s: 24, w: 400, max: cols.note - (cols.d + 150) });
+    T(mdesc(m) || (m.type === 'd' ? 'سحب' : 'دفعة'), cols.note, cy, { s: 24, w: 400, max: cols.note - (cols.d + 150) });
     T(m.type === 'd' ? fmt(m.amt) : '', cols.d, cy, { a: 'left', s: 26, c: RED, ltr: true });
     T(m.type === 'p' ? fmt(m.amt) : '', cols.p, cy, { a: 'left', s: 26, c: GRN, ltr: true });
     T(fmt(m.run), cols.r, cy, { a: 'left', s: 26, ltr: true });
@@ -320,7 +326,7 @@ function viewLog() {
   $('#view').innerHTML = `<div class="sec-t" style="margin-top:18px"><span>كل الحركات (آخر 300)</span></div>
   ${mv.length ? mv.map(m => `<div class="mv" onclick="go('cust','${m.cid}')" style="cursor:pointer">
     <div class="dot ${m.type}">${m.type === 'd' ? '＋' : '－'}</div>
-    <div class="i"><b>${esc(name(m.cid))}</b><small>${m.type === 'd' ? 'سحب' : 'دفعة'} — ${dshow(m.date)}${m.note ? ' — ' + esc(m.note) : ''}</small><small>سجّلها: ${esc(m.by)}</small></div>
+    <div class="i"><b>${esc(name(m.cid))}</b><small>${m.type === 'd' ? 'سحب' : 'دفعة'} — ${dshow(m.date)}${mdesc(m) ? ' — ' + esc(mdesc(m)) : ''}</small><small>سجّلها: ${esc(m.by)}</small></div>
     <div class="a"><span class="num" style="color:${m.type === 'd' ? 'var(--red2)' : 'var(--green)'}">${m.type === 'd' ? '+' : '−'}${fmt(m.amt)}</span></div></div>`).join('') : '<div class="empty">لسه مفيش حركات</div>'}`;
 }
 
@@ -366,5 +372,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember });
+Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, pickPay });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
