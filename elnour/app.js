@@ -32,7 +32,7 @@ const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOff
 const dshow = d => { const [y, m, dd] = d.split('-'); return `${+dd}/${+m}/${y}` };
 const canEdit = () => ME && (ME.role === 'owner' || ME.role === 'acc');
 const isOwner = () => ME && ME.role === 'owner';
-const PAY = ['كاش في الخزنة', 'إنستاباي', 'فودافون كاش', 'اتصالات كاش'];
+const PAY = ['كاش في الخزنة', 'إنستاباي', 'فودافون كاش', 'اتصالات كاش', 'البريد'];
 const mdesc = m => [m.method, m.note].filter(Boolean).join(' — ');
 const ROLES = { owner: 'صاحب البرنامج', acc: 'يسجّل ويعدّل', view: 'مشاهدة بس' };
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.appendChild(e); setTimeout(() => e.remove(), 2000) }
