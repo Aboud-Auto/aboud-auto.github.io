@@ -123,6 +123,7 @@ function viewHome() {
   </div>
   ${wallets()}
   <div class="search"><input id="qbox" placeholder="ابحث باسم العميل أو رقمه" value="${esc(q)}" oninput="setQ(this.value)"></div>
+  ${DB.customers.length ? `<button class="btn btn-ghost" style="margin-top:12px" onclick="sendAll()">📄 تقرير أرصدة كل العملاء (صورة)</button>` : ''}
   <div class="sec-t"><span>العملاء (${DB.customers.length})</span>
     <div class="chips">${[['all', 'الكل'], ['owe', 'عليهم فلوس'], ['clear', 'خالصين']].map(([k, l]) => `<span class="chip ${filter === k ? 'on' : ''}" onclick="setFilter('${k}')">${l}</span>`).join('')}</div></div>
   <div id="clist"></div>`;
@@ -357,6 +358,77 @@ async function statementImage(c) {
   T('شركة النور والفتح', W / 2, y, { a: 'center', s: 26, w: 400, c: MUT });
   return await new Promise(r => cv.toBlob(r, 'image/png'));
 }
+async function allImage() {
+  const list = DB.customers.map(c => {
+    const ms = DB.moves.filter(m => m.cid === c.id);
+    const d = ms.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), p = ms.filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0);
+    return { name: c.name, d, p, bal: d - p };
+  }).sort((a, b) => b.bal - a.bal);
+  const owe = list.filter(x => x.bal > 0), tot = owe.reduce((s, x) => s + x.bal, 0);
+  const TD = list.reduce((s, x) => s + x.d, 0), TP = list.reduce((s, x) => s + x.p, 0);
+  try { await Promise.all(['400', '700', '800'].map(w => document.fonts.load(w + ' 30px Cairo'))) } catch (e) { }
+  const logo = await loadImg('logo.jpg').catch(() => null);
+  const W = 1080, P = 50, RH = 60, F = 'Cairo, sans-serif';
+  const lw = W - 2 * P - 380, logoH = logo ? Math.round(lw * logo.height / logo.width) : 0;
+  const top = P + logoH + 75;
+  const H = top + 120 + 230 + 70 + list.length * RH + 90 + 160;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  const GOLD = '#e7b53c', TXT = '#f4f1ea', MUT = '#9b978e', RED = '#ff4a52', GRN = '#2fbf71', LINE = '#2c2c31';
+  x.fillStyle = '#0b0b0c'; x.fillRect(0, 0, W, H);
+  x.fillStyle = GOLD; x.fillRect(0, 0, W, 10); x.fillRect(0, H - 10, W, 10);
+  if (logo) x.drawImage(logo, (W - lw) / 2, P, lw, logoH);
+  const T = (t, px, py, o = {}) => { x.font = `${o.w || 700} ${o.s || 30}px ${F}`; x.fillStyle = o.c || TXT; x.textAlign = o.a || 'right'; x.direction = 'rtl'; x.fillText(o.max ? fitText(x, t, o.max) : t, px, py) };
+  let y = top;
+  T('تقرير أرصدة العملاء', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 50;
+  T(`بتاريخ ${dshow(today())}   •   ${list.length} عميل`, W / 2, y, { a: 'center', s: 26, w: 400, c: MUT }); y += 40;
+  x.fillStyle = '#17171a'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 200, 22); x.fill();
+  T('إجمالي الفلوس اللي برّه', W / 2, y + 50, { a: 'center', s: 28, c: MUT });
+  T(fmt(tot) + ' ج', W / 2, y + 128, { a: 'center', s: 66, w: 800, c: RED });
+  T(`${owe.length} عميل عليهم فلوس   •   إجمالي السحب ${fmt(TD)}   •   إجمالي المدفوع ${fmt(TP)}`, W / 2, y + 178, { a: 'center', s: 21, w: 400, c: MUT });
+  y += 230;
+  const cols = { n: W - P - 20, name: W - P - 80, d: P + 420, p: P + 230, r: P + 20 };
+  x.fillStyle = '#202024'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 58, 14); x.fill();
+  [['#', cols.n, 'right'], ['العميل', cols.name, 'right'], ['السحب', cols.d, 'left'], ['المدفوع', cols.p, 'left'], ['الرصيد', cols.r, 'left']].forEach(([t, px, a]) => T(t, px, y + 39, { s: 24, c: GOLD, a }));
+  y += 70;
+  list.forEach((c, i) => {
+    if (i % 2) { x.fillStyle = '#121214'; x.fillRect(P, y, W - 2 * P, RH) }
+    const cy = y + 40;
+    T(String(i + 1), cols.n, cy, { s: 22, w: 400, c: MUT });
+    T(c.name, cols.name, cy, { s: 25, w: 700, max: cols.name - (cols.d + 150) });
+    T(fmt(c.d), cols.d, cy, { a: 'left', s: 24, w: 400, c: MUT });
+    T(fmt(c.p), cols.p, cy, { a: 'left', s: 24, w: 400, c: GRN });
+    T(fmt(Math.abs(c.bal)) + (c.bal < 0 ? ' ليه' : ''), cols.r, cy, { a: 'left', s: 26, c: c.bal > 0 ? RED : c.bal < 0 ? GRN : MUT });
+    x.fillStyle = LINE; x.fillRect(P, y + RH - 1, W - 2 * P, 1);
+    y += RH;
+  });
+  x.fillStyle = '#202024'; x.beginPath(); x.roundRect(P, y + 10, W - 2 * P, 62, 14); x.fill();
+  T('الإجمالي', cols.name, y + 52, { s: 26, c: GOLD });
+  T(fmt(TD), cols.d, y + 52, { a: 'left', s: 24, c: TXT });
+  T(fmt(TP), cols.p, y + 52, { a: 'left', s: 24, c: GRN });
+  T(fmt(TD - TP), cols.r, y + 52, { a: 'left', s: 26, w: 800, c: RED });
+  y += 150;
+  T('شركة النور والفتح', W / 2, y, { a: 'center', s: 28, w: 700, c: GOLD });
+  return await new Promise(r => cv.toBlob(r, 'image/png'));
+}
+async function shareImage(blob, name, ph) {
+  const file = new File([blob], name, { type: 'image/png' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }) } catch (e) { if (e.name !== 'AbortError') toast('ماقدرتش أفتح المشاركة') }
+    return;
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('الصورة نزلت');
+  if (ph) window.open('https://wa.me/' + ph, '_blank');
+}
+function sendAll() {
+  once(async () => {
+    toast('بيتجهّز التقرير...');
+    let blob; try { blob = await allImage() } catch (e) { console.error(e); return toast('حصلت مشكلة في تجهيز التقرير') }
+    await shareImage(blob, `تقرير أرصدة العملاء ${today()}.png`);
+  });
+}
 function sendWA(cid) {
   once(async () => {
     const c = DB.customers.find(x => x.id === cid); if (!c) return;
@@ -433,5 +505,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, payTotal, openTransfer, trHint, saveTransfer });
+Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, payTotal, openTransfer, trHint, saveTransfer, sendAll });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
