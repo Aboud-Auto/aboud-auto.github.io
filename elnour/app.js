@@ -238,15 +238,78 @@ function saveMove(cid, type) {
 }
 function delMove(id) { if (!confirm('متأكد إنك عايز تحذف الحركة دي؟')) return; deleteDoc(doc(fs, 'moves', id)).catch(fail) }
 
-/* ====== كشف حساب واتساب ====== */
+/* ====== كشف حساب واتساب (صورة بلوجو الشركة) ====== */
+const loadImg = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src });
+function fitText(ctx, t, w) { t = String(t || ''); if (ctx.measureText(t).width <= w) return t; while (t.length && ctx.measureText(t + '…').width > w) t = t.slice(0, -1); return t + '…' }
+async function statementImage(c) {
+  const b = balance(c.id), mv = DB.moves.filter(m => m.cid === c.id).sort(ord);
+  let run = 0; const all = mv.map(m => { run += m.type === 'd' ? m.amt : -m.amt; return { ...m, run } });
+  const MAX = 30, rows = all.slice(-MAX), cut = all.length > MAX;
+  const td = mv.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), tp = mv.filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0);
+  try { await Promise.all(['400', '700', '800'].map(w => document.fonts.load(w + ' 30px Cairo'))) } catch (e) { }
+  const logo = await loadImg('logo.jpg').catch(() => null);
+  const W = 1080, P = 50, RH = 64, F = 'Cairo, sans-serif';
+  const logoH = logo ? Math.round((W - 2 * P - 380) * logo.height / logo.width) : 0;
+  const top = P + Math.max(logoH, 0) + 75;
+  const H = top + 150 + 230 + 70 + 20 + Math.max(rows.length, 1) * RH + (cut ? 50 : 0) + 230;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  const GOLD = '#e7b53c', TXT = '#f4f1ea', MUT = '#9b978e', RED = '#ff4a52', GRN = '#2fbf71', LINE = '#2c2c31';
+  x.fillStyle = '#0b0b0c'; x.fillRect(0, 0, W, H);
+  x.fillStyle = GOLD; x.fillRect(0, 0, W, 10); x.fillRect(0, H - 10, W, 10);
+  if (logo) x.drawImage(logo, (W - (W - 2 * P - 380)) / 2, P, W - 2 * P - 380, logoH);
+  const T = (t, px, py, o = {}) => { x.font = `${o.w || 700} ${o.s || 30}px ${F}`; x.fillStyle = o.c || TXT; x.textAlign = o.a || 'right'; x.direction = o.ltr ? 'ltr' : 'rtl'; x.fillText(o.max ? fitText(x, t, o.max) : t, px, py) };
+  let y = top;
+  T('كشف حساب', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 62;
+  T(c.name, W / 2, y, { a: 'center', s: 38, w: 700, max: W - 2 * P }); y += 46;
+  T(`بتاريخ ${dshow(today())}${c.phone ? '   •   ' + c.phone : ''}`, W / 2, y, { a: 'center', s: 26, w: 400, c: MUT }); y += 40;
+  // البوكس الرئيسي
+  x.fillStyle = '#17171a'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 200, 22); x.fill();
+  T(b > 0 ? 'الرصيد المستحق عليكم' : b < 0 ? 'رصيد لكم عندنا' : 'الحساب خالص', W / 2, y + 50, { a: 'center', s: 28, c: MUT });
+  T(fmt(Math.abs(b)) + ' ج', W / 2, y + 128, { a: 'center', s: 66, w: 800, c: b > 0 ? RED : b < 0 ? GRN : TXT });
+  T(`إجمالي السحب ${fmt(td)}   •   إجمالي المدفوع ${fmt(tp)}`, W / 2, y + 178, { a: 'center', s: 22, w: 400, c: MUT });
+  y += 230;
+  // رأس الجدول
+  const cols = { date: W - P - 20, note: W - P - 210, d: P + 380, p: P + 220, r: P + 20 };
+  x.fillStyle = '#202024'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 58, 14); x.fill();
+  [['التاريخ', cols.date, 'right'], ['البيان', cols.note, 'right'], ['سحب', cols.d, 'left'], ['دفعة', cols.p, 'left'], ['الرصيد', cols.r, 'left']]
+    .forEach(([t, px, a]) => T(t, px, y + 39, { s: 24, c: GOLD, a }));
+  y += 70;
+  if (!rows.length) { T('لا توجد حركات', W / 2, y + 40, { a: 'center', s: 26, c: MUT }); y += RH }
+  rows.forEach((m, i) => {
+    if (i % 2) { x.fillStyle = '#121214'; x.fillRect(P, y, W - 2 * P, RH) }
+    const cy = y + 42;
+    T(dshow(m.date), cols.date, cy, { s: 24, w: 400, ltr: false });
+    T(m.note || (m.type === 'd' ? 'سحب' : 'دفعة'), cols.note, cy, { s: 24, w: 400, max: cols.note - (cols.d + 150) });
+    T(m.type === 'd' ? fmt(m.amt) : '', cols.d, cy, { a: 'left', s: 26, c: RED, ltr: true });
+    T(m.type === 'p' ? fmt(m.amt) : '', cols.p, cy, { a: 'left', s: 26, c: GRN, ltr: true });
+    T(fmt(m.run), cols.r, cy, { a: 'left', s: 26, ltr: true });
+    x.fillStyle = LINE; x.fillRect(P, y + RH - 1, W - 2 * P, 1);
+    y += RH;
+  });
+  if (cut) { T(`(آخر ${MAX} حركة من ${all.length})`, W / 2, y + 36, { a: 'center', s: 22, c: MUT }); y += 50 }
+  y += 70;
+  T('شكراً لتعاملكم معنا', W / 2, y, { a: 'center', s: 32, w: 700, c: GOLD }); y += 50;
+  T('شركة النور والفتح', W / 2, y, { a: 'center', s: 26, w: 400, c: MUT });
+  return await new Promise(r => cv.toBlob(r, 'image/png'));
+}
 function sendWA(cid) {
-  const c = DB.customers.find(x => x.id === cid), b = balance(cid);
-  const mv = DB.moves.filter(m => m.cid === cid).sort(ord);
-  let run = 0; const lines = mv.map(m => { run += m.type === 'd' ? m.amt : -m.amt;
-    return `${dshow(m.date)} | ${m.type === 'd' ? 'سحب' : 'دفعة'} ${fmt(m.amt)}${m.note ? ' (' + m.note + ')' : ''} | الرصيد ${fmt(run)}` });
-  const txt = `*شركة النور والفتح*\nكشف حساب: ${c.name}\nبتاريخ: ${dshow(today())}\n\n${lines.length > 15 ? '(آخر 15 حركة)\n' : ''}${lines.slice(-15).join('\n') || 'لا توجد حركات'}\n\n*${b > 0 ? 'الرصيد المستحق عليكم' : b < 0 ? 'رصيد لكم عندنا' : 'الحساب خالص'}: ${fmt(Math.abs(b))} ج*\n\nشكراً لتعاملكم معنا`;
-  let ph = (c.phone || '').replace(/\D/g, ''); if (ph.startsWith('0')) ph = '2' + ph;
-  window.open('https://wa.me/' + ph + '?text=' + encodeURIComponent(txt), '_blank');
+  once(async () => {
+    const c = DB.customers.find(x => x.id === cid); if (!c) return;
+    toast('بيتجهّز كشف الحساب...');
+    let blob; try { blob = await statementImage(c) } catch (e) { console.error(e); return toast('حصلت مشكلة في تجهيز الصورة') }
+    const file = new File([blob], `كشف حساب - ${c.name}.png`, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }) } catch (e) { if (e.name !== 'AbortError') toast('ماقدرتش أفتح المشاركة') }
+      return;
+    }
+    // الكمبيوتر: نزّل الصورة وافتح واتساب على رقم العميل
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    let ph = (c.phone || '').replace(/\D/g, ''); if (ph.startsWith('0')) ph = '2' + ph;
+    toast('الصورة نزلت — ابعتها في الشات');
+    if (ph) window.open('https://wa.me/' + ph, '_blank');
+  });
 }
 
 /* ====== كل الحركات ====== */
