@@ -128,18 +128,50 @@ function viewHome() {
   <div id="clist"></div>`;
   renderList();
 }
+const OUT = 'خرج برّه (مصروف / سحب)';
+function walletBal(w) {
+  return DB.moves.reduce((s, m) => {
+    if (m.type === 'p' && (m.method || 'غير محدد') === w) return s + m.amt;
+    if (m.type === 't') { if (m.to === w) s += m.amt; if (m.from === w) s -= m.amt }
+    return s;
+  }, 0);
+}
+function walletList() {
+  return [...PAY, 'غير محدد'].filter(w => PAY.includes(w) || DB.moves.some(m => (m.type === 'p' && !m.method) || (m.type === 't' && (m.from === w || m.to === w))));
+}
 function wallets() {
-  const mo = today().slice(0, 7), pays = DB.moves.filter(m => m.type === 'p');
-  const list = [...PAY, 'غير محدد'].map(w => {
-    const ms = pays.filter(m => (m.method || 'غير محدد') === w);
-    return { w, all: ms.reduce((s, m) => s + m.amt, 0), mon: ms.filter(m => m.date.startsWith(mo)).reduce((s, m) => s + m.amt, 0) };
-  }).filter(x => PAY.includes(x.w) || x.all);
-  return `<div class="sec-t"><span>اللي اتحصّل في كل محفظة</span></div>
+  const mo = today().slice(0, 7);
+  const list = walletList().map(w => ({ w, bal: walletBal(w), mon: DB.moves.filter(m => m.type === 'p' && (m.method || 'غير محدد') === w && m.date.startsWith(mo)).reduce((s, m) => s + m.amt, 0) }));
+  return `<div class="sec-t"><span>الفلوس اللي في كل محفظة دلوقتي</span>${canEdit() ? `<span class="chip on" onclick="openTransfer()">⇄ تحويل / سحب</span>` : ''}</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${list.map(x => `
-    <div class="stat" style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:right">
+    <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px">
       <small style="display:block;color:var(--muted)">${x.w}</small>
-      <b class="num" style="display:block;font-size:20px;color:var(--green);text-align:right">${fmt(x.all)}</b>
-      <small style="color:var(--muted)">الشهر ده: <span class="num">${fmt(x.mon)}</span></small></div>`).join('')}</div>`;
+      <b class="num" style="display:block;font-size:20px;color:${x.bal < 0 ? 'var(--red2)' : 'var(--green)'};text-align:right">${fmt(x.bal)}</b>
+      <small style="color:var(--muted)">اتحصّل الشهر ده: <span class="num">${fmt(x.mon)}</span></small></div>`).join('')}</div>`;
+}
+function openTransfer() {
+  const ws = walletList(), opt = (arr, sel) => arr.map(w => `<option ${w === sel ? 'selected' : ''}>${w}</option>`).join('');
+  sheet(`<h3>تحويل فلوس من محفظة</h3>
+    <div class="note">مثلاً: سحبت فلوس الإنستاباي وحطيتها في الخزنة. الرقم هيتخصم من المحفظة الأولى ويتزوّد على التانية، ومش هيأثر على حسابات العملاء.</div>
+    <label class="field"><span>من</span><select id="tf" onchange="trHint()">${opt(ws, ws.find(w => w !== PAY[0] && walletBal(w) > 0) || PAY[1])}</select></label>
+    <label class="field"><span>إلى</span><select id="tt">${opt([...PAY, OUT], PAY[0])}</select></label>
+    <label class="field"><span>المبلغ</span><input id="ta" inputmode="numeric" oninput="liveComma(this)" style="font-size:22px;font-weight:800"></label>
+    <div class="note" id="thint"></div>
+    <label class="field"><span>التاريخ</span><input id="tdt" type="date" value="${today()}"></label>
+    <label class="field"><span>ملاحظة (اختياري)</span><input id="tn"></label>
+    <button class="btn btn-gold" onclick="saveTransfer()">تسجيل</button>`);
+  trHint();
+}
+function trHint() { const w = $('#tf').value, b = walletBal(w); $('#thint').innerHTML = `الموجود في ${esc(w)}: <b class="num">${fmt(b)}</b> ج — <span style="color:var(--gold);cursor:pointer" onclick="$('#ta').value='${fmt(Math.max(b, 0))}'">حوّل الكل</span>` }
+function saveTransfer() {
+  once(async () => {
+    const from = $('#tf').value, to = $('#tt').value, amt = parseAmt($('#ta').value);
+    if (from === to) return toast('اختار محفظتين مختلفين');
+    if (amt <= 0) return toast('اكتب المبلغ');
+    if (amt > walletBal(from) && !confirm('المبلغ أكبر من اللي في المحفظة. تسجّله برضه؟')) return;
+    setDoc(doc(fs, 'moves', uid()), { type: 't', from, to, amt, date: $('#tdt').value || today(), note: $('#tn').value.trim(), by: ME.name, ts: Date.now() + '' }).catch(fail);
+    closeM(); toast('تم التحويل');
+  });
 }
 function setQ(v) { q = v.trim(); renderList() }
 function setFilter(k) { filter = k; viewHome() }
@@ -349,7 +381,11 @@ function viewLog() {
   const mv = [...DB.moves].sort(ord).reverse().slice(0, 300);
   const name = id => DB.customers.find(c => c.id === id)?.name || '—';
   $('#view').innerHTML = `<div class="sec-t" style="margin-top:18px"><span>كل الحركات (آخر 300)</span></div>
-  ${mv.length ? mv.map(m => `<div class="mv" onclick="go('cust','${m.cid}')" style="cursor:pointer">
+  ${mv.length ? mv.map(m => m.type === 't' ? `<div class="mv">
+    <div class="dot" style="background:var(--card2);color:var(--gold)">⇄</div>
+    <div class="i"><b>${m.to === OUT ? 'سحب من ' + esc(m.from) : 'تحويل: ' + esc(m.from) + ' ← ' + esc(m.to)}</b><small>${dshow(m.date)}${m.note ? ' — ' + esc(m.note) : ''}</small><small>سجّلها: ${esc(m.by)}</small>
+      ${canEdit() ? `<button class="x" onclick="delMove('${m.id}')">حذف</button>` : ''}</div>
+    <div class="a"><span class="num" style="color:var(--gold)">${fmt(m.amt)}</span></div></div>` : `<div class="mv" onclick="go('cust','${m.cid}')" style="cursor:pointer">
     <div class="dot ${m.type}">${m.type === 'd' ? '＋' : '－'}</div>
     <div class="i"><b>${esc(name(m.cid))}</b><small>${m.type === 'd' ? 'سحب' : 'دفعة'} — ${dshow(m.date)}${mdesc(m) ? ' — ' + esc(mdesc(m)) : ''}</small><small>سجّلها: ${esc(m.by)}</small></div>
     <div class="a"><span class="num" style="color:${m.type === 'd' ? 'var(--red2)' : 'var(--green)'}">${m.type === 'd' ? '+' : '−'}${fmt(m.amt)}</span></div></div>`).join('') : '<div class="empty">لسه مفيش حركات</div>'}`;
@@ -397,5 +433,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, payTotal });
+Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, payTotal, openTransfer, trHint, saveTransfer });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
