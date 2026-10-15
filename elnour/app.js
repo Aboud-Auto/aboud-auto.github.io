@@ -189,7 +189,8 @@ function openCustomerForm(id) {
   sheet(`<h3>${c ? 'تعديل بيانات العميل' : 'عميل جديد'}</h3>
     <label class="field"><span>اسم العميل</span><input id="fn" value="${esc(c?.name || '')}"></label>
     <label class="field"><span>رقم الموبايل (واتساب)</span><input id="fp" inputmode="tel" class="num" style="text-align:right" value="${esc(c?.phone || '')}" placeholder="01xxxxxxxxx"></label>
-    ${c ? '' : `<label class="field"><span>رصيد قديم عليه (لو في) — اختياري</span><input id="fo" inputmode="numeric" oninput="liveComma(this)" placeholder="0"></label>`}
+    ${c ? '' : `<label class="field"><span>رصيد قديم عليه (لو في) — اختياري</span><input id="fo" inputmode="numeric" oninput="liveComma(this)" placeholder="0"></label>
+    <label class="field"><span>تاريخ الرصيد القديم</span><input id="fod" type="date" value="${today()}" max="${today()}"></label>`}
     <label class="field"><span>ملاحظات (اختياري)</span><input id="fnote" value="${esc(c?.note || '')}"></label>
     <button class="btn btn-gold" onclick="saveCustomer('${id || ''}')">حفظ</button>
     ${c ? `<button class="btn btn-ghost" style="margin-top:8px;color:var(--red2)" onclick="delCustomer('${c.id}')">حذف العميل وكل حركاته</button>` : ''}`);
@@ -203,9 +204,9 @@ function saveCustomer(id) {
       if (id) { updateDoc(doc(fs, 'customers', id), { name, phone, note }).catch(fail) }
       else {
         id = uid(); const b = writeBatch(fs);
-        b.set(doc(fs, 'customers', id), { name, phone, note, created: today() });
-        const o = parseAmt($('#fo').value);
-        if (o > 0) b.set(doc(fs, 'moves', uid()), { cid: id, type: 'd', amt: o, date: today(), note: 'رصيد قديم', by: ME.name, ts: Date.now() + '' });
+        const o = parseAmt($('#fo').value), od = $('#fod').value || today();
+        b.set(doc(fs, 'customers', id), { name, phone, note, created: o > 0 ? od : today() });
+        if (o > 0) b.set(doc(fs, 'moves', uid()), { cid: id, type: 'd', amt: o, date: od, note: 'رصيد قديم', by: ME.name, ts: '0' });
         b.commit().catch(fail);
       }
       closeM(); toast('تم الحفظ'); go('cust', id);
