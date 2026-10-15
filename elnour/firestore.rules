@@ -1,0 +1,14 @@
+rules_version = '2';
+// قواعد قاعدة بيانات «النور والفتح» — الدخول مسموح لإيميلات Gmail دي بس
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function allowed() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in ['diaakhan84@gmail.com'];
+    }
+    match /{document=**} {
+      allow read, write: if allowed();
+    }
+  }
+}

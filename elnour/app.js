@@ -1,18 +1,19 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* ====== إعدادات مشروع Firebase الخاص بالنور والفتح ====== */
 const firebaseConfig = {};
 if (!firebaseConfig.apiKey) { document.body.innerHTML = '<div style="min-height:100vh;display:grid;place-items:center;text-align:center;padding:24px;font-family:Cairo,sans-serif;color:#e7b53c"><div><img src="logo.jpg" style="max-width:280px;width:100%;border-radius:12px"><p style="margin-top:16px">البرنامج بيتجهّز — قريب جداً</p></div></div>'; throw new Error('no config'); }
-const DOMAIN = '@elnour-elfath.app';
+/* ====== الإيميلات المسموح لها تدخل (Gmail) ====== */
+const ALLOWED = ['diaakhan84@gmail.com'];
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 
 /* ====== حالة البرنامج ====== */
-let DB = { users: [], customers: [], moves: [] };
+let DB = { customers: [], moves: [] };
 let ME = null, unsubs = [];
 let route = { v: 'home' }, filter = 'all', q = '';
 
@@ -23,7 +24,6 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10) };
 const dshow = d => { const [y, m, dd] = d.split('-'); return `${+dd}/${+m}/${y}` };
 const canEdit = () => ME && ME.role === 'acc';
-const toEmail = u => u.trim().toLowerCase().replace(/\s+/g, '') + DOMAIN;
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.appendChild(e); setTimeout(() => e.remove(), 2000) }
 function parseAmt(v) { return Number(String(v).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,،\s]/g, '')) || 0 }
 function liveComma(el) { const p = parseAmt(el.value); el.value = p ? fmt(p) : '' }
@@ -32,45 +32,33 @@ const ord = (a, b) => (a.date + a.ts).localeCompare(b.date + b.ts);
 function lastMove(cid) { return DB.moves.filter(m => m.cid === cid).sort(ord).pop() }
 function fail(e) { console.error(e); toast(e && e.code === 'permission-denied' ? 'مش مسموحلك بالعملية دي' : 'حصلت مشكلة، جرّب تاني') }
 
-/* ====== الدخول ====== */
-async function boot() {
-  let setupDone = true;
-  try { const s = await getDoc(doc(fs, 'meta', 'setup')); setupDone = s.exists() } catch (e) { }
-  $('#setupBox').classList.toggle('hidden', setupDone);
-  $('#loginBox').classList.toggle('hidden', !setupDone);
-}
+/* ====== الدخول بحساب Gmail ====== */
+const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: 'select_account' });
+const isAllowed = u => u && u.email && ALLOWED.includes(u.email.toLowerCase());
 async function doLogin() {
-  const u = $('#lu').value, p = $('#lp').value;
-  if (!u || !p) { $('#lerr').textContent = 'اكتب اسم المستخدم وكلمة السر'; return }
   $('#lerr').textContent = 'جاري الدخول...';
-  try { await signInWithEmailAndPassword(auth, toEmail(u), p) }
-  catch (e) { $('#lerr').textContent = e.code === 'auth/network-request-failed' ? 'مفيش إنترنت — أول دخول محتاج نت' : 'اسم المستخدم أو كلمة السر غلط' }
+  try { await signInWithPopup(auth, provider) }
+  catch (e) {
+    if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/web-storage-unsupported'].includes(e.code)) return signInWithRedirect(auth, provider);
+    $('#lerr').textContent = e.code === 'auth/network-request-failed' ? 'مفيش إنترنت — أول دخول محتاج نت' : e.code === 'auth/popup-closed-by-user' ? '' : 'حصلت مشكلة: ' + (e.code || '');
+  }
 }
-async function doSetup() {
-  const name = $('#sn').value.trim(), user = $('#su').value.trim(), pass = $('#sp').value;
-  if (!name || !user) return $('#serr').textContent = 'كمّل البيانات';
-  if (pass.length < 6) return $('#serr').textContent = 'كلمة السر لازم 6 حروف أو أرقام على الأقل';
-  $('#serr').textContent = 'جاري الإنشاء...';
-  try {
-    const c = await createUserWithEmailAndPassword(auth, toEmail(user), pass);
-    const b = writeBatch(fs);
-    b.set(doc(fs, 'users', c.user.uid), { name, user: user.toLowerCase(), role: 'acc' });
-    b.set(doc(fs, 'meta', 'setup'), { done: true, at: Date.now() });
-    await b.commit();
-    location.reload();
-  } catch (e) { console.error(e); $('#serr').textContent = e.code === 'auth/email-already-in-use' ? 'اسم الدخول ده موجود' : 'حصلت مشكلة: ' + (e.code || '') }
-}
+getRedirectResult(auth).catch(e => { $('#lerr').textContent = 'حصلت مشكلة: ' + (e.code || '') });
 async function logout() { unsubs.forEach(f => f()); unsubs = []; ME = null; await signOut(auth); location.reload() }
 
 onAuthStateChanged(auth, async user => {
-  if (!user) { $('#splash').classList.add('hidden'); $('#login').classList.remove('hidden'); boot(); return }
-  unsubs.push(onSnapshot(doc(fs, 'users', user.uid), s => {
-    if (!s.exists()) { $('#lerr').textContent = 'الحساب ده متوقف'; signOut(auth); return }
-    const first = !ME; ME = { id: user.uid, ...s.data() };
-    if (first) start(); else { $('#who').textContent = whoText(); render() }
-  }, e => { $('#lerr').textContent = 'الحساب ده متوقف'; signOut(auth) }));
+  if (!user) { $('#splash').classList.add('hidden'); $('#login').classList.remove('hidden'); return }
+  if (!isAllowed(user)) {
+    await signOut(auth);
+    $('#splash').classList.add('hidden'); $('#login').classList.remove('hidden');
+    $('#lerr').textContent = 'الإيميل ده (' + user.email + ') مش مسموحله يدخل البرنامج';
+    return;
+  }
+  ME = { id: user.uid, name: user.displayName || user.email, email: user.email, role: 'acc' };
+  start();
 });
-const whoText = () => ME.name + (ME.role === 'acc' ? ' — محاسب' : ' — مشاهدة فقط');
+const whoText = () => ME.name;
 function start() {
   $('#splash').classList.add('hidden'); $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   $('#who').textContent = whoText();
@@ -79,7 +67,7 @@ function start() {
     $('#sync').textContent = snap.metadata.fromCache && !navigator.onLine ? '● بدون نت — هيتزامن لما النت يرجع' : '';
     render();
   }, fail));
-  live('users', 'users'); live('customers', 'customers'); live('moves', 'moves');
+  live('customers', 'customers'); live('moves', 'moves');
   go('home');
 }
 
@@ -259,68 +247,14 @@ function viewLog() {
     <div class="a"><span class="num" style="color:${m.type === 'd' ? 'var(--red2)' : 'var(--green)'}">${m.type === 'd' ? '+' : '−'}${fmt(m.amt)}</span></div></div>`).join('') : '<div class="empty">لسه مفيش حركات</div>'}`;
 }
 
-/* ====== الإعدادات والمستخدمين ====== */
+/* ====== الإعدادات ====== */
 function viewMore() {
   $('#view').innerHTML = `
-  <div class="cbox"><img src="logo.jpg" style="width:100%;max-width:280px;border-radius:12px"><div style="margin-top:8px;color:var(--muted)">${esc(ME.name)} — ${ME.role === 'acc' ? 'محاسب (يسجّل ويعدّل)' : 'شريك (مشاهدة فقط)'}</div></div>
-  ${canEdit() ? `<div class="sec-t"><span>المستخدمين</span><span class="chip on" onclick="openUser()">＋ إضافة مستخدم</span></div>
-  ${DB.users.map(u => `<div class="list-item"><div class="av" style="width:36px;height:36px">${esc(u.name[0])}</div>
-    <div class="f"><b>${esc(u.name)}</b><small class="num" style="text-align:right">${esc(u.user)}</small></div>
-    <span class="badge">${u.role === 'acc' ? 'محاسب' : 'مشاهدة'}</span>
-    <button class="iconbtn" onclick="openUser('${u.id}')">تعديل</button></div>`).join('')}` : ''}
-  <button class="btn btn-ghost" style="margin-top:12px" onclick="openPass()">تغيير كلمة السر بتاعتي</button>
-  <button class="btn btn-ghost" style="margin-top:8px" onclick="logout()">تسجيل خروج</button>`;
-}
-function openUser(id) {
-  const u = id ? DB.users.find(x => x.id === id) : null;
-  sheet(`<h3>${u ? 'تعديل مستخدم' : 'مستخدم جديد'}</h3>
-    <label class="field"><span>الاسم</span><input id="un" value="${esc(u?.name || '')}"></label>
-    ${u ? `<div class="note">اسم الدخول: <b class="num">${esc(u.user)}</b> — كلمة السر يغيّرها صاحب الحساب من الإعدادات عنده</div>` : `
-    <label class="field"><span>اسم الدخول (إنجليزي أو أرقام)</span><input id="uu" class="num" style="text-align:right" autocapitalize="none"></label>
-    <label class="field"><span>كلمة السر (6 على الأقل)</span><input id="up"></label>`}
-    <label class="field"><span>الصلاحية</span><select id="ur" ${u && u.id === ME.id ? 'disabled' : ''}>
-      <option value="view" ${u?.role !== 'acc' ? 'selected' : ''}>شريك — مشاهدة فقط</option>
-      <option value="acc" ${u?.role === 'acc' ? 'selected' : ''}>محاسب — يسجّل ويعدّل</option></select></label>
-    <div class="err" id="uerr"></div>
-    <button class="btn btn-gold" onclick="saveUser('${id || ''}')">حفظ</button>
-    ${u && u.id !== ME.id ? `<button class="btn btn-ghost" style="margin-top:8px;color:var(--red2)" onclick="delUser('${u.id}')">إيقاف الحساب ده</button>` : ''}`);
-}
-function saveUser(id) {
-  once(async () => {
-    const name = $('#un').value.trim(), role = $('#ur').value;
-    if (!name) return $('#uerr').textContent = 'اكتب الاسم';
-    if (id) { const data = id === ME.id ? { name } : { name, role }; updateDoc(doc(fs, 'users', id), data).catch(fail); closeM(); toast('تم الحفظ'); return }
-    const user = $('#uu').value.trim().toLowerCase().replace(/\s+/g, ''), pass = $('#up').value;
-    if (!/^[a-z0-9._-]+$/.test(user)) return $('#uerr').textContent = 'اسم الدخول حروف إنجليزي أو أرقام بس';
-    if (pass.length < 6) return $('#uerr').textContent = 'كلمة السر 6 على الأقل';
-    $('#uerr').textContent = 'جاري الإنشاء...';
-    try {
-      const sec = initializeApp(firebaseConfig, 'sec' + Date.now());
-      const sa = getAuth(sec);
-      const cr = await createUserWithEmailAndPassword(sa, toEmail(user), pass);
-      await setDoc(doc(fs, 'users', cr.user.uid), { name, user, role });
-      await signOut(sa);
-      closeM(); toast('تم إنشاء الحساب');
-    } catch (e) { console.error(e); $('#uerr').textContent = e.code === 'auth/email-already-in-use' ? 'اسم الدخول ده مستخدم قبل كده' : e.code === 'auth/network-request-failed' ? 'محتاج نت لإنشاء حساب' : 'حصلت مشكلة: ' + (e.code || '') }
-  });
-}
-function delUser(id) { if (!confirm('إيقاف الحساب ده؟ صاحبه مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'users', id)).catch(fail); closeM() }
-function openPass() {
-  sheet(`<h3>تغيير كلمة السر</h3>
-    <label class="field"><span>كلمة السر الحالية</span><input id="po" type="password"></label>
-    <label class="field"><span>كلمة السر الجديدة (6 على الأقل)</span><input id="pn" type="password"></label>
-    <div class="err" id="perr"></div>
-    <button class="btn btn-gold" onclick="savePass()">حفظ</button>`);
-}
-function savePass() {
-  once(async () => {
-    const o = $('#po').value, n = $('#pn').value;
-    if (n.length < 6) return $('#perr').textContent = 'كلمة السر الجديدة 6 على الأقل';
-    try { await reauthenticateWithCredential(auth.currentUser, EmailAuthProvider.credential(auth.currentUser.email, o)); await updatePassword(auth.currentUser, n); closeM(); toast('تم تغيير كلمة السر') }
-    catch (e) { $('#perr').textContent = 'كلمة السر الحالية غلط' }
-  });
+  <div class="cbox"><img src="logo.jpg" style="width:100%;max-width:280px;border-radius:12px">
+    <div style="margin-top:8px"><b>${esc(ME.name)}</b></div>
+    <div class="num" style="color:var(--muted);font-size:13px">${esc(ME.email)}</div></div>
+  <button class="btn btn-ghost" style="margin-top:12px" onclick="logout()">تسجيل خروج</button>`;
 }
 
-$('#lp').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin() });
-Object.assign(window, { doLogin, doSetup, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, openUser, saveUser, delUser, openPass, savePass, liveComma });
+Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
