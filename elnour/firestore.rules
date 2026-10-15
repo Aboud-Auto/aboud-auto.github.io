@@ -5,7 +5,7 @@ service cloud.firestore {
     function allowed() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && request.auth.token.email.lower() in ['diaakhan84@gmail.com'];
+        && request.auth.token.email.lower() in ['diaakhan84@gmail.com', 'yousefabod10@gmail.com'];
     }
     match /{document=**} {
       allow read, write: if allowed();

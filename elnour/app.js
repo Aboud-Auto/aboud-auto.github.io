@@ -6,7 +6,7 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 const firebaseConfig = {};
 if (!firebaseConfig.apiKey) { document.body.innerHTML = '<div style="min-height:100vh;display:grid;place-items:center;text-align:center;padding:24px;font-family:Cairo,sans-serif;color:#e7b53c"><div><img src="logo.jpg" style="max-width:280px;width:100%;border-radius:12px"><p style="margin-top:16px">البرنامج بيتجهّز — قريب جداً</p></div></div>'; throw new Error('no config'); }
 /* ====== الإيميلات المسموح لها تدخل (Gmail) ====== */
-const ALLOWED = ['diaakhan84@gmail.com'];
+const ALLOWED = ['diaakhan84@gmail.com', 'yousefabod10@gmail.com'];
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
