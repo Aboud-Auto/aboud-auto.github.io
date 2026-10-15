@@ -34,8 +34,6 @@ const canEdit = () => ME && (ME.role === 'owner' || ME.role === 'acc');
 const isOwner = () => ME && ME.role === 'owner';
 const PAY = ['كاش في الخزنة', 'إنستاباي', 'فودافون كاش', 'اتصالات كاش'];
 const mdesc = m => [m.method, m.note].filter(Boolean).join(' — ');
-let payPick = PAY[0];
-function pickPay(i) { payPick = PAY[i]; document.querySelectorAll('#paybox .chip').forEach((e, j) => e.classList.toggle('on', i === j)) }
 const ROLES = { owner: 'صاحب البرنامج', acc: 'يسجّل ويعدّل', view: 'مشاهدة بس' };
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.appendChild(e); setTimeout(() => e.remove(), 2000) }
 function parseAmt(v) { return Number(String(v).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,،\s]/g, '')) || 0 }
@@ -123,11 +121,25 @@ function viewHome() {
       <div class="stat"><b class="num" style="color:var(--green)">${fmt(paidMonth)}</b><small>اتحصّل الشهر ده</small></div>
     </div>
   </div>
+  ${wallets()}
   <div class="search"><input id="qbox" placeholder="ابحث باسم العميل أو رقمه" value="${esc(q)}" oninput="setQ(this.value)"></div>
   <div class="sec-t"><span>العملاء (${DB.customers.length})</span>
     <div class="chips">${[['all', 'الكل'], ['owe', 'عليهم فلوس'], ['clear', 'خالصين']].map(([k, l]) => `<span class="chip ${filter === k ? 'on' : ''}" onclick="setFilter('${k}')">${l}</span>`).join('')}</div></div>
   <div id="clist"></div>`;
   renderList();
+}
+function wallets() {
+  const mo = today().slice(0, 7), pays = DB.moves.filter(m => m.type === 'p');
+  const list = [...PAY, 'غير محدد'].map(w => {
+    const ms = pays.filter(m => (m.method || 'غير محدد') === w);
+    return { w, all: ms.reduce((s, m) => s + m.amt, 0), mon: ms.filter(m => m.date.startsWith(mo)).reduce((s, m) => s + m.amt, 0) };
+  }).filter(x => PAY.includes(x.w) || x.all);
+  return `<div class="sec-t"><span>اللي اتحصّل في كل محفظة</span></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${list.map(x => `
+    <div class="stat" style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:right">
+      <small style="display:block;color:var(--muted)">${x.w}</small>
+      <b class="num" style="display:block;font-size:20px;color:var(--green);text-align:right">${fmt(x.all)}</b>
+      <small style="color:var(--muted)">الشهر ده: <span class="num">${fmt(x.mon)}</span></small></div>`).join('')}</div>`;
 }
 function setQ(v) { q = v.trim(); renderList() }
 function setFilter(k) { filter = k; viewHome() }
@@ -225,22 +237,35 @@ function delCustomer(id) {
   b.commit().catch(fail); closeM(); go('home');
 }
 function openMove(cid, type) {
-  payPick = PAY[0];
   const c = DB.customers.find(x => x.id === cid);
   sheet(`<h3>${type === 'd' ? 'سحب جديد على' : 'دفعة من'} ${esc(c.name)}</h3>
     <div class="note">الرصيد الحالي: <b class="num">${fmt(balance(cid))}</b> ج — ${type === 'd' ? 'المبلغ ده هيتزوّد على رصيده' : 'المبلغ ده هيتخصم من رصيده'}</div>
-    <label class="field"><span>المبلغ</span><input id="ma" inputmode="numeric" oninput="liveComma(this)" style="font-size:22px;font-weight:800"></label>
+    ${type === 'd' ? `<label class="field"><span>المبلغ</span><input id="ma" inputmode="numeric" oninput="liveComma(this)" style="font-size:22px;font-weight:800"></label>` : `
+    <div class="field"><span>دفع كام في كل طريقة؟ (اكتب في اللي دفع بيه بس)</span>
+      ${PAY.map((t, i) => `<div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+        <b style="flex:0 0 120px;font-size:15px">${t}</b>
+        <input id="pa${i}" inputmode="numeric" oninput="liveComma(this);payTotal()" placeholder="0" style="flex:1;font-size:20px;font-weight:800"></div>`).join('')}
+      <div class="note" style="margin-top:10px">إجمالي الدفعة: <b class="num" id="ptot" style="color:var(--green)">0</b> ج</div></div>`}
     <label class="field"><span>التاريخ</span><input id="md" type="date" value="${today()}"></label>
-    ${type === 'p' ? `<div class="field"><span>طريقة الدفع</span><div class="chips" id="paybox" style="flex-wrap:wrap;gap:8px;margin-top:6px">${PAY.map((t, i) => `<span class="chip ${i === 0 ? 'on' : ''}" onclick="pickPay(${i})" style="padding:10px 14px;font-size:15px">${t}</span>`).join('')}</div></div>` : ''}
     <label class="field"><span>${type === 'd' ? 'البيان (أخد إيه؟)' : 'ملاحظة (اختياري)'}</span><input id="mn" placeholder="${type === 'd' ? 'مثلاً: 20 مفتاح خام + جهاز' : ''}"></label>
     <button class="btn ${type === 'd' ? 'btn-red' : 'btn-green'}" onclick="saveMove('${cid}','${type}')">تسجيل</button>`);
-  setTimeout(() => $('#ma').focus(), 50);
+  setTimeout(() => $(type === 'd' ? '#ma' : '#pa0').focus(), 50);
 }
+function payTotal() { $('#ptot').textContent = fmt(PAY.reduce((s, _, i) => s + parseAmt($('#pa' + i).value), 0)) }
 function saveMove(cid, type) {
   once(async () => {
-    const amt = parseAmt($('#ma').value); if (amt <= 0) return toast('اكتب المبلغ');
-    setDoc(doc(fs, 'moves', uid()), { cid, type, amt, date: $('#md').value || today(), note: $('#mn').value.trim(), ...(type === 'p' ? { method: payPick } : {}), by: ME.name, ts: Date.now() + '' }).catch(fail);
-    closeM(); toast(type === 'd' ? 'تم تسجيل السحب' : 'تم تسجيل الدفعة');
+    const date = $('#md').value || today(), note = $('#mn').value.trim(), ts = Date.now();
+    if (type === 'd') {
+      const amt = parseAmt($('#ma').value); if (amt <= 0) return toast('اكتب المبلغ');
+      setDoc(doc(fs, 'moves', uid()), { cid, type, amt, date, note, by: ME.name, ts: ts + '' }).catch(fail);
+      closeM(); return toast('تم تسجيل السحب');
+    }
+    const parts = PAY.map((method, i) => ({ method, amt: parseAmt($('#pa' + i).value) })).filter(x => x.amt > 0);
+    if (!parts.length) return toast('اكتب المبلغ في طريقة دفع واحدة على الأقل');
+    const b = writeBatch(fs), grp = parts.length > 1 ? uid() : null;
+    parts.forEach((x, i) => b.set(doc(fs, 'moves', uid()), { cid, type, amt: x.amt, method: x.method, date, note, ...(grp ? { grp } : {}), by: ME.name, ts: (ts + i) + '' }));
+    b.commit().catch(fail);
+    closeM(); toast('تم تسجيل دفعة ' + fmt(parts.reduce((s, x) => s + x.amt, 0)) + ' ج');
   });
 }
 function delMove(id) { if (!confirm('متأكد إنك عايز تحذف الحركة دي؟')) return; deleteDoc(doc(fs, 'moves', id)).catch(fail) }
@@ -372,5 +397,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, pickPay });
+Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, payTotal });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
