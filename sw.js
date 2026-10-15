@@ -1,5 +1,5 @@
 // ABOUD AUTO — offline support for the main app only (not /hesabat or admin)
-var CACHE = "aboud-auto-v47";
+var CACHE = "aboud-auto-v48";
 var CORE = [
   "./",
   "./index.html",
