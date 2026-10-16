@@ -34,6 +34,8 @@ const canEdit = () => ME && (ME.role === 'owner' || ME.role === 'acc');
 const isOwner = () => ME && ME.role === 'owner';
 const PAY = ['كاش في الخزنة', 'إنستاباي', 'فودافون كاش', 'اتصالات كاش', 'البريد'];
 const mdesc = m => [m.method, m.note].filter(Boolean).join(' — ');
+const MT = { d: 'سحب بضاعة / فلوس', p: 'دفعة', x: 'خصم' };
+const MCOL = { d: 'var(--red2)', p: 'var(--green)', x: 'var(--gold2)' };
 const ROLES = { owner: 'صاحب البرنامج', acc: 'يسجّل ويعدّل', view: 'مشاهدة بس' };
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.appendChild(e); setTimeout(() => e.remove(), 2000) }
 function parseAmt(v) { return Number(String(v).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,،\s]/g, '')) || 0 }
@@ -192,7 +194,7 @@ function viewCust() {
   const b = balance(c.id);
   const mv = DB.moves.filter(m => m.cid === c.id).sort(ord);
   let run = 0; const rows = mv.map(m => { run += m.type === 'd' ? m.amt : -m.amt; return { ...m, run } }).reverse();
-  const td = mv.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), tp = mv.filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0);
+  const td = mv.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), tp = mv.filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0), tx = mv.filter(m => m.type === 'x').reduce((s, m) => s + m.amt, 0);
   $('#view').innerHTML = `
   <div class="cbox">
     <div class="nm">${esc(c.name)}</div>
@@ -200,14 +202,16 @@ function viewCust() {
     <div class="bl ${b > 0 ? 'pos' : b < 0 ? 'neg' : 'zero'}"><span class="num">${fmt(Math.abs(b))}</span> <span style="font-size:18px">ج</span></div>
     <small style="color:var(--muted)">${b > 0 ? 'الرصيد اللي عليه' : b < 0 ? 'ليه عندنا (دافع زيادة)' : 'خالص — مفيش عليه حاجة'}</small>
     ${c.note ? `<div style="color:var(--muted);font-size:13px;margin-top:6px">${esc(c.note)}</div>` : ''}
-    <div class="stats" style="margin-top:14px;grid-template-columns:1fr 1fr">
+    <div class="stats" style="margin-top:14px;grid-template-columns:${tx ? '1fr 1fr 1fr' : '1fr 1fr'}">
       <div class="stat"><b class="num pos">${fmt(td)}</b><small>إجمالي اللي أخده</small></div>
       <div class="stat"><b class="num" style="color:var(--green)">${fmt(tp)}</b><small>إجمالي اللي دفعه</small></div>
+      ${tx ? `<div class="stat"><b class="num" style="color:var(--gold2)">${fmt(tx)}</b><small>إجمالي الخصومات</small></div>` : ''}
     </div>
     ${canEdit() ? `<div class="acts">
       <button class="btn btn-red" onclick="openMove('${c.id}','d')">＋ سحب جديد (يزوّد)</button>
       <button class="btn btn-green" onclick="openMove('${c.id}','p')">－ دفعة (تقلّل)</button>
-    </div>` : ''}
+    </div>
+    <button class="btn btn-ghost" style="margin-top:8px;color:var(--gold2);border-color:#4a3a14" onclick="openDiscount('${c.id}')">٪ عمل خصم للعميل</button>` : ''}
     <div class="acts2">
       <button class="btn btn-ghost" onclick="sendWA('${c.id}')">كشف حساب واتساب</button>
       ${canEdit() ? `<button class="btn btn-ghost" onclick="openCustomerForm('${c.id}')">تعديل بيانات العميل</button>` : `<button class="btn btn-ghost" onclick="callC('${c.id}')">اتصال</button>`}
@@ -216,12 +220,12 @@ function viewCust() {
   <div class="sec-t"><span>سجل الحركات (${mv.length})</span></div>
   ${rows.length ? rows.map(m => `
     <div class="mv">
-      <div class="dot ${m.type}">${m.type === 'd' ? '＋' : '－'}</div>
-      <div class="i"><b>${m.type === 'd' ? 'سحب بضاعة / فلوس' : 'دفعة'}</b>
+      <div class="dot ${m.type}">${m.type === 'd' ? '＋' : m.type === 'x' ? '٪' : '－'}</div>
+      <div class="i"><b>${MT[m.type]}</b>
         <small>${dshow(m.date)}${mdesc(m) ? ' — ' + esc(mdesc(m)) : ''}</small>
         <small>سجّلها: ${esc(m.by)}</small>
         ${canEdit() ? `<button class="x" onclick="delMove('${m.id}')">حذف الحركة</button>` : ''}</div>
-      <div class="a"><span class="num" style="color:${m.type === 'd' ? 'var(--red2)' : 'var(--green)'}">${m.type === 'd' ? '+' : '−'}${fmt(m.amt)}</span>
+      <div class="a"><span class="num" style="color:${MCOL[m.type]}">${m.type === 'd' ? '+' : '−'}${fmt(m.amt)}</span>
         <small>الرصيد بعدها <span class="num">${fmt(m.run)}</span></small></div>
     </div>`).join('') : '<div class="empty">لسه مفيش حركات على العميل ده</div>'}`;
 }
@@ -284,6 +288,34 @@ function openMove(cid, type) {
     <button class="btn ${type === 'd' ? 'btn-red' : 'btn-green'}" onclick="saveMove('${cid}','${type}')">تسجيل</button>`);
   setTimeout(() => $(type === 'd' ? '#ma' : '#pa0').focus(), 50);
 }
+function openDiscount(cid) {
+  const c = DB.customers.find(x => x.id === cid), b = balance(cid);
+  sheet(`<h3>خصم لـ ${esc(c.name)}</h3>
+    <div class="note">الرصيد الحالي: <b class="num">${fmt(b)}</b> ج — الخصم هيتطرح من رصيده، ومش هيدخل أي محفظة (لأنه مش فلوس اتحصّلت).</div>
+    <div style="display:flex;gap:10px">
+      <label class="field" style="flex:2"><span>مبلغ الخصم</span><input id="xa" inputmode="numeric" oninput="liveComma(this);$('#xp').value='';discHint()" style="font-size:22px;font-weight:800"></label>
+      <label class="field" style="flex:1"><span>أو نسبة ٪</span><input id="xp" inputmode="decimal" placeholder="مثلاً 10" oninput="discPct(${b})" style="font-size:22px;font-weight:800"></label>
+    </div>
+    <div class="note" id="xh">الرصيد بعد الخصم: <b class="num">${fmt(b)}</b> ج</div>
+    <label class="field"><span>التاريخ</span><input id="xd" type="date" value="${today()}"></label>
+    <label class="field"><span>سبب الخصم (اختياري)</span><input id="xn" placeholder="مثلاً: خصم تسوية حساب"></label>
+    <button class="btn btn-gold" onclick="saveDiscount('${cid}')">تسجيل الخصم</button>`);
+  $('#xa').dataset.b = b;
+  setTimeout(() => $('#xa').focus(), 50);
+}
+function discPct(b) { const p = parseAmt($('#xp').value); $('#xa').value = p > 0 && b > 0 ? fmt(b * p / 100) : ''; discHint() }
+function discHint() { const b = +$('#xa').dataset.b, a = parseAmt($('#xa').value); $('#xh').innerHTML = `الرصيد بعد الخصم: <b class="num">${fmt(b - a)}</b> ج` }
+function saveDiscount(cid) {
+  once(async () => {
+    const amt = Math.round(parseAmt($('#xa').value)); if (amt <= 0) return toast('اكتب مبلغ الخصم');
+    const b = balance(cid);
+    if (amt > b && !confirm('الخصم أكبر من الرصيد اللي عليه، والعميل هيبقى ليه فلوس عندكم. تسجّله برضه؟')) return;
+    const p = parseAmt($('#xp').value), n = $('#xn').value.trim();
+    const note = [p > 0 ? `خصم ${p}٪` : '', n].filter(Boolean).join(' — ');
+    setDoc(doc(fs, 'moves', uid()), { cid, type: 'x', amt, date: $('#xd').value || today(), note, by: ME.name, ts: Date.now() + '' }).catch(fail);
+    closeM(); toast('تم تسجيل خصم ' + fmt(amt) + ' ج');
+  });
+}
 function payTotal() { $('#ptot').textContent = fmt(PAY.reduce((s, _, i) => s + parseAmt($('#pa' + i).value), 0)) }
 function saveMove(cid, type) {
   once(async () => {
@@ -310,7 +342,7 @@ async function statementImage(c) {
   const b = balance(c.id), mv = DB.moves.filter(m => m.cid === c.id).sort(ord);
   let run = 0; const all = mv.map(m => { run += m.type === 'd' ? m.amt : -m.amt; return { ...m, run } });
   const MAX = 30, rows = all.slice(-MAX), cut = all.length > MAX;
-  const td = mv.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), tp = mv.filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0);
+  const td = mv.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), tp = mv.filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0), tx = mv.filter(m => m.type === 'x').reduce((s, m) => s + m.amt, 0);
   try { await Promise.all(['400', '700', '800'].map(w => document.fonts.load(w + ' 30px Cairo'))) } catch (e) { }
   const logo = await loadImg('logo.jpg').catch(() => null);
   const W = 1080, P = 50, RH = 64, F = 'Cairo, sans-serif';
@@ -332,7 +364,7 @@ async function statementImage(c) {
   x.fillStyle = '#17171a'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 200, 22); x.fill();
   T(b > 0 ? 'الرصيد المستحق عليكم' : b < 0 ? 'رصيد لكم عندنا' : 'الحساب خالص', W / 2, y + 50, { a: 'center', s: 28, c: MUT });
   T(fmt(Math.abs(b)) + ' ج', W / 2, y + 128, { a: 'center', s: 66, w: 800, c: b > 0 ? RED : b < 0 ? GRN : TXT });
-  T(`إجمالي السحب ${fmt(td)}   •   إجمالي المدفوع ${fmt(tp)}`, W / 2, y + 178, { a: 'center', s: 22, w: 400, c: MUT });
+  T(`إجمالي السحب ${fmt(td)}   •   إجمالي المدفوع ${fmt(tp)}${tx ? '   •   الخصومات ' + fmt(tx) : ''}`, W / 2, y + 178, { a: 'center', s: 22, w: 400, c: MUT });
   y += 230;
   // رأس الجدول
   const cols = { date: W - P - 20, note: W - P - 210, d: P + 380, p: P + 220, r: P + 20 };
@@ -345,9 +377,9 @@ async function statementImage(c) {
     if (i % 2) { x.fillStyle = '#121214'; x.fillRect(P, y, W - 2 * P, RH) }
     const cy = y + 42;
     T(dshow(m.date), cols.date, cy, { s: 24, w: 400, ltr: false });
-    T(mdesc(m) || (m.type === 'd' ? 'سحب' : 'دفعة'), cols.note, cy, { s: 24, w: 400, max: cols.note - (cols.d + 150) });
+    T(m.type === 'x' ? ['خصم', m.note].filter(Boolean).join(' — ') : mdesc(m) || (m.type === 'd' ? 'سحب' : 'دفعة'), cols.note, cy, { s: 24, w: 400, max: cols.note - (cols.d + 150) });
     T(m.type === 'd' ? fmt(m.amt) : '', cols.d, cy, { a: 'left', s: 26, c: RED, ltr: true });
-    T(m.type === 'p' ? fmt(m.amt) : '', cols.p, cy, { a: 'left', s: 26, c: GRN, ltr: true });
+    T(m.type !== 'd' ? fmt(m.amt) : '', cols.p, cy, { a: 'left', s: 26, c: m.type === 'x' ? GOLD : GRN, ltr: true });
     T(fmt(m.run), cols.r, cy, { a: 'left', s: 26, ltr: true });
     x.fillStyle = LINE; x.fillRect(P, y + RH - 1, W - 2 * P, 1);
     y += RH;
@@ -361,7 +393,7 @@ async function statementImage(c) {
 async function allImage() {
   const list = DB.customers.map(c => {
     const ms = DB.moves.filter(m => m.cid === c.id);
-    const d = ms.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), p = ms.filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0);
+    const d = ms.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), p = ms.filter(m => m.type === 'p' || m.type === 'x').reduce((s, m) => s + m.amt, 0);
     return { name: c.name, d, p, bal: d - p };
   }).sort((a, b) => b.bal - a.bal);
   const owe = list.filter(x => x.bal > 0), tot = owe.reduce((s, x) => s + x.bal, 0);
@@ -389,7 +421,7 @@ async function allImage() {
   y += 230;
   const cols = { n: W - P - 20, name: W - P - 80, d: P + 420, p: P + 230, r: P + 20 };
   x.fillStyle = '#202024'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 58, 14); x.fill();
-  [['#', cols.n, 'right'], ['العميل', cols.name, 'right'], ['السحب', cols.d, 'left'], ['المدفوع', cols.p, 'left'], ['الرصيد', cols.r, 'left']].forEach(([t, px, a]) => T(t, px, y + 39, { s: 24, c: GOLD, a }));
+  [['#', cols.n, 'right'], ['العميل', cols.name, 'right'], ['السحب', cols.d, 'left'], ['المدفوع والخصم', cols.p, 'left'], ['الرصيد', cols.r, 'left']].forEach(([t, px, a]) => T(t, px, y + 39, { s: 24, c: GOLD, a }));
   y += 70;
   list.forEach((c, i) => {
     if (i % 2) { x.fillStyle = '#121214'; x.fillRect(P, y, W - 2 * P, RH) }
@@ -458,9 +490,9 @@ function viewLog() {
     <div class="i"><b>${m.to === OUT ? 'سحب من ' + esc(m.from) : 'تحويل: ' + esc(m.from) + ' ← ' + esc(m.to)}</b><small>${dshow(m.date)}${m.note ? ' — ' + esc(m.note) : ''}</small><small>سجّلها: ${esc(m.by)}</small>
       ${canEdit() ? `<button class="x" onclick="delMove('${m.id}')">حذف</button>` : ''}</div>
     <div class="a"><span class="num" style="color:var(--gold)">${fmt(m.amt)}</span></div></div>` : `<div class="mv" onclick="go('cust','${m.cid}')" style="cursor:pointer">
-    <div class="dot ${m.type}">${m.type === 'd' ? '＋' : '－'}</div>
-    <div class="i"><b>${esc(name(m.cid))}</b><small>${m.type === 'd' ? 'سحب' : 'دفعة'} — ${dshow(m.date)}${mdesc(m) ? ' — ' + esc(mdesc(m)) : ''}</small><small>سجّلها: ${esc(m.by)}</small></div>
-    <div class="a"><span class="num" style="color:${m.type === 'd' ? 'var(--red2)' : 'var(--green)'}">${m.type === 'd' ? '+' : '−'}${fmt(m.amt)}</span></div></div>`).join('') : '<div class="empty">لسه مفيش حركات</div>'}`;
+    <div class="dot ${m.type}">${m.type === 'd' ? '＋' : m.type === 'x' ? '٪' : '－'}</div>
+    <div class="i"><b>${esc(name(m.cid))}</b><small>${m.type === 'd' ? 'سحب' : m.type === 'x' ? 'خصم' : 'دفعة'} — ${dshow(m.date)}${mdesc(m) ? ' — ' + esc(mdesc(m)) : ''}</small><small>سجّلها: ${esc(m.by)}</small></div>
+    <div class="a"><span class="num" style="color:${MCOL[m.type]}">${m.type === 'd' ? '+' : '−'}${fmt(m.amt)}</span></div></div>`).join('') : '<div class="empty">لسه مفيش حركات</div>'}`;
 }
 
 /* ====== الإعدادات والمستخدمين ====== */
@@ -505,5 +537,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, payTotal, openTransfer, trHint, saveTransfer, sendAll });
+Object.assign(window, { doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
