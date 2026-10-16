@@ -1236,7 +1236,7 @@ function renderSet(){
     '<div class="kv"><span>مستحق للشركاء</span><b>'+m(T.pOwed)+'</b></div>'+
     (NOFUND?'':'<div class="kv"><span>مصاريف لسه ما اتردّتش للعهدة</span><b>'+m(T.unre)+'</b></div>')+
     '<div class="kv"><span>مراجعة الحسابات</span><b>'+(T.check?'<span class="ok">✔ متطابقة</span>':'<span class="bad">راجع الأرقام</span>')+'</b></div></div>'+
-    '<div class="card"><button class="btn sec" data-act="hist">📜 سجل الحركات (مين عمل إيه وإمتى)</button></div><div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">تصدير العربيات (ملف CSV)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">خد نسخة من بياناتك كل فترة واحفظها في الملفات أو ابعتها لنفسك على واتساب.</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="kv"><span>الحساب</span><b class="num">'+esc((firebase.auth().currentUser||{}).email||"")+'</b></div><button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>'+
+    '<div class="card"><button class="btn sec" data-act="hist">📜 سجل الحركات (مين عمل إيه وإمتى)</button></div><div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">📊 تصدير كل البيانات (ملف Excel)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">خد نسخة من بياناتك كل فترة واحفظها في الملفات أو ابعتها لنفسك على واتساب.</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="kv"><span>الحساب</span><b class="num">'+esc((firebase.auth().currentUser||{}).email||"")+'</b></div><button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>'+
     '<div class="card sub">الربح الصافي = سعر البيع − (سعر الشراء + كل المصاريف). في الشراكة: المصاريف بتتخصم من الربح الأول، وبعدين الباقي بيتقسم على حسب مبلغ كل واحد من سعر الشراء.</div>';
 }
 
@@ -2964,6 +2964,106 @@ function importBackup(){
   inp.click();
 }
 function logout(){if(confirm("تسجيل خروج من التطبيق؟"))firebase.auth().signOut().then(function(){location.reload()})}
+/* ---------- تصدير Excel ----------
+   بيعمل ملف Excel كامل (كل البيانات في شيتات منفصلة) من غير أي مكتبة خارجية،
+   فبيشتغل حتى من غير نت. */
+var XL_MIME="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+function xlEsc(s){return String(s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+function xlCol(i){var s="";i++;while(i>0){var m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s}
+function xlSheet(rows){
+  var w=[];rows.forEach(function(r){r.forEach(function(v,i){var l=String(v==null?"":v).length;w[i]=Math.min(60,Math.max(w[i]||8,l+2))})});
+  var x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView rightToLeft="1" workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>';
+  if(w.length)x+='<cols>'+w.map(function(v,i){return '<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+v+'" customWidth="1"/>'}).join("")+'</cols>';
+  x+='<sheetData>';
+  rows.forEach(function(r,ri){
+    x+='<row r="'+(ri+1)+'">';
+    r.forEach(function(v,ci){
+      if(v===null||v===undefined||v==="")return;
+      var ref=xlCol(ci)+(ri+1);
+      if(typeof v==="number"&&isFinite(v))x+='<c r="'+ref+'"'+(ri?' s="2"':' s="1"')+'><v>'+(Math.round(v*100)/100)+'</v></c>';
+      else x+='<c r="'+ref+'" t="inlineStr"'+(ri?'':' s="1"')+'><is><t xml:space="preserve">'+xlEsc(v)+'</t></is></c>';
+    });
+    x+='</row>';
+  });
+  return x+'</sheetData></worksheet>';
+}
+var XL_CRC=null;
+function xlCrc(b){if(!XL_CRC){XL_CRC=new Uint32Array(256);for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;XL_CRC[n]=c>>>0}}var c=0xFFFFFFFF;for(var i=0;i<b.length;i++)c=XL_CRC[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function xlZip(files){
+  var enc=new TextEncoder(),parts=[],cd=[],off=0;
+  function u16(v){return [v&255,(v>>8)&255]}function u32(v){return [v&255,(v>>8)&255,(v>>16)&255,(v>>>24)&255]}
+  files.forEach(function(f){
+    var name=enc.encode(f[0]),data=enc.encode(f[1]),crc=xlCrc(data);
+    var lh=new Uint8Array([].concat(u32(0x04034b50),u16(20),u16(0x0800),u16(0),u16(0),u16(0x21),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0)));
+    parts.push(lh,name,data);
+    cd.push(new Uint8Array([].concat(u32(0x02014b50),u16(20),u16(20),u16(0x0800),u16(0),u16(0),u16(0x21),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(off))),name);
+    off+=lh.length+name.length+data.length;
+  });
+  var cdLen=cd.reduce(function(s,a){return s+a.length},0);
+  var end=new Uint8Array([].concat(u32(0x06054b50),u16(0),u16(0),u16(files.length),u16(files.length),u32(cdLen),u32(off),u16(0)));
+  return new Blob(parts.concat(cd,[end]),{type:XL_MIME});
+}
+function xlBook(sheets){
+  var used={};
+  sheets.forEach(function(s){var n=String(s.name).replace(/[\[\]\*\?\/\\:]/g," ").slice(0,31)||"شيت",b=n,i=2;while(used[n])n=b.slice(0,28)+" "+(i++);used[n]=1;s.name=n});
+  var files=[
+    ["[Content_Types].xml",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+sheets.map(function(s,i){return '<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'}).join("")+'</Types>'],
+    ["_rels/.rels",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+    ["xl/workbook.xml",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'+sheets.map(function(s,i){return '<sheet name="'+xlEsc(s.name)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>'}).join("")+'</sheets></workbook>'],
+    ["xl/_rels/workbook.xml.rels",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+sheets.map(function(s,i){return '<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>'}).join("")+'<Relationship Id="rId'+(sheets.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+    ["xl/styles.xml",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Arial"/></font><font><b/><sz val="11"/><name val="Arial"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8C766"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>']
+  ];
+  sheets.forEach(function(s,i){files.push(["xl/worksheets/sheet"+(i+1)+".xml",xlSheet(s.rows)])});
+  return xlZip(files);
+}
+function carsTable(T){
+  var head=["العربية","تاريخ الشراء","سعر الشراء","المصاريف","التكلفة","تاريخ البيع","سعر البيع","محصّل كاش","محصّل إنستاباي","باقي على العميل","صافي الربح","ربحك","الشركاء","المستثمرين","الحالة","باقي للبايع"];
+  var rows=T.cars.map(function(c){return [c.name,c.buyDate||"",c.buyPrice||0,c.exp,c.cost,c.sellDate||"",c.sold?c.sellPrice:"",c.cashIn,c.instaIn,c.sold?Math.max(c.remaining,0):"",c.sold?c.profit:"",c.sold?c.myProfit:"",
+    c.parts.map(function(p){return p.name+" ("+Math.round(p.amount)+")"}).join(" + "),c.invs.map(function(v){return v.name+" ("+Math.round(v.amount)+")"}).join(" + "),c.sold?(c.remaining>0?"باقي فلوس":"اتباعت"):"في المعرض",Math.max(c.sellerRem,0)]});
+  return [head].concat(rows);
+}
+var XL_SKIP={id:1,_enc:1,enc:1,iv:1,uid:1,owner:1};
+var XL_EXTRA={carId:"العربية",toCar:"لعربية",iid:"المستثمر",pid:"الشريك",dir:"الاتجاه",efrom:"اتدفع من",refund:"مرتجع",dep:"عربون",depRef:"رد عربون",trade:"قيمة عربية البدل",tradeName:"عربية البدل",forf:"عربون اتصادر",fdate:"تاريخ المصادرة",loanId:"على سلفة",stakeId:"على مشاركة",roll:"نقل حساب",car:"العربية"};
+function xlFieldVal(k,v){
+  if(v===null||v===undefined)return "";
+  if((k==="carId"||k==="toCar")&&typeof v==="string"){var c=S.cars.find(function(x){return x.id===v});return c?c.name:v}
+  if(k==="iid"&&typeof v==="string"){var iv=typeof invById==="function"&&invById(v);return iv?iv.name:v}
+  if(typeof v==="boolean")return v?"أيوه":"لأ";
+  if(typeof v==="number")return v;
+  if(typeof v==="string")return v;
+  if(Array.isArray(v))return v.map(function(o){if(o&&typeof o==="object"){var n=o.name||o.person||(o.iid&&typeof invById==="function"&&(invById(o.iid)||{}).name)||"";return (n?n+" ":"")+(o.amount!=null?"("+Math.round(+o.amount||0).toLocaleString("en-US")+")":"")||JSON.stringify(o)}return String(o)}).join(" + ");
+  if(v&&typeof v.toDate==="function"){try{return v.toDate().toISOString().slice(0,16).replace("T"," ")}catch(e){}}
+  return JSON.stringify(v);
+}
+function collTable(coll,list){
+  var keys=[];list.forEach(function(d){Object.keys(d||{}).forEach(function(k){if(!XL_SKIP[k]&&keys.indexOf(k)<0)keys.push(k)})});
+  var first=["date","name","carId","amount","type","kind"];keys.sort(function(a,b){var ia=first.indexOf(a),ib=first.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib)});
+  var head=["الوصف"].concat(keys.map(function(k){return HL_F[k]||XL_EXTRA[k]||k}));
+  var rows=list.slice().sort(function(a,b){return String(a.date||"").localeCompare(String(b.date||""))}).map(function(d){
+    var desc="";try{desc=hlDesc(coll,d)}catch(e){}
+    return [desc].concat(keys.map(function(k){return xlFieldVal(k,d[k])}));
+  });
+  return [head].concat(rows);
+}
+async function exportExcel(appTitle){
+  var dl=dlShim();
+  if(!dl)return toast("التصدير مش متاح هنا");
+  try{
+    var T=calc(),sheets=[];
+    var sum=[["البند","القيمة"]],add=function(l,v){if(typeof v==="number"&&isFinite(v))sum.push([l,v])};
+    sum.push(["تاريخ التصدير",new Date().toLocaleString("en-GB")]);
+    add("رأس المال الأساسي",T.capital);add("رأس المال دلوقتي",T.capNow);add("العهدة",T.fund);
+    add("الخزنة (كاش)",T.safeBal);add("إنستاباي",T.instaBal);add("الكاش كله",T.cashNow);
+    add("عربيات في المعرض",T.stockN);add("تكلفة عربيات المعرض",T.stockCost);add("عربيات اتباعت",T.soldN);
+    add("صافي أرباح العربيات",T.profit);add("العمولات الخارجية",T.extTot);add("ليك عند العملاء",T.recv);add("عليك للناس",T.owe);add("عجز رأس المال",T.deficit);
+    sheets.push({name:"ملخص",rows:sum});
+    sheets.push({name:"العربيات",rows:carsTable(T)});
+    var LIST=[["expenses","expenses","المصاريف"],["cols","collections","التحصيلات"],["cap","capital","رأس المال"],["pay","payouts","تسليم الشركاء"],["ledger","ledger","دفتر الفلوس"],["ext","external","العمولات الخارجية"],["inv","investors","المستثمرين"],["invmov","invmoves","حركات المستثمرين"],["transfers","transfers","التحويلات"],["cars","cars","العربيات (تفاصيل)"]];
+    LIST.forEach(function(x){var l=S[x[0]]||[];if(l.length)sheets.push({name:x[2],rows:collTable(x[1],l)})});
+    var blob=xlBook(sheets);
+    await dl.save({filename:appTitle+"_"+todayStr()+".xlsx",data:blob});
+  }catch(e){if(!e||e.code!=="declined")toast("تعذر التصدير")}
+}
 /* ---------- export ---------- */
 async function exportCsv(){
   var dl=dlShim();
@@ -3077,7 +3177,7 @@ document.addEventListener("click",async function(e){
   else if(a==="stlsp"){modal.sp=t.dataset.v;if(modal.sp==="range"&&!modal.sf){modal.sf=todayStr().slice(0,8)+"01";modal.st=todayStr()}stlSelectAll();drawReportSheet()}
   else if(a==="stlall"){var sl=stlCars(),sn=sl.filter(function(c){return (modal.sel||{})[c.id]}).length;if(sn===sl.length)modal.sel={};else stlSelectAll();drawReportSheet()}
   else if(a==="rsave")saveReport(t.dataset.f);
-  else if(a==="export")exportCsv();
+  else if(a==="export")exportExcel("ABOUD_AUTO");
   else if(a==="backup")exportBackup();
   else if(a==="restore")importBackup();
   else if(a==="logout")logout();
