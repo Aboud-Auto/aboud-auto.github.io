@@ -387,7 +387,7 @@ function calc(){
   var recv=0,owe=0;loansCalc().forEach(function(l){if(l.dir==="out")recv+=l.remaining;else owe+=l.remaining});
   var sOwe=0;cars.forEach(function(c){sOwe+=c.sellerRem});owe+=sOwe;
   var extTot=0;S.ext.forEach(function(x){extTot+=+x.amount||0});
-  var F=flowsOf(cars),fundBal=fund+F.fund,safeBal=capital-fund+F.cash,instaBal=F.insta,cashNow=safeBal+instaBal;
+  var F=flowsOf(cars),fundBal=fund+F.fund,safeBal=capital-fund+F.cash,instaBal=F.insta;if(noInsta()){safeBal+=instaBal;instaBal=0}var cashNow=safeBal+instaBal;
   var lossRem=lossDef-lossPaid,wDef=withdraw-repay,deficit=wDef+lossRem,capNow=capital+addcap+extTot-ew-jam-deficit;
   var undist=profitEx-repay-lossPaid-pw,value=capNow+undist;
   var IS=invStats(cars);
@@ -958,7 +958,7 @@ function heroHtml(T){
   function hb(ic,l,v,s,cls,k){return '<div class="hb '+(cls||"")+'"'+(k?' data-act="tinfo" data-k="'+k+'"':'')+'><div class="hl">'+ic+' '+l+(k?'<span class="hgo">‹</span>':'')+'</div><div class="hv">'+v+'</div>'+(s?'<div class="hs">'+s+'</div>':'')+'</div>'}
   var base=T.capital+T.addcap-T.jam-T.wDef,prof=T.undist+T.extAvail-T.lossRem,mv=[];
   if(T.addcap>0.5)mv.push("زيادات +"+m(T.addcap));if(T.jam>0.5)mv.push("جمعية −"+m(T.jam));if(T.wDef>0.5)mv.push("سحب −"+m(T.wDef));
-  var h='<div class="hero"><div class="htop" data-act="tinfo" data-k="hcash"><div class="l">💵 الفلوس اللي معاك (خزنة + إنستاباي)<span class="hgo">‹</span></div><div class="v">'+m(T.cashNow)+'</div><div class="s">الخزنة '+m(T.safeBal)+' · إنستاباي '+m(T.instaBal)+'</div></div>';
+  var h='<div class="hero"><div class="htop" data-act="tinfo" data-k="hcash"><div class="l">💵 الفلوس اللي معاك'+(noInsta()?' (الخزنة)':' (خزنة + إنستاباي)')+'<span class="hgo">‹</span></div><div class="v">'+m(T.cashNow)+'</div>'+(noInsta()?'':'<div class="s">الخزنة '+m(T.safeBal)+' · إنستاباي '+m(T.instaBal)+'</div>')+'</div>';
   h+='<div class="hg">'+
     hb("🏦","أصل رأس المال",m(base),"منه عهدة "+m(T.fund)+"<br>والباقي للشغل "+m(base-T.fund)+(mv.length?"<br>بدأت بـ "+m(T.capital)+" · "+mv.join(" · "):""),"","hbase")+
     hb("💰","الأرباح",m(prof),"أرباح عربيات "+m(T.undist)+"<br>عمولات خارجية "+m(T.extAvail)+(T.lossRem>0.5?"<br>خسائر لسه −"+m(T.lossRem):""),prof<-0.5?"neg":"pos","hprof")+
@@ -2596,6 +2596,24 @@ async function instaAdjSave(){if(submitting)return;var T=calc(),r=val("iaReal");
     else ok=await create("capital",{kind:d<0?"withdraw":"addcap",src:"insta",amount:a,date:dt,note:nt,adj:true});
     if(ok){closeSheet();toast("اتظبط ✔")}}finally{submitting=false}}
 window.instaAdj=instaAdj;window.instaAdjSave=instaAdjSave;
+
+/* ---------- عميل معيّن من غير إنستاباي خالص (بالسيريال) ----------
+   رصيد الإنستاباي القديم بيتحسب ضمن الخزنة، وكل خانات/اختيارات الإنستاباي بتستخبى من الشاشات */
+var NO_INSTA_SERIALS=[1];
+function noInsta(){return !!(S.mem&&NO_INSTA_SERIALS.indexOf(+S.mem.serial)>=0)}
+function noInstaScrub(root){if(!noInsta()||!root||!root.querySelectorAll)return;
+  var IN="إنستاباي",hide=function(el){if(el&&el.style.display!=="none")el.style.display="none"};
+  root.querySelectorAll('input[name="insta"],input[name="iaReal"]').forEach(function(i){i.value="";hide(i.closest(".fld"))});
+  root.querySelectorAll("select").forEach(function(sel){var ch=false;Array.prototype.slice.call(sel.options).forEach(function(o){if(o.value==="insta"||o.value==="both"&&o.textContent.indexOf(IN)>=0||(o.value==="toInsta"||o.value==="toSafe")&&o.textContent.indexOf(IN)>=0){if(o.selected)ch=true;o.remove()}});
+    if(ch&&sel.options.length){sel.selectedIndex=0;sel.dispatchEvent(new Event("change",{bubbles:true}))}if(!sel.options.length)hide(sel.closest(".fld"))});
+  root.querySelectorAll(".card .sect").forEach(function(x){if(x.textContent.indexOf("الإنستاباي اتحوّل")>=0)hide(x.closest(".card"))});
+  root.querySelectorAll(".tile").forEach(function(t){var l=t.querySelector(".tl");if(l&&l.textContent.indexOf(IN)>=0)hide(t)});
+  root.querySelectorAll(".kv").forEach(function(k){var l=k.firstElementChild;if(l&&l.textContent.indexOf(IN)>=0)hide(k)});
+  root.querySelectorAll("button").forEach(function(b){if(b.textContent.indexOf(IN)>=0)hide(b)});
+  root.querySelectorAll(".preview,.ts,.d,.s").forEach(function(p){var h=p.innerHTML,n=h.replace(/\s*·\s*إنستاباي\s*(<b[^>]*>[^<]*<\/b>|[\d,.\-]+\s*ج?)/g,"");if(n!==h)p.innerHTML=n});}
+(function(){var busy=false,mo=new MutationObserver(function(){if(busy||!noInsta())return;busy=true;try{noInstaScrub(document.getElementById("sheet"));noInstaScrub(document.getElementById("app"))}finally{busy=false}});
+  function go(){["sheet","app"].forEach(function(id){var el=document.getElementById(id);if(el)mo.observe(el,{childList:true,subtree:true})})}
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",go);else go()})();
 /* ---------- صفحة الإنستاباي: الرصيد + كشف الحركة + تحويل لمستثمر ----------
    تحويل لمستثمر (فلوسه هو اللي عندك في الإنستاباي):
    - على حسابه إنستاباي → transfers {dir:"toInv",src:"insta",iid}: بتخرج من إنستاباي المعرض، ورصيده ما يتغيّرش (بتبقى "معاه على حسابه")
