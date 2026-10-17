@@ -376,7 +376,7 @@ async function statementImage(c) {
   try { await Promise.all(['400', '700', '800'].map(w => document.fonts.load(w + ' 30px Cairo'))) } catch (e) { }
   const logo = await loadImg('logo.jpg').catch(() => null);
   const W = 1080, P = 50, RH = 64, F = 'Cairo, sans-serif';
-  const logoH = logo ? Math.round((W - 2 * P - 380) * logo.height / logo.width) : 0;
+  const lw = logo ? Math.min(W - 2 * P - 380, 340 * logo.width / logo.height) : 0, logoH = logo ? Math.round(lw * logo.height / logo.width) : 0;
   const top = P + Math.max(logoH, 0) + 75;
   const H = top + 150 + 230 + 70 + 20 + Math.max(rows.length, 1) * RH + (cut ? 50 : 0) + 230;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
@@ -384,7 +384,7 @@ async function statementImage(c) {
   const GOLD = '#e7b53c', TXT = '#f4f1ea', MUT = '#9b978e', RED = '#ff4a52', GRN = '#2fbf71', LINE = '#2c2c31';
   x.fillStyle = '#0b0b0c'; x.fillRect(0, 0, W, H);
   x.fillStyle = GOLD; x.fillRect(0, 0, W, 10); x.fillRect(0, H - 10, W, 10);
-  if (logo) x.drawImage(logo, (W - (W - 2 * P - 380)) / 2, P, W - 2 * P - 380, logoH);
+  if (logo) x.drawImage(logo, (W - lw) / 2, P, lw, logoH);
   const T = (t, px, py, o = {}) => { x.font = `${o.w || 700} ${o.s || 30}px ${F}`; x.fillStyle = o.c || TXT; x.textAlign = o.a || 'right'; x.direction = o.ltr ? 'ltr' : 'rtl'; x.fillText(o.max ? fitText(x, t, o.max) : t, px, py) };
   let y = top;
   T('كشف حساب', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 62;
@@ -431,7 +431,7 @@ async function allImage() {
   try { await Promise.all(['400', '700', '800'].map(w => document.fonts.load(w + ' 30px Cairo'))) } catch (e) { }
   const logo = await loadImg('logo.jpg').catch(() => null);
   const W = 1080, P = 50, RH = 60, F = 'Cairo, sans-serif';
-  const lw = W - 2 * P - 380, logoH = logo ? Math.round(lw * logo.height / logo.width) : 0;
+  const lw = logo ? Math.min(W - 2 * P - 380, 340 * logo.width / logo.height) : 0, logoH = logo ? Math.round(lw * logo.height / logo.width) : 0;
   const top = P + logoH + 75;
   const H = top + 120 + 230 + 70 + list.length * RH + 90 + 160;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
@@ -966,7 +966,7 @@ async function invImage(v) {
   try { await Promise.all(['400', '700', '800'].map(w => document.fonts.load(w + ' 30px Cairo'))) } catch (e) { }
   const logo = await loadImg('logo.jpg').catch(() => null);
   const W = 1080, P0 = 50, RH = 66, F = 'Cairo, sans-serif';
-  const lw = W - 2 * P0 - 380, logoH = logo ? Math.round(lw * logo.height / logo.width) : 0;
+  const lw = logo ? Math.min(W - 2 * P0 - 380, 340 * logo.width / logo.height) : 0, logoH = logo ? Math.round(lw * logo.height / logo.width) : 0;
   const tl = [];
   if (v.disc) tl.push(['الإجمالي قبل الخصم', fmtP(v.sub)], ['خصم', '− ' + fmtP(v.disc), '#e7b53c']);
   tl.push([v.kind === 'ret' ? 'قيمة المرتجع' : 'الإجمالي', fmtP(v.total) + ' ج', '#ffd76a', 1]);
