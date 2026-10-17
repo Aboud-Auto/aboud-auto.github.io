@@ -804,7 +804,7 @@ function renderHome(){
   h+=cashSplit(T);
   h+='<div class="grid2" style="margin-bottom:10px">'+
      tile("💵 الخزنة (كاش)",m(T.safeBal,T.safeBal<0?"bad":""),"")+
-     tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"لسه ماتحوّلش للخزنة")+'</div>'+
+     tile("📲 إنستاباي (الكل)",m(instaAll(T).tot,instaAll(T).tot<0?"bad":""),"عندك "+fmt(T.instaBal)+" · اضغط للتفاصيل ‹").replace('<div class="tile"','<div class="tile" onclick="openInstaAll()" style="cursor:pointer"')+'</div>'+
      '<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="transfer">🔁 تحويل بين إنستاباي والخزنة</button>';
   h+='<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف</button>';
   h+='<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="dep">🔖 تسجيل عربون على عربية</button>';
@@ -2298,6 +2298,16 @@ function renderInvDetail(){
   $("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=prev;
 }
 
+/* إجمالي الإنستاباي كله: اللي عندك + اللي في الإنستاباي بتاع كل مستثمر + اللي أمانة عند الناس */
+function instaAll(T){var inv=[],tr={},trL=[],mine=T.instaBal,tot=mine;
+  T.inv.list.forEach(function(o){if(o.hI>0.5){inv.push({name:o.name,a:o.hI});tot+=o.hI}});
+  loansCalc().forEach(function(l){if(l.dir==="out"&&l.isp&&l.remaining>0.5){var k=l.person||"بدون اسم";if(!tr[k]){tr[k]={name:k,a:0};trL.push(tr[k])}tr[k].a+=l.remaining;tot+=l.remaining}});
+  return {mine:mine,inv:inv,tr:trL,tot:tot}}
+function instaAllCard(T){var A=instaAll(T);return '<div class="card">'+tkv("📲 إجمالي الإنستاباي كله",m(A.tot,A.tot<0?"bad":""),null,"اللي عندك + اللي عند الناس",1)+
+  tkv("· عندك انت",m(A.mine,A.mine<0?"bad":""))+
+  A.inv.map(function(x){return tkv("· 💼 عند "+esc(x.name)+" (مستثمر)",m(x.a))}).join("")+
+  A.tr.map(function(x){return tkv("· 👤 عند "+esc(x.name)+" (أمانة)",m(x.a))}).join("")+
+  ((A.inv.length||A.tr.length)?"":tnone("الإنستاباي كله عندك"))+'</div>'}
 var ISEND={give:"فلوسه بتتنقل له (تفضل في رصيده)",wd:"سحب من رأس ماله (خدها وخلاص)",pwd:"سحب أرباح (خدها وخلاص)"};
 var IDEST={insta:"الإنستاباي بتاعه",cash:"الخزنة بتاعته (كاش معاه)"};
 function heldLines(o){return '<div class="kv" style="padding-right:28px"><span class="sub">↳ في الإنستاباي بتاعه</span><b>'+m(o.hI)+'</b></div><div class="kv" style="padding-right:28px"><span class="sub">↳ في الخزنة بتاعته</span><b>'+m(o.hC)+'</b></div>'}
@@ -2357,7 +2367,8 @@ async function invHeldSave(){if(submitting)return;var iid=modal&&modal.iid,o=cal
   if(a<=0)return toast("اكتب المبلغ");if(a>mx+0.5)return toast("اللي معاه في "+(fr==="cash"?"الخزنة بتاعته ":"الإنستاباي بتاعه ")+fmt(mx)+" بس");
   submitting=true;try{if(await create("transfers",{dir:"invHeld",from:fr,iid:iid,amount:a,date:val("ihd")||todayStr(),note:val("ihn").trim()}))
     {toast("اتنقلت ✔");openInv(iid)}}finally{submitting=false}}
-window.invHeldMove=invHeldMove;window.invHeldSave=invHeldSave;
+function openInstaAll(){modal={type:"instaall"};openSheet(sheetHead("📲 الإنستاباي كله فين؟")+instaAllCard(calc())+(calc().inv.list.length?'<button class="btn" style="margin-top:10px" onclick="invSend(\'\')">💼 تحويل لمستثمر</button>':''))}
+window.openInstaAll=openInstaAll;window.invHeldMove=invHeldMove;window.invHeldSave=invHeldSave;
 var IBACK={insta:"رجّعها على الإنستاباي بتاعك",cash:"رجّعها كاش في خزنتك",wd:"اعتبرها سحب من رأس ماله (خدها وخلاص)",pwd:"اعتبرها سحب أرباح (خدها وخلاص)"};
 function invBack(iid){
   var o=calc().inv.list.find(function(x){return x.id===iid});if(!o||o.held<=0.5)return toast("مفيش فلوس معاه");

@@ -980,7 +980,7 @@ function renderHome(){
   h+=cashSplit(T);
   h+='<div class="grid2" style="margin-bottom:10px">'+
      tile("💵 الخزنة (كاش)",m(T.safeBal,T.safeBal<0?"bad":""),"")+
-     tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"اضغط للكشف والتحويلات ‹").replace('<div class="tile"','<div class="tile" onclick="openInsta()" style="cursor:pointer"')+'</div>'+
+     tile("📲 إنستاباي (الكل)",m(instaAll(T).tot,instaAll(T).tot<0?"bad":""),"عندك "+fmt(T.instaBal)+" · اضغط للتفاصيل ‹").replace('<div class="tile"','<div class="tile" onclick="openInsta()" style="cursor:pointer"')+'</div>'+
      '<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="transfer">🔁 تحويل بين إنستاباي والخزنة</button>';
   h+='<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف</button>';
   if(kashOn())h+='<button class="btn" style="margin-bottom:12px" data-act="tab" data-tab="kash">📒 افتح الكشكول (مدين / دائن)</button>';
@@ -2605,7 +2605,7 @@ function instaMore(){if(modal&&modal.type==="insta"){modal.n+=60;renderInsta()}}
 function renderInsta(){
   var T=calc(),mv=instaMoves(T),n=modal.n||40,invI=0;
   T.inv.list.forEach(function(o){invI+=invLoc(o).insta});
-  var h=sheetHead("📲 إنستاباي")+'<div class="card">'+
+  var h=sheetHead("📲 إنستاباي")+instaAllCard(T)+'<div class="card">'+
     tkv("رصيد الإنستاباي دلوقتي",m(T.instaBal,T.instaBal<0?"bad":""),null,"لسه ماتحوّلش للخزنة",1)+
     (invI>0.5?tkv("· منه فلوس مستثمرين",m(invI))+tkv("· والباقي بتاعك",m(T.instaBal-invI,T.instaBal-invI<0?"bad":"")):"")+
     (T.inv.held>0.5?tkv("💼 فلوس مستثمرين معاهم على حساباتهم",m(T.inv.held),null,"لسه في رصيدهم"):"")+'</div>';
@@ -2618,6 +2618,16 @@ function renderInsta(){
     if(mv.length>n)h+='<button class="btn sec small" style="margin-top:8px" onclick="instaMore()">عرض أقدم ('+(mv.length-n)+')</button>'}
   var prev=$("#sheet").scrollTop;$("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=prev;
 }
+/* إجمالي الإنستاباي كله: اللي عندك + اللي في الإنستاباي بتاع كل مستثمر + اللي أمانة عند الناس */
+function instaAll(T){var inv=[],tr={},trL=[],mine=T.instaBal,tot=mine;
+  T.inv.list.forEach(function(o){if(o.hI>0.5){inv.push({name:o.name,a:o.hI});tot+=o.hI}});
+  loansCalc().forEach(function(l){if(l.dir==="out"&&l.isp&&l.remaining>0.5){var k=l.person||"بدون اسم";if(!tr[k]){tr[k]={name:k,a:0};trL.push(tr[k])}tr[k].a+=l.remaining;tot+=l.remaining}});
+  return {mine:mine,inv:inv,tr:trL,tot:tot}}
+function instaAllCard(T){var A=instaAll(T);return '<div class="card">'+tkv("📲 إجمالي الإنستاباي كله",m(A.tot,A.tot<0?"bad":""),null,"اللي عندك + اللي عند الناس",1)+
+  tkv("· عندك انت",m(A.mine,A.mine<0?"bad":""))+
+  A.inv.map(function(x){return tkv("· 💼 عند "+esc(x.name)+" (مستثمر)",m(x.a))}).join("")+
+  A.tr.map(function(x){return tkv("· 👤 عند "+esc(x.name)+" (أمانة)",m(x.a))}).join("")+
+  ((A.inv.length||A.tr.length)?"":tnone("الإنستاباي كله عندك"))+'</div>'}
 var ISEND={give:"فلوسه بتتنقل له (تفضل في رصيده)",wd:"سحب من رأس ماله (خدها وخلاص)",pwd:"سحب أرباح (خدها وخلاص)"};
 var IDEST={insta:"الإنستاباي بتاعه",cash:"الخزنة بتاعته (كاش معاه)"};
 function heldLines(o){return '<div class="kv" style="padding-right:28px"><span class="sub">↳ في الإنستاباي بتاعه</span><b>'+m(o.hI)+'</b></div><div class="kv" style="padding-right:28px"><span class="sub">↳ في الخزنة بتاعته</span><b>'+m(o.hC)+'</b></div>'}
