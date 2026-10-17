@@ -79,12 +79,12 @@ const whoText = () => ME.name + ' — ' + ROLES[ME.role];
 function start() {
   $('#splash').classList.add('hidden'); $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   $('#who').textContent = whoText();
-  const live = (name, key) => unsubs.push(onSnapshot(collection(fs, name), snap => {
+  const live = (name, key, quiet) => unsubs.push(onSnapshot(collection(fs, name), snap => {
     DB[key] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     $('#sync').textContent = snap.metadata.fromCache && !navigator.onLine ? '● بدون نت — هيتزامن لما النت يرجع' : '';
     render();
-  }, fail));
-  live('customers', 'customers'); live('moves', 'moves'); live('items', 'items'); live('invoices', 'invoices');
+  }, quiet ? e => console.warn(name, e) : fail));
+  live('customers', 'customers'); live('moves', 'moves'); live('items', 'items', 1); live('invoices', 'invoices', 1);
   if (isOwner()) live('members', 'members');
   go('home');
 }
