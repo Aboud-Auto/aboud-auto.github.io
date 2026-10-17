@@ -425,6 +425,7 @@ function pwExt(x){var a=+x.amount||0;return x.from==="ext"?a:x.from==="both"?Mat
 function capIn(k){return k==="addcap"}
 function capMove(k){return capOut(k)||capIn(k)}
 function capLabel(x){
+  if(x.adj)return x.kind==="addcap"?"🔧 ظبط رصيد الإنستاباي (زيادة)":"🔧 ظبط رصيد الإنستاباي (عجز)";
   if(x.kind==="withdraw")return "👤 سحب من رأس المال";
   if(x.kind==="pwithdraw")return "💵 سحب أرباح"+(x.from==="ext"?" (من العمولات)":x.from==="both"?" (عربيات "+fmt((+x.amount||0)-pwExt(x))+" + عمولات "+fmt(pwExt(x))+")":"");
   if(x.kind==="lossrepay"){var cr=S.cars.find(function(c){return c.id===x.carId});return "📉 سداد خسارة "+esc(cr?cr.name:"عربية")}
@@ -691,6 +692,7 @@ function heroTap(k,T){
       (T.recv>0.5?tkv("− سلف ادتها لناس",m(T.recv,"bad")):"")+
       ttot("= المفروض يبقى معاك",m(T.cashNow));
     if(!T.check)h+='<div class="banner" style="margin:10px 0 0">⚠️ في فرق في الحساب، راجع آخر حركات اتسجلت</div>';
+    h+='<button class="btn sec small" style="margin-top:12px" onclick="instaAdj()">🔧 ظبط رصيد الإنستاباي</button>';
     h+='<div class="two" style="margin-top:12px"><button class="btn sec small" data-act="tinfo" data-k="stock">العربيات في المعرض</button><button class="btn sec small" data-act="tinfo" data-k="debts">مديونيات العملاء</button></div>';
   }else if(k==="hbase"){
     t="🏦 أصل رأس المال";
@@ -3024,6 +3026,33 @@ function rbTrader(){
   return {title:"كشف حساب تاجر",sub:o.name+" · حتى "+rfd(todayStr()),file:PFX+"-trader-"+fz(o.name)+"-"+todayStr(),blocks:B};
 }
 window.openTraders=openTraders;window.trFilter=trFilter;window.openTrader=openTrader;window.trMoney=trMoney;window.trMoneySave=trMoneySave;window.trSettle=trSettle;window.trReport=trReport;
+/* ---------- ظبط رصيد الإنستاباي: الرصيد الحقيقي والفرق يتسجل ----------
+   ناقص: للخزنة → transfers {dir:"toSafe",adj:true} · عجز → capital {kind:"withdraw",src:"insta",adj:true}
+   زيادة: من الخزنة → transfers {dir:"toInsta",adj:true} · زيادة → capital {kind:"addcap",src:"insta",adj:true} */
+function instaAdj(){var T=calc();modal={type:"instaadj"};
+  openSheet(sheetHead("🔧 ظبط رصيد الإنستاباي")+
+    '<div class="preview" style="display:block">المتسجل في البرنامج: <b>'+m(T.instaBal)+'</b></div>'+
+    fld("الرصيد الحقيقي اللي في الإنستاباي دلوقتي",minp("iaReal"))+
+    fld("الفرق ده يتسجل إزاي؟",'<select name="iaHow"><option value="safe">نقل بين الإنستاباي والخزنة</option><option value="cap">عجز / زيادة في رأس المال</option></select>')+
+    '<div class="two">'+fld("التاريخ",dinp("iaDate"))+fld("ملاحظة (اختياري)",'<input name="iaNote" autocomplete="off">')+'</div>'+
+    '<div class="preview" id="iaPv" style="display:block"></div>'+
+    '<button class="btn" onclick="instaAdjSave()">حفظ</button><button class="btn sec" style="margin-top:8px" onclick="closeSheet()">إلغاء</button>');
+  var sh=$("#sheet");sh.addEventListener("input",instaAdjPv);sh.addEventListener("change",instaAdjPv);instaAdjPv()}
+function instaAdjPv(){var el=$("#iaPv");if(!el||!modal||modal.type!=="instaadj")return;var T=calc(),r=val("iaReal");
+  if(r===""){el.innerHTML="اكتب الرصيد الحقيقي وهيبانلك الفرق";return}
+  var d=parseNum(r)-T.instaBal,how=val("iaHow"),h;
+  if(Math.abs(d)<0.5){el.innerHTML="الرصيد مظبوط، مفيش فرق";return}
+  if(d<0){h='الإنستاباي ناقص <b class="bad">'+m(-d)+'</b>';h+=how==="safe"?'<br>هيتنقل للخزنة: الخزنة تبقى <b>'+m(T.safeBal-d)+'</b>':'<br>هينزل من رأس المال كعجز (تقدر تسدده بعدين من «سداد عجز السحب»)'}
+  else{h='الإنستاباي زيادة <b class="good">'+m(d)+'</b>';h+=how==="safe"?'<br>هيتنقل من الخزنة: الخزنة تبقى <b class="'+(T.safeBal-d<0?"bad":"")+'">'+m(T.safeBal-d)+'</b>':'<br>هيتضاف لرأس المال'}
+  el.innerHTML=h+'<br>الإنستاباي بعد الظبط: <b>'+m(T.instaBal+d)+'</b>'}
+async function instaAdjSave(){if(submitting)return;var T=calc(),r=val("iaReal");if(r==="")return toast("اكتب الرصيد الحقيقي");
+  var d=Math.round((parseNum(r)-T.instaBal)*100)/100,how=val("iaHow"),dt=val("iaDate")||todayStr(),nt=val("iaNote").trim()||"ظبط رصيد الإنستاباي",a=Math.abs(d);
+  if(a<0.5)return toast("الرصيد مظبوط، مفيش فرق");
+  submitting=true;try{var ok;
+    if(how==="safe")ok=await create("transfers",{dir:d<0?"toSafe":"toInsta",amount:a,date:dt,note:nt,adj:true});
+    else ok=await create("capital",{kind:d<0?"withdraw":"addcap",src:"insta",amount:a,date:dt,note:nt,adj:true});
+    if(ok){closeSheet();toast("اتظبط ✔")}}finally{submitting=false}}
+window.instaAdj=instaAdj;window.instaAdjSave=instaAdjSave;
 function buildReport(){return modal.kind==="trader"?rbTrader():modal.kind==="person"?rbPerson():modal.kind==="jardall"?rbJardAll():modal.kind==="inv"?rbInvestor():modal.kind==="invall"?rbInvAll():modal.kind==="settle"?rbSettle():modal.kind==="partner"?rbPartner():modal.kind==="carp"?rbCarPartners():rbPeriod()}
 
 function reportNames(){var o={},a=[];S.cars.forEach(function(c){(c.partners||[]).forEach(function(p){if(p.name&&!o[p.name]){o[p.name]=1;a.push(p.name)}})});return a}
