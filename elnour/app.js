@@ -90,7 +90,7 @@ function start() {
 }
 
 /* ====== التنقل ====== */
-const TAB_OF = { cust: 'home', inv: 'invs', newinv: 'invs' };
+const TAB_OF = { cust: 'home', inv: 'invs', newinv: 'invs', count: 'items' };
 const FAB = { home: ['＋ عميل جديد', () => openCustomerForm()], items: ['＋ صنف جديد', () => openItem()], invs: ['＋ فاتورة بيع', () => newInv('sale')] };
 function go(v, arg, replace) {
   if (!replace && (route.v !== v || route.arg !== arg)) HIST.push(route);
@@ -114,7 +114,8 @@ function render() {
   if (route.v === 'items' && foc === 'iqbox') return renderItems();
   if (route.v === 'invs' && foc === 'vqbox') return renderInvs();
   if (route.v === 'newinv' && $('#invEd')) return; // متقاطعش الفاتورة وهي بتتكتب
-  ({ home: viewHome, cust: viewCust, log: viewLog, more: viewMore, items: viewItems, invs: viewInvs, inv: viewInv, newinv: viewNewInv })[route.v]();
+  if (route.v === 'count' && $('#cntEd')) return;
+  ({ home: viewHome, cust: viewCust, log: viewLog, more: viewMore, items: viewItems, invs: viewInvs, inv: viewInv, newinv: viewNewInv, count: viewCount })[route.v]();
 }
 
 /* ====== الرئيسية ====== */
@@ -615,19 +616,22 @@ function viewLog() {
    - فاتورة البيع لعميل متسجل: قيمتها بتتزوّد على حسابه، واللي اندفع معاها بيتخصم
      (يعني الزيادة في الدفع بتنزل من القديم، والناقص بيتضاف عليه)
    ===================================================================== */
-const KIND = { sale: 'فاتورة بيع', ret: 'مرتجع', quote: 'عرض سعر', in: 'إضافة بضاعة' };
-const KCOL = { sale: 'var(--red2)', ret: 'var(--blue)', quote: 'var(--gold2)', in: 'var(--green)' };
-const KBG = { sale: 'rgba(214,34,42,.15)', ret: 'rgba(90,160,255,.15)', quote: 'rgba(231,181,60,.15)', in: 'rgba(47,191,113,.15)' };
-const KSIGN = { sale: -1, ret: 1, in: 1, quote: 0 }; // أثر كل نوع على المخزن
+const KIND = { sale: 'فاتورة بيع', ret: 'مرتجع', quote: 'عرض سعر', in: 'إضافة بضاعة', cnt: 'جرد' };
+const KCOL = { sale: 'var(--red2)', ret: 'var(--blue)', quote: 'var(--gold2)', in: 'var(--green)', cnt: '#b48cff' };
+const KBG = { sale: 'rgba(214,34,42,.15)', ret: 'rgba(90,160,255,.15)', quote: 'rgba(231,181,60,.15)', in: 'rgba(47,191,113,.15)', cnt: 'rgba(180,140,255,.15)' };
+const KSIGN = { sale: -1, ret: 1, in: 1, quote: 0, cnt: 1 }; // الجرد: الكمية في السطر هي الفرق (+ أو −)
+const STOCK = k => k === 'in' || k === 'cnt'; // أثر كل نوع على المخزن
 const fmtP = n => (+n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const item = id => DB.items.find(i => i.id === id);
 const invOf = id => DB.invoices.find(v => v.id === id);
 const paidSum = v => (v.paid || []).reduce((s, p) => s + p.amt, 0);
 const custName = id => DB.customers.find(c => c.id === id)?.name;
-const invWho = v => v.kind === 'in' ? 'المخزن' : v.cid ? (custName(v.cid) || v.cname || 'عميل اتحذف') : (v.cname || (v.kind === 'quote' ? 'عميل' : 'عميل نقدي'));
+const invWho = v => STOCK(v.kind) ? 'المخزن' : v.cid ? (custName(v.cid) || v.cname || 'عميل اتحذف') : (v.cname || (v.kind === 'quote' ? 'عميل' : 'عميل نقدي'));
 const invOrd = (a, b) => (a.date + a.ts).localeCompare(b.date + b.ts);
 function nextNo(kind) { return DB.invoices.filter(v => v.kind === kind).reduce((m, v) => Math.max(m, v.no || 0), 0) + 1 }
-let iq = '', ifilter = 'all', vq = '', vfilter = 'all', vcust = '';
+let iq = '', ifilter = 'all', icat = '', lastCat = '', vq = '', vfilter = 'all', vcust = '', CNT = {};
+const cats = () => [...new Set(DB.items.map(i => (i.cat || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ar'));
+const NOCAT = 'بدون بند';
 
 /* ---------- صفحة الأصناف ---------- */
 function viewItems() {
@@ -642,22 +646,32 @@ function viewItems() {
       <div class="stat"><b class="num" style="color:${out ? 'var(--red2)' : 'var(--green)'}">${out}</b><small>صنف خلصان</small></div>
     </div>
   </div>
-  ${canEdit() && DB.items.length ? `<button class="btn btn-ghost" style="margin-top:12px;color:var(--green)" onclick="newInv('in')">📦 دخول بضاعة للمخزن (كذا صنف مرة واحدة)</button>` : ''}
+  ${canEdit() && DB.items.length ? `<div class="kgrid">
+    <button onclick="newInv('in')" style="color:var(--green)"><i>📦</i>دخول بضاعة</button>
+    <button onclick="startCount()" style="color:#b48cff"><i>📋</i>جرد ${icat ? esc(icat) : 'المخزن'}</button></div>` : ''}
   <div class="search"><input id="iqbox" placeholder="ابحث باسم الصنف أو الكود" value="${esc(iq)}" oninput="setIQ(this.value)"></div>
-  <div class="sec-t"><span>الأصناف (${DB.items.length})</span>
-    <div class="chips">${[['all', 'الكل'], ['out', 'خلصان']].map(([k, l]) => `<span class="chip ${ifilter === k ? 'on' : ''}" onclick="setIF('${k}')">${l}</span>`).join('')}</div></div>
+  <div class="sec-t"><span>البنود</span><span class="chip ${ifilter === 'out' ? 'on' : ''}" onclick="setIF('${ifilter === 'out' ? 'all' : 'out'}')">الخلصان بس</span></div>
+  ${catChips(icat, 'setCat')}
   <div id="ilist"></div>`;
   renderItems();
 }
 function setIQ(v) { iq = v.trim(); renderItems() }
 function setIF(k) { ifilter = k; viewItems() }
+function setCat(c) { icat = c; viewItems() }
+function startCount() { CNT = {}; go('count', icat) }
+function catChips(sel, fn) {
+  const n = c => DB.items.filter(i => (i.cat || '') === c).length, none = n('');
+  return `<div class="cats"><span class="chip ${!sel ? 'on' : ''}" onclick="${fn}('')">الكل <span class="num">${DB.items.length}</span></span>${cats().map(c => `<span class="chip ${sel === c ? 'on' : ''}" onclick="${fn}(this.dataset.c)" data-c="${esc(c)}">${esc(c)} <span class="num">${n(c)}</span></span>`).join('')}${none && cats().length ? `<span class="chip ${sel === NOCAT ? 'on' : ''}" onclick="${fn}('${NOCAT}')">${NOCAT} <span class="num">${none}</span></span>` : ''}</div>`;
+}
+const inCat = (i, c) => !c || (c === NOCAT ? !(i.cat || '') : (i.cat || '') === c);
 const itemMatch = (i, s) => !s || i.name.includes(s) || (i.code || '').toLowerCase().includes(s.toLowerCase());
 function renderItems() {
   const el = $('#ilist'); if (!el) return;
-  let list = DB.items.filter(i => itemMatch(i, iq));
+  let list = DB.items.filter(i => itemMatch(i, iq) && inCat(i, icat));
   if (ifilter === 'out') list = list.filter(i => (i.qty || 0) <= 0);
-  list.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-  el.innerHTML = list.length ? list.map(i => `
+  list.sort((a, b) => (a.cat || '\uffff').localeCompare(b.cat || '\uffff', 'ar') || a.name.localeCompare(b.name, 'ar'));
+  const grp = !icat && cats().length; let last = null;
+  el.innerHTML = list.length ? list.map(i => `${grp && (i.cat || '') !== last ? `<div class="sec-t" style="color:var(--gold2);font-weight:700">${esc((last = i.cat || '') || NOCAT)}</div>` : ''}
     <div class="cust" onclick="openItem('${i.id}')">
       <div class="av" style="border-radius:12px">${esc(i.name.trim()[0] || '؟')}</div>
       <div class="n"><b>${esc(i.name)}</b><small>جملة <span class="num">${fmtP(i.w)}</span> • قطاعي <span class="num">${fmtP(i.r)}</span>${i.code ? ' • ' + esc(i.code) : ''}</small></div>
@@ -668,10 +682,10 @@ function itemHist(id) {
   const h = DB.invoices.filter(v => v.kind !== 'quote' && v.lines.some(l => l.iid === id)).sort(invOrd).reverse().slice(0, 8);
   if (!h.length) return '';
   return `<div class="sec-t"><span>آخر حركات الصنف</span></div>${h.map(v => {
-    const q = v.lines.filter(l => l.iid === id).reduce((s, l) => s + l.qty, 0);
+    const q = KSIGN[v.kind] * v.lines.filter(l => l.iid === id).reduce((s, l) => s + l.qty, 0);
     return `<div class="list-item" style="cursor:pointer" onclick="closeM();go('inv','${v.id}')">
       <div class="f"><b style="color:${KCOL[v.kind]}">${KIND[v.kind]} #${v.no}</b><small>${dshow(v.date)} — ${esc(invWho(v))}</small></div>
-      <b class="num" style="color:${KSIGN[v.kind] < 0 ? 'var(--red2)' : 'var(--green)'}">${KSIGN[v.kind] < 0 ? '−' : '+'}${fmtP(q)}</b></div>`
+      <b class="num" style="color:${q < 0 ? 'var(--red2)' : 'var(--green)'}">${q < 0 ? '−' : '+'}${fmtP(Math.abs(q))}</b></div>`
   }).join('')}`;
 }
 function openItem(id) {
@@ -679,6 +693,7 @@ function openItem(id) {
   if (i && !canEdit()) return sheet(`<h3>${esc(i.name)}</h3>
     <div class="note">جملة: <b class="num">${fmtP(i.w)}</b> — قطاعي: <b class="num">${fmtP(i.r)}</b><br>في المخزن: <b class="num">${fmtP(i.qty || 0)}</b> ${esc(i.unit || 'قطعة')}</div>${itemHist(i.id)}`);
   sheet(`<h3>${i ? 'تعديل صنف' : 'صنف جديد'}</h3>
+    <div class="field"><span>البند</span>${catPicker(i ? i.cat || '' : icat && icat !== NOCAT ? icat : lastCat)}</div>
     <label class="field"><span>اسم الصنف</span><input id="in_n" value="${esc(i?.name || '')}" placeholder="مثلاً: ريموت كيا سيراتو 3 زرار"></label>
     <div style="display:flex;gap:10px">
       <label class="field" style="flex:1"><span>سعر الجملة</span><input id="in_w" inputmode="decimal" value="${i ? fmtP(i.w) : ''}" style="font-size:20px;font-weight:800"></label>
@@ -690,23 +705,44 @@ function openItem(id) {
     </div>
     <label class="field"><span>كود الصنف (اختياري)</span><input id="in_c" value="${esc(i?.code || '')}"></label>
     ${i ? `<div class="note">لو جاتلك بضاعة جديدة من الصنف ده دوس «دخول كمية» تحت. تغيير الكمية فوق للجرد بس.</div>` : ''}
-    <button class="btn btn-gold" onclick="saveItem('${id || ''}')">حفظ</button>
+    ${i ? `<button class="btn btn-gold" onclick="saveItem('${id}')">حفظ</button>` : `<div class="acts" style="margin-top:0">
+      <button class="btn btn-gold" onclick="saveItem('',1)">حفظ وضيف صنف تاني</button>
+      <button class="btn btn-ghost" onclick="saveItem('')">حفظ وخلاص</button></div>`}
     ${i ? `<button class="btn btn-green" style="margin-top:8px" onclick="quickIn('${i.id}')">＋ دخول كمية للمخزن</button>
     ${itemHist(i.id)}
     <button class="btn btn-ghost" style="margin-top:12px;color:var(--red2)" onclick="delItem('${i.id}')">حذف الصنف</button>` : ''}`);
-  if (!i) setTimeout(() => $('#in_n').focus(), 50);
+  if (!i) setTimeout(() => $('#in_n')?.focus(), 50);
 }
-function saveItem(id) {
+function catPicker(sel) {
+  const cs = cats(); if (sel && !cs.includes(sel)) cs.push(sel);
+  return `<div class="chips" id="catc" style="flex-wrap:wrap">${cs.map(c => `<span class="chip ${c === sel ? 'on' : ''}" onclick="pickCat(this)">${esc(c)}</span>`).join('')}
+    <span class="chip" style="border-style:dashed" onclick="newCatBox()">＋ بند جديد</span></div>
+    <input id="in_cat" class="${cs.length ? 'hidden' : ''}" placeholder="اسم البند (مثلاً: كفرات، ريموتات، مفاتيح خام)" style="margin-top:8px">`;
+}
+function pickCat(el) { const on = el.classList.contains('on'); document.querySelectorAll('#catc .chip').forEach(c => c.classList.remove('on')); if (!on) el.classList.add('on'); $('#in_cat').value = ''; $('#in_cat').classList.add('hidden') }
+function newCatBox() { document.querySelectorAll('#catc .chip').forEach(c => c.classList.remove('on')); $('#in_cat').classList.remove('hidden'); $('#in_cat').focus() }
+function getCat() { const n = $('#in_cat'); if (n && !n.classList.contains('hidden') && n.value.trim()) return n.value.trim(); const c = $('#catc .chip.on'); return c ? c.textContent.trim() : '' }
+function cntRecord(b, lines, note) { // تسجيل الجرد في الفواتير عشان يفضل فيه أثر
+  const total = lines.reduce((s, l) => s + l.qty * l.price, 0), v = { no: nextNo('cnt'), kind: 'cnt', cid: null, cname: '', pt: 'w', lines, sub: total, disc: 0, total, paid: [], date: today(), note: note || '', by: ME.name, ts: Date.now() + '' };
+  const id = uid(); b.set(doc(fs, 'invoices', id), v); applyInv(b, id, v); return id;
+}
+function saveItem(id, again) {
   once(async () => {
     const name = $('#in_n').value.trim(); if (!name) return toast('اكتب اسم الصنف');
-    const d = { name, w: parseAmt($('#in_w').value), r: parseAmt($('#in_r').value), unit: $('#in_u').value.trim() || 'قطعة', code: $('#in_c').value.trim() };
+    const d = { name, cat: getCat(), w: parseAmt($('#in_w').value), r: parseAmt($('#in_r').value), unit: $('#in_u').value.trim() || 'قطعة', code: $('#in_c').value.trim() };
+    lastCat = d.cat;
     const qv = parseAmt($('#in_q').value);
     if (DB.items.some(x => x.name === name && x.id !== id)) return toast('في صنف تاني بنفس الاسم');
     if (id) {
       const i = item(id);
-      if (qv !== (i.qty || 0)) { if (!confirm(`هتغيّر كمية المخزن من ${fmtP(i.qty || 0)} لـ ${fmtP(qv)} (جرد). متأكد؟`)) return; d.qty = qv }
-      updateDoc(doc(fs, 'items', id), d).catch(fail);
+      const b = writeBatch(fs); b.update(doc(fs, 'items', id), d);
+      if (qv !== (i.qty || 0)) {
+        if (!confirm(`هتغيّر كمية المخزن من ${fmtP(i.qty || 0)} لـ ${fmtP(qv)} (جرد). متأكد؟`)) return;
+        cntRecord(b, [{ iid: id, name, qty: qv - (i.qty || 0), price: d.w, was: i.qty || 0, now: qv }]);
+      }
+      b.commit().catch(fail);
     } else setDoc(doc(fs, 'items', uid()), { ...d, qty: qv, created: today() }).catch(fail);
+    if (again) { closeM(); toast('اتحفظ: ' + name); return setTimeout(() => openItem(), 120) }
     closeM(); toast('تم الحفظ');
   });
 }
@@ -731,6 +767,50 @@ function saveQuickIn(id) {
     const v = { no: nextNo('in'), kind: 'in', cid: null, cname: '', pt: 'w', lines: [{ iid: id, name: i.name, qty: q, price: i.w || 0 }], sub: q * (i.w || 0), disc: 0, total: q * (i.w || 0), paid: [], date: $('#qi_d').value || today(), note: $('#qi_n').value.trim(), by: ME.name, ts: Date.now() + '' };
     const b = writeBatch(fs), vid = uid(); b.set(doc(fs, 'invoices', vid), v); applyInv(b, vid, v); b.commit().catch(fail);
     closeM(); toast(`اتضاف ${fmtP(q)} على المخزن`);
+  });
+}
+
+/* ---------- الجرد ---------- */
+function viewCount() {
+  const c = route.arg || '', list = DB.items.filter(i => inCat(i, c)).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  $('#view').innerHTML = `<div id="cntEd">
+  <div class="cbox" style="text-align:right"><b style="font-size:18px">📋 جرد ${c ? esc(c) : 'كل المخزن'}</b>
+    <div class="note" style="margin-bottom:0">اكتب قدام كل صنف الكمية اللي عدّيتها فعلاً. اللي هتسيبه فاضي مش هيتغيّر. لما تخلص دوس «حفظ الجرد» تحت.</div></div>
+  <div class="sec-t"><span>اختار البند</span></div>
+  ${catChips(c, 'cntCat')}
+  <div style="margin-top:12px">${list.length ? list.map(i => `<div class="ln">
+    <div class="ln1"><b>${esc(i.name)}</b></div>
+    <div class="ln2"><small style="color:var(--muted);flex:1">في البرنامج: <b class="num" style="color:var(--text);font-size:15px">${fmtP(i.qty || 0)}</b> ${esc(i.unit || 'قطعة')}</small>
+      <span class="cd" id="cd_${i.id}"></span>
+      <input class="pr" inputmode="decimal" placeholder="العدد" value="${esc(CNT[i.id] ?? '')}" oninput="cntIn('${i.id}',this.value)" style="width:96px;font-size:17px"></div></div>`).join('') : '<div class="empty">مفيش أصناف في البند ده</div>'}</div>
+  <div class="note" id="cnth"></div>
+  <label class="field"><span>ملاحظة (اختياري)</span><input id="cntn" placeholder="مثلاً: جرد آخر الشهر"></label>
+  <button class="btn btn-gold" style="padding:16px" onclick="saveCount()">حفظ الجرد</button></div>`;
+  list.forEach(i => cntDiff(i.id)); cntSum();
+}
+function cntCat(c) { route.arg = c; $('#view').innerHTML = ''; viewCount() }
+function cntIn(id, v) { CNT[id] = v; cntDiff(id); cntSum() }
+function cntDiff(id) {
+  const el = $('#cd_' + id); if (!el) return;
+  const v = CNT[id], i = item(id);
+  if (v === undefined || String(v).trim() === '' || !i) { el.innerHTML = ''; return }
+  const d = parseAmt(v) - (i.qty || 0);
+  el.innerHTML = !d ? '<b style="color:var(--green)">✓</b>' : `<b class="num" style="color:${d < 0 ? 'var(--red2)' : 'var(--green)'}">${d < 0 ? '−' : '+'}${fmtP(Math.abs(d))}</b>`;
+}
+function cntChanges() {
+  return Object.entries(CNT).filter(([id, v]) => String(v).trim() !== '' && item(id)).map(([id, v]) => { const i = item(id), now = parseAmt(v), was = i.qty || 0; return { iid: id, name: i.name, qty: now - was, price: i.w || 0, was, now } }).filter(l => l.qty);
+}
+function cntSum() {
+  const ch = cntChanges(), counted = Object.values(CNT).filter(v => String(v).trim() !== '').length;
+  $('#cnth').innerHTML = !counted ? 'لسه ما كتبتش أي كمية.' : `عدّيت <b class="num">${counted}</b> صنف — ${ch.length ? `هيتعدّل <b class="num">${ch.length}</b> صنف (ناقص ${ch.filter(l => l.qty < 0).length} / زيادة ${ch.filter(l => l.qty > 0).length})` : 'كله مظبوط ومطابق ✓'}`;
+}
+function saveCount() {
+  once(async () => {
+    const ch = cntChanges();
+    if (!ch.length) { if (Object.values(CNT).some(v => String(v).trim() !== '')) { CNT = {}; toast('كل الكميات مطابقة ✓'); return back() } return toast('اكتب الكميات اللي عدّيتها الأول') }
+    if (!confirm(`هيتعدّل ${ch.length} صنف في المخزن. تكمّل؟`)) return;
+    const b = writeBatch(fs), id = cntRecord(b, ch, $('#cntn').value.trim()); b.commit().catch(fail);
+    CNT = {}; JUST = id; toast('تم حفظ الجرد'); go('inv', id, true);
   });
 }
 
@@ -759,7 +839,7 @@ function viewInvs() {
   <div class="search"><input id="vqbox" placeholder="ابحث برقم الفاتورة أو اسم العميل" value="${esc(vq)}" oninput="setVQ(this.value)"></div>
   ${vc ? `<div class="note" style="display:flex;align-items:center;gap:8px"><span style="flex:1">فواتير <b>${esc(vc.name)}</b> بس</span><span class="chip on" onclick="custInvs('')">عرض الكل ✕</span></div>` : ''}
   <div class="sec-t"><span>الفواتير</span>
-    <div class="chips" style="overflow-x:auto">${[['all', 'الكل'], ['sale', 'بيع'], ['ret', 'مرتجع'], ['quote', 'عروض'], ['in', 'دخول']].map(([k, l]) => `<span class="chip ${vfilter === k ? 'on' : ''}" onclick="setVF('${k}')">${l}</span>`).join('')}</div></div>
+    <div class="chips" style="overflow-x:auto">${[['all', 'الكل'], ['sale', 'بيع'], ['ret', 'مرتجع'], ['quote', 'عروض'], ['in', 'دخول'], ['cnt', 'جرد']].map(([k, l]) => `<span class="chip ${vfilter === k ? 'on' : ''}" onclick="setVF('${k}')">${l}</span>`).join('')}</div></div>
   <div id="vlist"></div>`;
   renderInvs();
 }
@@ -769,6 +849,7 @@ function setVF(k) { vfilter = k; viewInvs() }
 function payLabel(v) {
   if (v.kind === 'quote') return v.done ? 'اتحوّل لفاتورة' : 'عرض سعر';
   if (v.kind === 'in') return v.lines.length + ' صنف';
+  if (v.kind === 'cnt') return v.lines.length + ' صنف اتعدّل';
   if (v.kind === 'ret') return v.cid ? 'اتخصم من حسابه' : 'رجّعله فلوس';
   const P = paidSum(v);
   return P <= 0 ? 'آجل' : P < v.total ? 'جزء آجل' : P > v.total ? 'دفع زيادة' : 'مدفوعة';
@@ -947,7 +1028,7 @@ function edSug(s) {
   if (!s) { el.innerHTML = ''; return }
   const list = DB.items.filter(i => itemMatch(i, s)).sort((a, b) => a.name.localeCompare(b.name, 'ar')).slice(0, 8);
   el.innerHTML = `<div class="sug">${list.length ? list.map(i => `<button onclick="edAdd('${i.id}')"><b>${esc(i.name)}</b>
-    <small>${ED.kind === 'in' ? '' : (ED.pt === 'w' ? 'جملة ' : 'قطاعي ') + '<span class="num">' + fmtP(priceOf(i, ED.pt)) + '</span> • '}في المخزن <span class="num">${fmtP(i.qty || 0)}</span></small></button>`).join('')
+    <small>${i.cat ? esc(i.cat) + ' • ' : ''}${ED.kind === 'in' ? '' : (ED.pt === 'w' ? 'جملة ' : 'قطاعي ') + '<span class="num">' + fmtP(priceOf(i, ED.pt)) + '</span> • '}في المخزن <span class="num">${fmtP(i.qty || 0)}</span></small></button>`).join('')
       : `<div style="padding:12px;color:var(--muted);font-size:13px">مفيش صنف بالاسم ده — سجّله الأول من تبويب «الأصناف»</div>`}</div>`;
 }
 function edAdd(id) {
@@ -1005,15 +1086,16 @@ function viewInv() {
       <b class="num" style="flex:1;font-size:18px">#${v.no}</b><span style="color:var(--muted);font-size:13px">${dshow(v.date)}</span>
     </div>
     <div style="margin-top:12px;font-size:18px;font-weight:800">${c ? `<span style="cursor:pointer" onclick="go('cust','${c.id}')">${esc(c.name)} ←</span>` : esc(invWho(v))}</div>
-    ${v.kind !== 'in' ? `<small style="color:var(--muted)">بأسعار ${v.pt === 'w' ? 'الجملة' : 'القطاعي'}${c && c.phone ? ' • <span class="num">' + esc(c.phone) + '</span>' : ''}</small>` : ''}
+    ${!STOCK(v.kind) ? `<small style="color:var(--muted)">بأسعار ${v.pt === 'w' ? 'الجملة' : 'القطاعي'}${c && c.phone ? ' • <span class="num">' + esc(c.phone) + '</span>' : ''}</small>` : ''}
     ${src ? `<div class="note" style="margin:10px 0 0;cursor:pointer" onclick="go('inv','${src.id}')">اتعملت من عرض سعر #${src.no} ←</div>` : ''}
     ${conv ? `<div class="note" style="margin:10px 0 0;cursor:pointer" onclick="go('inv','${conv.id}')">✓ العرض ده اتحوّل لفاتورة بيع #${conv.no} ←</div>` : ''}
   </div>
   <div class="sec-t"><span>الأصناف (${v.lines.length})</span></div>
   <div class="tbl">${v.lines.map(l => `<div class="tr">
-    <div class="tn"><b>${esc(l.name)}</b>${v.kind !== 'in' ? `<small><span class="num">${fmtP(l.qty)}</span> × <span class="num">${fmtP(l.price)}</span></small>` : ''}</div>
-    <b class="num">${v.kind === 'in' ? '+' + fmtP(l.qty) : fmtP(l.qty * l.price)}</b></div>`).join('')}</div>
-  ${v.kind !== 'in' ? `<div class="tot">
+    <div class="tn"><b>${esc(l.name)}</b>${v.kind === 'cnt' ? `<small>كان <span class="num">${fmtP(l.was)}</span> ← بقى <span class="num">${fmtP(l.now)}</span></small>` : v.kind !== 'in' ? `<small><span class="num">${fmtP(l.qty)}</span> × <span class="num">${fmtP(l.price)}</span></small>` : ''}</div>
+    <b class="num" style="${v.kind === 'cnt' ? 'color:' + (l.qty < 0 ? 'var(--red2)' : 'var(--green)') : ''}">${STOCK(v.kind) ? (l.qty < 0 ? '−' : '+') + fmtP(Math.abs(l.qty)) : fmtP(l.qty * l.price)}</b></div>`).join('')}</div>
+  ${v.kind === 'cnt' ? `<div class="tot"><div class="r"><span>فرق قيمة المخزن (بالجملة)</span><b class="num" style="color:${v.total < 0 ? 'var(--red2)' : 'var(--green)'}">${v.total < 0 ? '−' : '+'}${fmt(Math.abs(v.total))}</b></div></div>` : ''}
+  ${!STOCK(v.kind) ? `<div class="tot">
     ${v.disc ? `<div class="r"><span>قبل الخصم</span><b class="num">${fmtP(v.sub)}</b></div><div class="r"><span>خصم</span><b class="num" style="color:var(--gold2)">− ${fmtP(v.disc)}</b></div>` : ''}
     <div class="r big"><span>${v.kind === 'ret' ? 'قيمة المرتجع' : 'الإجمالي'}</span><b class="num" style="color:${KCOL[v.kind]}">${fmtP(v.total)}</b></div>
     ${v.kind === 'sale' ? `${(v.paid || []).map(p => `<div class="r"><span>دفع ${esc(p.method)}</span><b class="num" style="color:var(--green)">${fmt(p.amt)}</b></div>`).join('') || `<div class="r"><span>المدفوع</span><b>آجل بالكامل</b></div>`}
@@ -1024,14 +1106,14 @@ function viewInv() {
   </div>` : ''}
   ${v.note ? `<div class="note">${esc(v.note)}</div>` : ''}
   <small style="display:block;color:var(--muted);margin:10px 2px">سجّلها: ${esc(v.by)}</small>
-  ${v.kind !== 'in' ? `<button class="btn btn-gold" onclick="sendInv('${v.id}')">📤 ابعت ${KIND[v.kind]} واتساب (صورة)</button>` : ''}
+  ${!STOCK(v.kind) ? `<button class="btn btn-gold" onclick="sendInv('${v.id}')">📤 ابعت ${KIND[v.kind]} واتساب (صورة)</button>` : ''}
   ${canEdit() ? `${v.kind === 'quote' && !conv ? `<button class="btn btn-green" style="margin-top:8px" onclick="newInv('sale',{from:'${v.id}'})">🧾 حوّل العرض لفاتورة بيع</button>` : ''}
-  <div class="acts2"><button class="btn btn-ghost" onclick="newInv('${v.kind}',{edit:'${v.id}'})">تعديل</button>
-  <button class="btn btn-ghost" style="color:var(--red2)" onclick="delInv('${v.id}')">حذف</button></div>` : ''}`;
+  ${v.kind === 'cnt' ? `<button class="btn btn-ghost" style="margin-top:8px;color:var(--red2)" onclick="delInv('${v.id}')">إلغاء الجرد ده (الكميات ترجع زي ما كانت)</button>` : `<div class="acts2"><button class="btn btn-ghost" onclick="newInv('${v.kind}',{edit:'${v.id}'})">تعديل</button>
+  <button class="btn btn-ghost" style="color:var(--red2)" onclick="delInv('${v.id}')">حذف</button></div>`}` : ''}`;
 }
 function delInv(id) {
   const v = invOf(id);
-  const eff = { sale: 'هترجع الكميات للمخزن' + (v.cid ? ' وهتتشال من حساب العميل هي واللي اندفع معاها' : ' والفلوس هتتشال من المحفظة'), ret: 'الكميات هتتخصم من المخزن تاني' + (v.cid ? ' والمرتجع هيتشال من حساب العميل' : ''), in: 'الكميات هتتخصم من المخزن', quote: '' }[v.kind];
+  const eff = { sale: 'هترجع الكميات للمخزن' + (v.cid ? ' وهتتشال من حساب العميل هي واللي اندفع معاها' : ' والفلوس هتتشال من المحفظة'), ret: 'الكميات هتتخصم من المخزن تاني' + (v.cid ? ' والمرتجع هيتشال من حساب العميل' : ''), in: 'الكميات هتتخصم من المخزن', cnt: 'الكميات هترجع زي ما كانت قبل الجرد', quote: '' }[v.kind];
   if (!confirm(`متأكد إنك عايز تحذف ${KIND[v.kind]} #${v.no}؟${eff ? '\n' + eff + '.' : ''}`)) return;
   const b = writeBatch(fs); undoInv(b, v); b.delete(doc(fs, 'invoices', id));
   if (v.from && invOf(v.from)) b.update(doc(fs, 'invoices', v.from), { done: deleteField() });
@@ -1149,5 +1231,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll });
+Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
