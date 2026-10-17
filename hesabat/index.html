@@ -330,9 +330,9 @@ function flowsOf(cars,d){
   S.pay.forEach(function(x){if(!x.roll&&pk[x.carId+"|"+x.pid]&&ok(x.date))add(x.src,-(+x.amount||0))});
   S.cap.forEach(function(x){if((x.kind==="withdraw"||x.kind==="pwithdraw"||x.kind==="jam")&&ok(x.date))add(x.src,-(+x.amount||0));else if(x.kind==="addcap"&&ok(x.date))add(x.src,+x.amount||0)});
   S.ext.forEach(function(x){if(!ok(x.date))return;var a=+x.amount||0,xi=x.how==="insta"?a:x.how==="both"?Math.min(a,Math.max(0,+x.insta||0)):0;cash+=a-xi;insta+=xi});
-  S.transfers.forEach(function(x){if(!ok(x.date))return;var a=+x.amount||0;if(x.dir==="toFund"){add(x.src,-a);fund+=a}else if(x.dir==="fromFund"){fund-=a;add(x.src,a)}else if(x.dir==="toInsta"){cash-=a;insta+=a}else{cash+=a;insta-=a}});
+  S.transfers.forEach(function(x){if(!ok(x.date))return;var a=+x.amount||0;if(x.dir==="toFund"){add(x.src,-a);fund+=a}else if(x.dir==="fromFund"){fund-=a;add(x.src,a)}else if(x.dir==="toInv"){add(x.src==="cash"?"cash":"insta",-a)}else if(x.dir==="fromInv"){add(x.src==="cash"?"cash":"insta",a)}else if(x.dir==="toInsta"){cash-=a;insta+=a}else{cash+=a;insta-=a}});
   S.ledger.forEach(function(x){if(x.kind==="spay"&&ids[x.carId]&&ok(x.date))add(x.src,-(+x.amount||0))});
-  S.invmov.forEach(function(x){if(!ok(x.date))return;if(x.kind==="dep")add(x.src==="insta"?"insta":"cash",+x.amount||0);else if(x.kind==="wd"||x.kind==="pwd")add(x.src==="insta"?"insta":"cash",-(+x.amount||0))});
+  S.invmov.forEach(function(x){if(!ok(x.date)||x.src==="held")return;if(x.kind==="dep")add(x.src==="insta"?"insta":"cash",+x.amount||0);else if(x.kind==="wd"||x.kind==="pwd")add(x.src==="insta"?"insta":"cash",-(+x.amount||0))});
   var lm=lmapOf();
   S.ledger.forEach(function(x){if(ok(x.date))add(x.src,lsigned(x,lm))});
   return {cash:cash,insta:insta,fund:fund};
@@ -391,7 +391,7 @@ function calc(){
   var lossRem=lossDef-lossPaid,wDef=withdraw-repay,deficit=wDef+lossRem,capNow=capital+addcap+extTot-ew-jam-deficit;
   var undist=profitEx-repay-lossPaid-pw,value=capNow+undist;
   var IS=invStats(cars);
-  var check=Math.round(cashNow+fundBal+stockCost+debts+recv-owe-deposits-pOwed-IS.bal-value)===0;
+  var check=Math.round(cashNow+fundBal+stockCost+debts+recv-owe-deposits-pOwed-IS.bal+IS.held-value)===0;
   return {ew:ew,extAvail:extTot-ew,deposits:deposits,forfT:forfT,jam:jam,addcap:addcap,extTot:extTot,cars:cars,capital:capital,fund:fund,withdraw:withdraw,repay:repay,pw:pw,wDef:wDef,deficit:deficit,capNow:capNow,undist:undist,value:value,
     profit:profit,profitEx:profitEx,recv:recv,owe:owe,sOwe:sOwe,lossDef:lossDef,lossPaid:lossPaid,lossRem:lossRem,
     soldN:soldN,stockN:stockN,stockCost:stockCost,debts:debts,cashNow:cashNow,safeBal:safeBal,instaBal:instaBal,
@@ -437,7 +437,7 @@ function capLabel(x){
   if(x.kind==="addcap")return "➕ زيادة رأس المال";
   return "🏦 سداد عجز السحب";
 }
-function srcNote(x){return x&&x.src==="insta"?"من إنستاباي":x&&x.src==="fund"?"من العهدة":""}
+function srcNote(x){return x&&x.src==="held"?"من اللي معاه على حسابه":x&&x.src==="insta"?"من إنستاباي":x&&x.src==="fund"?"من العهدة":""}
 function dline(){var a=[],i;for(i=0;i<arguments.length;i++)if(arguments[i])a.push(arguments[i]);return a.join(" · ")}
 function srcSel(n,sel,wf){
   var T=calc();
@@ -660,7 +660,7 @@ function hlDesc(coll,o){
     if(o.trade)return "عربية داخلة في البدل"+(o.tradeName?": "+o.tradeName:"");return "تحصيل "+amt(t)}
   if(coll==="investors")return "مستثمر "+(o.name||"");
   if(o.kind&&HL_KIND[o.kind])return HL_KIND[o.kind]+" "+amt(o.amount);
-  if(coll==="transfers")return (o.dir==="toInsta"?"تحويل من الخزنة لإنستاباي ":"تحويل من إنستاباي للخزنة ")+amt(o.amount);
+  if(coll==="transfers")return o.dir==="toInv"?"تحويل لمستثمر على حسابه "+amt(o.amount):o.dir==="fromInv"?"رجوع فلوس من مستثمر "+amt(o.amount):(o.dir==="toInsta"?"تحويل من الخزنة لإنستاباي ":"تحويل من إنستاباي للخزنة ")+amt(o.amount);
   if(coll==="external")return "عمولة "+(o.desc||"")+" "+amt(o.amount);
   return (HL_AR[coll]||coll)+(o.amount!=null?" "+amt(o.amount):"");
 }
@@ -863,6 +863,7 @@ function heroTap(k,T){
       (T.stockCost>0.5?tkv("− عربيات في المعرض",m(T.stockCost,"bad"),null,'<span class="num">'+T.stockN+'</span> عربية'):"")+
       (T.debts>0.5?tkv("− باقي عند العملاء",m(T.debts,"bad")):"")+
       (T.recv>0.5?tkv("− سلف ادتها لناس",m(T.recv,"bad")):"")+
+      (T.inv.held>0.5?tkv("− فلوس مستثمرين معاهم على حساباتهم",m(T.inv.held,"bad")):"")+
       ttot("= المفروض يبقى معاك",m(T.cashNow));
     if(!T.check)h+='<div class="banner" style="margin:10px 0 0">⚠️ في فرق في الحساب، راجع آخر حركات اتسجلت</div>';
     h+='<div class="two" style="margin-top:12px"><button class="btn sec small" data-act="tinfo" data-k="stock">العربيات في المعرض</button><button class="btn sec small" data-act="tinfo" data-k="debts">مديونيات العملاء</button></div>';
@@ -979,7 +980,7 @@ function renderHome(){
   h+=cashSplit(T);
   h+='<div class="grid2" style="margin-bottom:10px">'+
      tile("💵 الخزنة (كاش)",m(T.safeBal,T.safeBal<0?"bad":""),"")+
-     tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"لسه ماتحوّلش للخزنة")+'</div>'+
+     tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"اضغط للكشف والتحويلات ‹").replace('<div class="tile"','<div class="tile" onclick="openInsta()" style="cursor:pointer"')+'</div>'+
      '<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="transfer">🔁 تحويل بين إنستاباي والخزنة</button>';
   h+='<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف</button>';
   if(kashOn())h+='<button class="btn" style="margin-bottom:12px" data-act="tab" data-tab="kash">📒 افتح الكشكول (مدين / دائن)</button>';
@@ -1025,7 +1026,7 @@ function renderCars(){
 
 function renderDay(){
   var D=dayCalc(S.day),items=[],xT=0;
-  D.ims.forEach(function(x){var lr=x.kind==="lossrepay";items.push({t:invMoveLabel(x)+" - "+esc(invName(x.iid)),d:dline(srcNote(x),esc(x.note||""),lr?"(مش بيأثر على السيولة)":""),a:x.kind==="dep"?(+x.amount||0):(x.kind==="wd"||x.kind==="pwd")?-(+x.amount||0):0,info:lr?(+x.amount||0):null,del:["invmoves",x.id]})});
+  D.ims.forEach(function(x){var lr=x.kind==="lossrepay"||x.src==="held";items.push({t:invMoveLabel(x)+" - "+esc(invName(x.iid)),d:dline(srcNote(x),esc(x.note||""),lr?"(مش بيأثر على السيولة)":""),a:lr?0:x.kind==="dep"?(+x.amount||0):(x.kind==="wd"||x.kind==="pwd")?-(+x.amount||0):0,info:lr?(+x.amount||0):null,del:["invmoves",x.id]})});
   D.xs.forEach(function(x){xT+=+x.amount||0;items.push({t:"🤝 عمولة خارجية - "+esc(x.desc||""),d:dline(esc(extParties(x)),esc(x.note||""),"✅ دخلت رأس المال"),a:+x.amount||0,del:["external",x.id]})});
   D.buys.forEach(function(c){
     items.push({t:"🚗 شراء "+esc(c.name),d:dline(c.tradeIn?"🔁 دخلت في بيعة بقيمة "+fmt(c.tradeIn):"",srcNote({src:c.buySrc}),c.owedSeller>0.5?"السعر "+fmt(c.buyPrice)+" · باقي للبايع "+fmt(c.owedSeller):""),a:-paidNow(c)+(+c.tradeIn||0),del:["car",c.id]});
@@ -1046,7 +1047,7 @@ function renderDay(){
     items.push({t:tt,d:dline(srcNote(x),esc(x.note||"")),a:x.src==="fund"?0:sg,info:x.src==="fund"?Math.abs(sg):null,del:["ledger",x.id]});
   });
   calc().cars.forEach(function(c){rbList(c).forEach(function(r){if(r.amt>0&&r.date===S.day)items.push({t:"🧾 رد مصاريف "+esc(c.name)+" للعهدة",d:"من الخزنة",a:-r.amt})})});
-  D.trs.forEach(function(x){if(x.dir==="toFund"||x.dir==="fromFund"){var fa=+x.amount||0;items.push({t:x.dir==="toFund"?"🧾 تزويد العهدة":"🧾 رجوع فلوس من العهدة",d:dline(srcNote(x),esc(x.note||"")),a:x.dir==="toFund"?-fa:fa,del:["transfers",x.id]});return}items.push({t:"🔁 تحويل "+(x.dir==="toInsta"?"من الخزنة لإنستاباي":"من إنستاباي للخزنة"),d:dline(esc(x.note||""),"(مش بيأثر على السيولة)"),a:0,info:+x.amount||0,del:["transfers",x.id]})});
+  D.trs.forEach(function(x){if(x.dir==="toInv"||x.dir==="fromInv"){var va=+x.amount||0,vs=x.src==="cash"?"الخزنة":"إنستاباي";items.push({t:x.dir==="toInv"?"💼 تحويل لـ "+esc(invName(x.iid))+" على حسابه (من "+vs+")":"💼 رجوع فلوس من "+esc(invName(x.iid))+" (لـ "+vs+")",d:dline(esc(x.note||""),"(رصيده ما اتغيّرش)"),a:x.dir==="toInv"?-va:va,del:["transfers",x.id]});return}if(x.dir==="toFund"||x.dir==="fromFund"){var fa=+x.amount||0;items.push({t:x.dir==="toFund"?"🧾 تزويد العهدة":"🧾 رجوع فلوس من العهدة",d:dline(srcNote(x),esc(x.note||"")),a:x.dir==="toFund"?-fa:fa,del:["transfers",x.id]});return}items.push({t:"🔁 تحويل "+(x.dir==="toInsta"?"من الخزنة لإنستاباي":"من إنستاباي للخزنة"),d:dline(esc(x.note||""),"(مش بيأثر على السيولة)"),a:0,info:+x.amount||0,del:["transfers",x.id]})});
   var list=items.length?items.map(function(i){
     var amt=i.info!=null?'<span class="num sub">'+fmt(i.info)+'</span>':'<span class="num '+(i.a>=0?"good":"bad")+'" style="font-weight:700">'+(i.a>0?"+":"")+fmt(i.a)+'</span>';
     return '<div class="item"><div style="flex:1"><div class="t">'+i.t+'</div>'+(i.d?'<div class="d">'+i.d+'</div>':"")+'</div>'+amt+(i.del?'<button class="del" data-act="delitem" data-coll="'+i.del[0]+'" data-id="'+i.del[1]+'" aria-label="حذف">🗑</button>':'')+'</div>';
@@ -1588,6 +1589,7 @@ function refresh(){
   if(modal&&modal.type==="traders")renderTraders();
   if(modal&&modal.type==="trader")renderTrader();
   if(modal&&modal.type==="inv")renderInvDetail();
+  if(modal&&modal.type==="insta")renderInsta();
   if(modal&&modal.type==="person")renderPerson();
   if(modal&&modal.type==="tinfo"&&modal.k==="ext")tileTap("ext");
   if(modal&&modal.type==="fund")renderFund();
@@ -2422,17 +2424,18 @@ function invModeTxt(v){
 }
 function invStats(cars){
   var mp={},list=[];
-  S.inv.forEach(function(v){mp[v.id]={id:v.id,name:v.name||"",pct:hasPctOf(v)?+v.pct:null,note:v.note||"",createdAt:v.createdAt||0,dep:0,wd:0,pwd:0,prof:0,loss:0,lr:0,working:0,lent:0,cdebt:0,cdebts:[],loans:[],cars:[],moves:[]};list.push(mp[v.id])});
-  S.invmov.forEach(function(x){var o=mp[x.iid];if(!o)return;var a=+x.amount||0;if(x.kind==="dep")o.dep+=a;else if(x.kind==="wd")o.wd+=a;else if(x.kind==="pwd")o.pwd+=a;else if(x.kind==="lossrepay")o.lr+=a;o.moves.push(x)});
+  S.inv.forEach(function(v){mp[v.id]={id:v.id,name:v.name||"",pct:hasPctOf(v)?+v.pct:null,note:v.note||"",createdAt:v.createdAt||0,dep:0,wd:0,pwd:0,prof:0,loss:0,lr:0,working:0,lent:0,held:0,cdebt:0,cdebts:[],loans:[],cars:[],moves:[]};list.push(mp[v.id])});
+  S.invmov.forEach(function(x){var o=mp[x.iid];if(!o)return;var a=+x.amount||0;if(x.kind==="dep")o.dep+=a;else if(x.kind==="wd")o.wd+=a;else if(x.kind==="pwd")o.pwd+=a;else if(x.kind==="lossrepay")o.lr+=a;if(x.src==="held"&&(x.kind==="wd"||x.kind==="pwd"))o.held-=a;o.moves.push(x)});
+  S.transfers.forEach(function(x){var o=mp[x.iid];if(!o)return;var a=+x.amount||0;if(x.dir==="toInv")o.held+=a;else if(x.dir==="fromInv")o.held-=a});
   cars.forEach(function(c){(c.invs||[]).forEach(function(v){var o=mp[v.iid];if(!o)return;o.cars.push({c:c,v:v});if(c.sold&&v.debtLeft>0.5){o.cdebt+=v.debtLeft;o.cdebts.push({c:c,v:v})}if(!c.sold)o.working+=v.amount;else if(v.profit>=0)o.prof+=v.profit;else o.loss+=-v.profit})});
   loansCalc().forEach(function(l){l.invs.forEach(function(v){var o=mp[v.iid];if(!o)return;o.lent+=v.left;o.loans.push({l:l,v:v})})});
-  var T={list:list,bal:0,working:0,lent:0,cdebt:0,free:0,lossRem:0,prof:0,loss:0,cap:0,pwd:0};
+  var T={list:list,bal:0,working:0,lent:0,held:0,cdebt:0,free:0,lossRem:0,prof:0,loss:0,cap:0,pwd:0};
   list.forEach(function(o){
-    o.cap=o.dep-o.wd;o.lossRem=o.loss-o.lr;o.profNet=o.prof-o.lr-o.pwd;o.bal=o.cap+o.prof-o.loss-o.pwd;o.profAvail=Math.max(0,o.prof-o.loss-o.pwd);o.free=o.bal-o.working-o.lent-o.cdebt;
+    o.cap=o.dep-o.wd;o.lossRem=o.loss-o.lr;o.profNet=o.prof-o.lr-o.pwd;o.bal=o.cap+o.prof-o.loss-o.pwd;o.profAvail=Math.max(0,o.prof-o.loss-o.pwd);o.held=Math.max(0,o.held);o.free=o.bal-o.working-o.lent-o.cdebt-o.held;
     o.repayable=Math.max(0,Math.min(o.lossRem,o.profNet));
     o.moves.sort(function(a,b){return (b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0)});
     o.cars.sort(function(a,b){return (b.c.buyDate||"").localeCompare(a.c.buyDate||"")});
-    T.bal+=o.bal;T.working+=o.working;T.lent+=o.lent;T.cdebt+=o.cdebt;T.free+=o.free;T.lossRem+=Math.max(o.lossRem,0);T.prof+=o.prof;T.loss+=o.loss;T.cap+=o.cap;T.pwd+=o.pwd;
+    T.bal+=o.bal;T.working+=o.working;T.lent+=o.lent;T.held+=o.held;T.cdebt+=o.cdebt;T.free+=o.free;T.lossRem+=Math.max(o.lossRem,0);T.prof+=o.prof;T.loss+=o.loss;T.cap+=o.cap;T.pwd+=o.pwd;
   });
   list.sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)});
   return T;
@@ -2551,7 +2554,7 @@ var VIA={cash:"كاش في إيده",insta:"على حسابه إنستاباي",
 function viaTxt(x){var v=x&&VIA[x.via];return v?(x.kind==="dep"?"دفعها ":"وصلتله ")+v:""}
 function invInstaRaw(iid){var s=0;
   S.invmov.forEach(function(x){if(x.iid!==iid||x.src!=="insta")return;var a=+x.amount||0;if(x.kind==="dep")s+=a;else if(x.kind==="wd"||x.kind==="pwd")s-=a});
-  S.transfers.forEach(function(x){if(x.iid!==iid)return;var a=+x.amount||0;if(x.dir==="toInsta")s+=a;else s-=a});return s}
+  S.transfers.forEach(function(x){if(x.iid!==iid)return;var a=+x.amount||0;if(x.dir==="toInv"||x.dir==="fromInv"){if(x.src!=="cash")s+=x.dir==="fromInv"?a:-a;return}if(x.dir==="toInsta")s+=a;else s-=a});return s}
 function invLoc(o){var f=Math.max(0,o.free||0),i=Math.min(f,Math.max(0,invInstaRaw(o.id)));return {insta:i,cash:f-i}}
 function invMoveLoc(iid){var o=calc().inv.list.find(function(x){return x.id===iid});if(!o)return;var L=invLoc(o);modal={type:"invloc",iid:iid};
   openSheet(sheetHead("⇄ نقل فلوس "+esc(o.name))+
@@ -2564,6 +2567,122 @@ async function invLocSave(){if(submitting)return;var iid=modal&&modal.iid,o=calc
   if(a<=0)return toast("اكتب المبلغ");if(a>mx+0.5)return toast("فلوسه "+(dir==="toInsta"?"في الخزنة ":"في الإنستاباي ")+fmt(mx)+" بس");
   submitting=true;try{if(await create("transfers",{dir:dir,amount:a,date:val("ildate")||todayStr(),note:val("ilnote").trim()||("فلوس المستثمر "+o.name),iid:iid})){toast("اتنقلت ✔");openInv(iid)}}finally{submitting=false}}
 window.invMoveLoc=invMoveLoc;window.invLocSave=invLocSave;window.openInv=openInv;
+/* ---------- صفحة الإنستاباي: الرصيد + كشف الحركة + تحويل لمستثمر ----------
+   تحويل لمستثمر (فلوسه هو اللي عندك في الإنستاباي):
+   - على حسابه إنستاباي → transfers {dir:"toInv",src:"insta",iid}: بتخرج من إنستاباي المعرض، ورصيده ما يتغيّرش (بتبقى "معاه على حسابه")
+   - للخزنة              → transfers {dir:"toSafe",iid}: نقل مكان فلوسه بس
+   - سحب / سحب أرباح    → invmoves wd/pwd من الإنستاباي (خدها وخلاص)
+   وبعدين اللي معاه على حسابه: يرجّعه (fromInv) أو يتسجل سحب (invmoves src:"held") */
+function instaMoves(T){
+  var it=[],ids={},lm=lmapOf();T.cars.forEach(function(c){ids[c.id]=c});
+  function nm(id){var c=ids[id];return c?esc(c.name):"؟"}
+  function push(d,c,t,a,n,del){if(Math.abs(a)>=0.5)it.push({d:d||"",c:c||0,t:t,a:a,n:n||"",del:del||null})}
+  T.cars.forEach(function(c){if(c.buySrc==="insta")push(c.buyDate,c.createdAt,"🚗 شراء "+esc(c.name),-paidNow(c)+(+c.tradeIn||0)+c.pCash)});
+  S.expenses.forEach(function(e){if(ids[e.carId]&&expSrc(e)==="insta")push(e.date,e.createdAt,"💸 "+esc(e.type||"مصروف")+" - "+nm(e.carId),-(+e.amount||0),e.note,["expenses",e.id])});
+  S.cols.forEach(function(x){if(ids[x.carId]&&(+x.insta||0))push(x.date,x.createdAt,(x.depRef?"↩️ رد عربون ":x.dep?"🔖 عربون ":x.refund?"↩️ مرتجع ":"💰 تحصيل ")+nm(x.carId),+x.insta||0,x.note,["collections",x.id])});
+  S.pay.forEach(function(x){if(!x.roll&&ids[x.carId]&&x.src==="insta")push(x.date,x.createdAt,"🤝 تسليم شريك - "+nm(x.carId),-(+x.amount||0),x.note,["payouts",x.id])});
+  S.cap.forEach(function(x){if(x.src!=="insta")return;var a=+x.amount||0;if(x.kind==="withdraw"||x.kind==="pwithdraw"||x.kind==="jam")push(x.date,x.createdAt,capLabel(x),-a,x.note,["capital",x.id]);else if(x.kind==="addcap")push(x.date,x.createdAt,capLabel(x),a,x.note,["capital",x.id])});
+  S.ext.forEach(function(x){var a=+x.amount||0,xi=x.how==="insta"?a:x.how==="both"?Math.min(a,Math.max(0,+x.insta||0)):0;push(x.date,x.createdAt,"🤝 عمولة "+esc(x.desc||""),xi,x.note,["external",x.id])});
+  S.transfers.forEach(function(x){var a=+x.amount||0,t,s=0,iv=x.iid?" ("+esc(invName(x.iid))+")":"";
+    if(x.dir==="toFund"){if(x.src!=="insta")return;t="🧾 تزويد العهدة";s=-a}
+    else if(x.dir==="fromFund"){if(x.src!=="insta")return;t="🧾 رجوع من العهدة";s=a}
+    else if(x.dir==="toInv"){if(x.src==="cash")return;t="💼 تحويل لـ "+esc(invName(x.iid))+" على حسابه";s=-a}
+    else if(x.dir==="fromInv"){if(x.src==="cash")return;t="💼 رجوع فلوس من "+esc(invName(x.iid));s=a}
+    else if(x.dir==="toInsta"){t="🔁 من الخزنة للإنستاباي"+iv;s=a}
+    else{t="🔁 من الإنستاباي للخزنة"+iv;s=-a}
+    push(x.date,x.createdAt,t,s,x.note,["transfers",x.id])});
+  S.ledger.forEach(function(x){if(x.src!=="insta")return;var a=+x.amount||0;
+    if(x.kind==="spay"){if(ids[x.carId])push(x.date,x.createdAt,"🏪 سداد للبايع - "+nm(x.carId),-a,x.note,["ledger",x.id]);return}
+    var sg=lsigned(x,lm);if(!sg)return;var l=x.kind==="loan"?x:lm[x.loanId],who=esc((l&&l.person)||"بدون اسم"),out=l&&l.dir==="out";
+    push(x.date,x.createdAt,x.kind==="pay"?(out?"📥 رجّع "+who:"📤 سداد لـ "+who):(out?"📤 سلفة لـ "+who:"📥 استلمت من "+who),sg,x.note,["ledger",x.id])});
+  S.invmov.forEach(function(x){if(x.src!=="insta")return;var a=+x.amount||0;if(x.kind==="dep")push(x.date,x.createdAt,"💼 إيداع "+esc(invName(x.iid)),a,x.note,["invmoves",x.id]);else if(x.kind==="wd"||x.kind==="pwd")push(x.date,x.createdAt,"💼 "+(x.kind==="pwd"?"سحب أرباح ":"سحب ")+esc(invName(x.iid)),-a,x.note,["invmoves",x.id])});
+  it.sort(function(a,b){return a.d.localeCompare(b.d)||(a.c-b.c)});
+  var b=0;it.forEach(function(x){b+=x.a;x.b=b});
+  return it.reverse();
+}
+function openInsta(){modal={type:"insta",n:40};renderInsta();$("#sheet").scrollTop=0}
+function instaMore(){if(modal&&modal.type==="insta"){modal.n+=60;renderInsta()}}
+function renderInsta(){
+  var T=calc(),mv=instaMoves(T),n=modal.n||40,invI=0;
+  T.inv.list.forEach(function(o){invI+=invLoc(o).insta});
+  var h=sheetHead("📲 إنستاباي")+'<div class="card">'+
+    tkv("رصيد الإنستاباي دلوقتي",m(T.instaBal,T.instaBal<0?"bad":""),null,"لسه ماتحوّلش للخزنة",1)+
+    (invI>0.5?tkv("· منه فلوس مستثمرين",m(invI))+tkv("· والباقي بتاعك",m(T.instaBal-invI,T.instaBal-invI<0?"bad":"")):"")+
+    (T.inv.held>0.5?tkv("💼 فلوس مستثمرين معاهم على حساباتهم",m(T.inv.held),null,"لسه في رصيدهم"):"")+'</div>';
+  if(T.inv.list.length)h+='<button class="btn" style="margin-bottom:10px" onclick="invSend(\'\')">💼 تحويل لمستثمر</button>';
+  h+='<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="transfer">🔁 تحويل بين إنستاباي والخزنة</button>';
+  h+='<div class="sect">كشف حركة الإنستاباي</div>';
+  if(!mv.length)h+='<div class="empty">لسه مفيش حركة على الإنستاباي</div>';
+  else{h+='<div class="card" style="padding:6px 16px">'+mv.slice(0,n).map(function(x){
+      return '<div class="item"><div style="flex:1"><div class="t">'+x.t+'</div><div class="d">'+fdate(x.d)+(x.n?" · "+esc(x.n):"")+' · الرصيد بعدها '+fmt(x.b)+'</div></div><span class="num '+(x.a>=0?"good":"bad")+'" style="font-weight:700">'+(x.a>=0?"+":"−")+fmt(Math.abs(x.a))+'</span></div>'}).join("")+'</div>';
+    if(mv.length>n)h+='<button class="btn sec small" style="margin-top:8px" onclick="instaMore()">عرض أقدم ('+(mv.length-n)+')</button>'}
+  var prev=$("#sheet").scrollTop;$("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=prev;
+}
+var ISEND={acct:"على حسابه إنستاباي (تفضل في رصيده)",safe:"للخزنة كاش (تفضل في رصيده)",wd:"سحب من رأس ماله (خدها وخلاص)",pwd:"سحب أرباح (خدها وخلاص)"};
+function invSend(iid){
+  var T=calc(),IL=T.inv.list;if(!IL.length)return toast("ضيف مستثمر الأول");
+  var sel=IL.some(function(x){return x.id===iid})?iid:IL[0].id;
+  modal={type:"invsend",back:modal&&modal.type==="inv"?modal.id:null};
+  openSheet(sheetHead("💼 تحويل لمستثمر من الإنستاباي")+
+    fld("المستثمر",'<select name="svi">'+IL.map(function(x){return '<option value="'+esc(x.id)+'"'+(x.id===sel?" selected":"")+'>'+esc(x.name)+' (حر معاك '+fmt(x.free)+')</option>'}).join("")+'</select>')+
+    '<div class="two">'+fld("المبلغ",minp("sva"))+fld("التاريخ",dinp("svd"))+'</div>'+
+    fld("الفلوس راحت فين؟",'<select name="svk">'+Object.keys(ISEND).map(function(k){return '<option value="'+k+'">'+ISEND[k]+'</option>'}).join("")+'</select>')+
+    fld("ملاحظة (اختياري)",'<input name="svn" autocomplete="off">')+
+    '<div class="preview" id="isv" style="display:block"></div>'+
+    '<button class="btn" onclick="invSendSave()">حفظ</button><button class="btn sec" style="margin-top:8px" onclick="invSendBack()">رجوع</button>');
+  invSendPv();
+}
+function invSendBack(){var b=modal&&modal.back;if(b)openInv(b);else openInsta()}
+function invSendPv(){
+  var el=$("#isv");if(!el)return;var T=calc(),o=T.inv.list.find(function(x){return x.id===val("svi")});if(!o){el.innerHTML="";return}
+  var a=parseNum(val("sva")),k=val("svk"),L=invLoc(o),h="";
+  h+='فلوس '+esc(o.name)+' الحرة معاك: <b>'+m(o.free)+'</b> (في الإنستاباي '+m(L.insta)+' · في الخزنة '+m(L.cash)+')'+(o.held>0.5?'<br>ومعاه على حسابه من قبل: '+m(o.held):'');
+  if(k==="acct")h+='<br>رصيده هيفضل <b>'+m(o.bal)+'</b> زي ما هو، والفلوس هتتسجل إنها معاه على حسابه. ولو رجّعها أو حبيت تعتبرها سحب، تعملها من صفحته.';
+  else if(k==="safe")h+='<br>رصيده هيفضل <b>'+m(o.bal)+'</b>، والفلوس بتتنقل من الإنستاباي للخزنة بس.';
+  else h+='<br>رصيده بعد السحب: <b>'+m(o.bal-a)+'</b>'+(k==="pwd"?' · أرباحه المتاحة '+m(o.profAvail):'');
+  var mx=k==="safe"?L.insta:o.free;
+  if(a>mx+0.5)h+='<br><b class="bad">المبلغ أكبر من '+(k==="safe"?"فلوسه اللي في الإنستاباي":"فلوسه الحرة معاك")+' ('+fmt(mx)+')</b>';
+  else if(k==="pwd"&&a>o.profAvail+0.5)h+='<br><b class="bad">المبلغ أكبر من أرباحه المتاحة ('+fmt(o.profAvail)+')</b>';
+  var ib=T.instaBal-a;h+='<br>الإنستاباي بعد التحويل: <b class="'+(ib<0?"bad":"")+'">'+m(ib)+'</b>'+(k==="safe"?' · الخزنة '+m(T.safeBal+a):'');
+  if(ib<-0.5)h+='<br><b class="bad">⚠️ رصيد الإنستاباي مش مكفّي</b>';
+  el.innerHTML=h;
+}
+async function invSendSave(){if(submitting)return;
+  var T=calc(),iid=val("svi"),o=T.inv.list.find(function(x){return x.id===iid}),a=parseNum(val("sva")),k=val("svk"),d=val("svd")||todayStr(),nt=val("svn").trim();
+  if(!o)return toast("اختار المستثمر");if(a<=0)return toast("اكتب المبلغ");
+  var L=invLoc(o);
+  if(k==="safe"&&a>L.insta+0.5)return toast("فلوسه في الإنستاباي "+fmt(L.insta)+" بس");
+  if(k!=="safe"&&a>o.free+0.5)return toast("فلوسه الحرة معاك "+fmt(o.free)+" بس (الباقي شغال في عربيات أو بره)");
+  if(k==="pwd"&&a>o.profAvail+0.5)return toast(o.profAvail>0.5?"أرباحه المتاحة "+fmt(o.profAvail)+" بس":"مفيش أرباح متاحة للسحب");
+  submitting=true;var ok=false;try{
+    if(k==="acct")ok=await create("transfers",{dir:"toInv",src:"insta",iid:iid,amount:a,date:d,note:nt||("فلوس "+o.name+" اتحولت على حسابه")});
+    else if(k==="safe")ok=await create("transfers",{dir:"toSafe",iid:iid,amount:a,date:d,note:nt||("فلوس المستثمر "+o.name)});
+    else ok=await create("invmoves",{iid:iid,kind:k==="pwd"?"pwd":"wd",amount:a,date:d,src:"insta",via:"insta",note:nt});
+  }finally{submitting=false}
+  if(ok){toast("اتسجّل ✔");invSendBack()}
+}
+var IBACK={insta:"رجّعها على إنستاباي المعرض",cash:"رجّعها كاش في الخزنة",wd:"اعتبرها سحب من رأس ماله (خدها وخلاص)",pwd:"اعتبرها سحب أرباح (خدها وخلاص)"};
+function invBack(iid){
+  var o=calc().inv.list.find(function(x){return x.id===iid});if(!o||o.held<=0.5)return toast("مفيش فلوس معاه على حسابه");
+  modal={type:"invback",iid:iid};
+  openSheet(sheetHead("💼 فلوس معاه على حسابه - "+esc(o.name))+
+    '<div class="preview" style="display:block">معاه على حسابه: <b>'+m(o.held)+'</b> (لسه في رصيده)'+(o.profAvail>0.5?'<br>أرباحه المتاحة: '+m(o.profAvail):'')+'</div>'+
+    fld("هتعمل فيها إيه؟",'<select name="ibk">'+Object.keys(IBACK).map(function(k){return '<option value="'+k+'">'+IBACK[k]+'</option>'}).join("")+'</select>')+
+    '<div class="two">'+fld("المبلغ",minp("iba",Math.round(o.held)))+fld("التاريخ",dinp("ibd"))+'</div>'+fld("ملاحظة (اختياري)",'<input name="ibn" autocomplete="off">')+
+    '<button class="btn" onclick="invBackSave()">حفظ</button><button class="btn sec" style="margin-top:8px" onclick="openInv(\''+esc(iid)+'\')">رجوع</button>');
+}
+async function invBackSave(){if(submitting)return;
+  var iid=modal&&modal.iid,o=calc().inv.list.find(function(x){return x.id===iid});if(!o)return;
+  var k=val("ibk"),a=parseNum(val("iba")),d=val("ibd")||todayStr(),nt=val("ibn").trim();
+  if(a<=0)return toast("اكتب المبلغ");if(a>o.held+0.5)return toast("اللي معاه على حسابه "+fmt(o.held)+" بس");
+  if(k==="pwd"&&a>o.profAvail+0.5)return toast(o.profAvail>0.5?"أرباحه المتاحة "+fmt(o.profAvail)+" بس":"مفيش أرباح متاحة للسحب");
+  submitting=true;var ok=false;try{
+    if(k==="insta"||k==="cash")ok=await create("transfers",{dir:"fromInv",src:k,iid:iid,amount:a,date:d,note:nt||("رجوع فلوس "+o.name)});
+    else ok=await create("invmoves",{iid:iid,kind:k==="pwd"?"pwd":"wd",amount:a,date:d,src:"held",via:"insta",note:nt});
+  }finally{submitting=false}
+  if(ok){toast("اتسجّل ✔");openInv(iid)}
+}
+window.openInsta=openInsta;window.instaMore=instaMore;window.invSend=invSend;window.invSendBack=invSendBack;window.invSendPv=invSendPv;window.invSendSave=invSendSave;window.invBack=invBack;window.invBackSave=invBackSave;
 function renderInvDetail(){
   var T=calc(),o=T.inv.list.find(function(x){return x.id===modal.id});if(!o){closeSheet();return}
   var h=sheetHead("💼 "+esc(o.name))+'<div class="card">'+
@@ -2580,10 +2699,12 @@ function renderInvDetail(){
     (o.cdebt>0.5?'<div class="kv" style="padding-right:14px"><span class="sub">· لسه عند عملاء ('+o.cdebts.map(function(x){return esc(x.c.name)}).join("، ")+')</span><b class="warn">'+m(o.cdebt)+'</b></div>':'')+
     '<div class="kv" style="padding-right:14px"><span class="sub">· حر معاك</span><b>'+m(o.free,o.free<0?"bad":"")+'</b></div>'+
     (o.free>0.5?(function(){var L=invLoc(o);return '<div class="kv" style="padding-right:28px"><span class="sub">↳ في الخزنة</span><b>'+m(L.cash)+'</b></div><div class="kv" style="padding-right:28px"><span class="sub">↳ في الإنستاباي</span><b>'+m(L.insta)+'</b></div>'})():'')+
+    (o.held>0.5?'<div class="kv" style="padding-right:14px"><span class="sub">· معاه على حسابه (لسه في رصيده)</span><b>'+m(o.held)+'</b></div>':'')+
     (o.note?'<div class="kv"><span>ملاحظة</span><b>'+esc(o.note)+'</b></div>':'')+'</div>';
   h+='<div class="two" style="margin-bottom:10px"><button class="btn" data-act="form" data-kind="invmove" data-sub="dep" data-iid="'+esc(o.id)+'">➕ إيداع</button><button class="btn sec" data-act="form" data-kind="invmove" data-sub="wd" data-iid="'+esc(o.id)+'">➖ سحب</button></div>'+
     '<button class="btn" style="margin-bottom:10px" data-act="form" data-kind="invmove" data-sub="pwd" data-iid="'+esc(o.id)+'">💵 سحب أرباح'+(o.profAvail>0.5?' (متاح '+fmt(o.profAvail)+')':'')+'</button>'+
-    (o.free>0.5?'<button class="btn sec" style="margin-bottom:10px" onclick="invMoveLoc(\''+esc(o.id)+'\')">⇄ نقل فلوسه بين الخزنة والإنستاباي</button>':'');
+    (o.free>0.5?'<button class="btn sec" style="margin-bottom:10px" onclick="invMoveLoc(\''+esc(o.id)+'\')">⇄ نقل فلوسه بين الخزنة والإنستاباي</button><button class="btn sec" style="margin-bottom:10px" onclick="invSend(\''+esc(o.id)+'\')">📲 حوّل له من الإنستاباي على حسابه</button>':'')+
+    (o.held>0.5?'<button class="btn" style="margin-bottom:10px" onclick="invBack(\''+esc(o.id)+'\')">💼 اللي معاه على حسابه ('+fmt(o.held)+'): رجوع أو سحب</button>':'');
   if(o.repayable>0.5)h+='<button class="btn" style="margin-bottom:10px" data-act="form" data-kind="invloss" data-iid="'+esc(o.id)+'">📉 سداد خسارته من أرباحه (عليه '+fmt(o.lossRem)+')</button>';
   else if(o.lossRem>0.5)h+='<div class="banner">عليه خسارة '+fmt(o.lossRem)+' ج، وتقدر تسددها من أرباحه أول ما يكسب في عربية.</div>';
   h+='<button class="btn sec" style="margin-bottom:10px" data-act="report" data-kind="inv" data-name="'+esc(o.id)+'">📄 كشف حساب المستثمر (صورة / PDF)</button>';
@@ -2596,6 +2717,9 @@ function renderInvDetail(){
     var dd=dline(srcNote(x),viaTxt(x),esc(x.note||""));
     return '<div class="item"><div style="flex:1"><div class="t">'+invMoveLabel(x)+'</div><div class="d">'+fdate(x.date)+(dd?" · "+dd:"")+'</div></div><span class="num '+(x.kind==="dep"?"good":(x.kind==="wd"||x.kind==="pwd")?"bad":"")+'" style="font-weight:700">'+fmt(x.amount)+'</span><button class="del" data-act="delitem" data-coll="invmoves" data-id="'+x.id+'" aria-label="حذف">🗑</button></div>';
   }).join("")+'</div>';
+  var htr=S.transfers.filter(function(x){return x.iid===o.id&&(x.dir==="toInv"||x.dir==="fromInv")}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0)});
+  if(htr.length)h+='<div class="sect">تحويلات على حسابه</div><div class="card" style="padding:6px 16px">'+htr.map(function(x){var to=x.dir==="toInv";
+    return '<div class="item"><div style="flex:1"><div class="t">'+(to?"📲 اتحوّل على حسابه":"↩️ رجّعها "+(x.src==="cash"?"كاش للخزنة":"على الإنستاباي"))+'</div><div class="d">'+fdate(x.date)+(x.note?" · "+esc(x.note):"")+' · رصيده ما اتغيّرش</div></div><span class="num '+(to?"warn":"good")+'" style="font-weight:700">'+fmt(x.amount)+'</span><button class="del" data-act="delitem" data-coll="transfers" data-id="'+x.id+'" aria-label="حذف">🗑</button></div>'}).join("")+'</div>';
   h+='<div class="two" style="margin-top:6px"><button class="btn sec" data-act="form" data-kind="investor" data-iid="'+esc(o.id)+'">تعديل</button><button class="btn danger" data-act="delinv" data-id="'+esc(o.id)+'">حذف المستثمر</button></div>';
   var prev=$("#sheet").scrollTop;
   $("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=prev;
@@ -2756,7 +2880,7 @@ function rbInvestor(){
   var T=calc(),o=T.inv.list.find(function(x){return x.id===modal.inv});if(!o)return null;
   var pc=function(x){return (Math.round((x||0)*1000)/10)+"%"},fz=function(x){return String(x).replace(/[\\\/:*?"<>|\s]+/g,"-")};
   var it=[{l:"رصيده الحالي",v:rnum(o.bal)+" ج",acc:true},{l:"رأس ماله (اللي جابه − اللي سحبه)",v:rnum(o.cap)+" ج"},{l:"أرباحه من العربيات",v:rnum(o.prof)+" ج",c:RK.good},{l:"أرباح اتسحبت له",v:rnum(o.pwd)+" ج",c:RK.bad},{l:"أرباح متاحة للسحب",v:rnum(o.profAvail)+" ج",c:RK.good},
-    {l:"شغال في عربيات",v:rnum(o.working)+" ج"},{l:"حر في الخزنة",v:rnum(invLoc(o).cash)+" ج"},{l:"حر في الإنستاباي",v:rnum(invLoc(o).insta)+" ج"}];if(o.cdebt>0.5)it.push({l:"عند عملاء (باقي بيع)",v:rnum(o.cdebt)+" ج",c:RK.warn});
+    {l:"شغال في عربيات",v:rnum(o.working)+" ج"},{l:"حر في الخزنة",v:rnum(invLoc(o).cash)+" ج"},{l:"حر في الإنستاباي",v:rnum(invLoc(o).insta)+" ج"}];if(o.held>0.5)it.push({l:"معاه على حسابه",v:rnum(o.held)+" ج"});if(o.cdebt>0.5)it.push({l:"عند عملاء (باقي بيع)",v:rnum(o.cdebt)+" ج",c:RK.warn});
   if(o.loss>0.5)it.push({l:"خسائره من العربيات",v:rnum(o.loss)+" ج",c:RK.bad},{l:"خسارة عليه لسه",v:rnum(Math.max(o.lossRem,0))+" ج",c:o.lossRem>0.5?RK.warn:RK.good});
   var B=[{t:"tiles",items:it}];
   var cars=o.cars.slice().sort(function(a,b){return (a.c.buyDate||"").localeCompare(b.c.buyDate||"")});
@@ -2770,7 +2894,7 @@ function rbInvestor(){
   var mv=o.moves.filter(function(x){return x.kind!=="lossrepay"}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")});
   if(mv.length){B.push({t:"sec",title:"الإيداعات والسحوبات وسحب الأرباح"});
     B.push({t:"table",cols:[{h:"البند",w:.5},{h:"التاريخ",w:.22},{h:"المبلغ",w:.28,k:"n",s:1}],
-      rows:mv.map(function(x){var a=+x.amount||0,d=x.kind==="dep";return [(d?"إيداع":x.kind==="pwd"?"سحب أرباح":"سحب من رأس ماله")+(x.src==="insta"?" (إنستاباي)":"")+(viaTxt(x)?" - "+viaTxt(x):"")+(x.note?" - "+x.note:""),rfd(x.date),{v:d?a:-a,c:d?RK.good:RK.bad}]})})}
+      rows:mv.map(function(x){var a=+x.amount||0,d=x.kind==="dep";return [(d?"إيداع":x.kind==="pwd"?"سحب أرباح":"سحب من رأس ماله")+(x.src==="insta"?" (إنستاباي)":x.src==="held"?" (من اللي معاه)":"")+(viaTxt(x)?" - "+viaTxt(x):"")+(x.note?" - "+x.note:""),rfd(x.date),{v:d?a:-a,c:d?RK.good:RK.bad}]})})}
   var lr=o.moves.filter(function(x){return x.kind==="lossrepay"}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")});
   if(lr.length)B.push({t:"table",cols:[{h:"سداد الخسارة من أرباحه",w:.5},{h:"التاريخ",w:.22},{h:"المبلغ",w:.28,k:"n"}],rows:lr.map(function(x){return ["دفعة سداد",rfd(x.date),+x.amount||0]}).concat([{cells:["الإجمالي","",o.lr]}])});
   B.push({t:"sec",title:"الحساب"});
@@ -3015,7 +3139,7 @@ function rbPeriod(){
   pays.forEach(function(x){if(!x.roll)pOutT+=+x.amount||0});
   lds.forEach(function(x){ldT+=lsigned(x,lmx)});
   spays.forEach(function(x){spT+=+x.amount||0});
-  var ims=S.invmov.filter(function(x){return r(x.date)&&x.kind!=="lossrepay"}),imT=invNet(ims);
+  var ims=S.invmov.filter(function(x){return r(x.date)&&x.kind!=="lossrepay"&&x.src!=="held"}),imT=invNet(ims);S.transfers.forEach(function(x){if(!r(x.date))return;if(x.dir==="toInv")imT-=+x.amount||0;else if(x.dir==="fromInv")imT+=+x.amount||0});
   var net=cashT+instaT+pInT-buyPd-spT-expT-wdT-pOutT+ldT+imT;
   var items=[{l:"صافي حركة السيولة",v:rnum(net,true)+" ج",acc:true},
     {l:"إجمالي المبيعات",v:rnum(salesT)+" ج"},{l:"إجمالي المشتريات",v:rnum(buyT)+" ج"},
@@ -3714,12 +3838,14 @@ document.addEventListener("click",async function(e){
 });
 function liveKind(){return modal&&modal.type==="form"&&(modal.kind==="sell"||modal.kind==="collect"||modal.kind==="buy"||modal.kind==="edit"||modal.kind==="invmove"||modal.kind==="transfer"||modal.kind==="loan"||modal.kind==="loanpay"||modal.kind==="sellerpay"||modal.kind==="invdebt"||modal.kind==="fundmove"||modal.kind==="fundcount")}
 document.addEventListener("input",function(e){
+  if($("#isv"))invSendPv();
   if(e.target&&e.target.dataset&&e.target.dataset.money)moneyInput(e.target);
   if(e.target.id==="q"){S.q=e.target.value;var l=$("#carList");if(l)l.innerHTML=carListHtml();return}
   if(liveKind())updatePreview();
   if($("#isph"))ispHint();
 });
 document.addEventListener("change",function(e){
+  if($("#isv"))invSendPv();
   if(modal&&modal.type==="report"){
     var rn=e.target.name,rmap={rtrader:"trader",rperson:"person",rinv:"inv",rday:"day",rmonth:"month",rpartner:"partner",rcar:"car",rcarp:"car",rexp:"exd"};
     if(rn==="stlcar"){modal.sel=modal.sel||{};if(e.target.checked)modal.sel[e.target.value]=1;else delete modal.sel[e.target.value];var st=$("#sheet").scrollTop;drawReportSheet();$("#sheet").scrollTop=st;return}
