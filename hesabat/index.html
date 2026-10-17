@@ -980,7 +980,7 @@ function renderHome(){
   h+=cashSplit(T);
   h+='<div class="grid2" style="margin-bottom:10px">'+
      tile("💵 الخزنة (كاش)",m(T.safeBal,T.safeBal<0?"bad":""),"")+
-     tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"اضغط للكشف والتحويلات ‹").replace('<div class="tile"','<div class="tile" onclick="openInsta()" style="cursor:pointer"')+'</div>'+
+     tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"لسه ماتحوّلش للخزنة")+'</div>'+
      '<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="transfer">🔁 تحويل بين إنستاباي والخزنة</button>';
   h+='<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف</button>';
   if(kashOn())h+='<button class="btn" style="margin-bottom:12px" data-act="tab" data-tab="kash">📒 افتح الكشكول (مدين / دائن)</button>';
