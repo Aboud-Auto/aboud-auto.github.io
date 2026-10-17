@@ -723,9 +723,9 @@ function heroTap(k,T){
     h+=hbtn("💳 كل اللي عليك (مع الشركاء والمستثمرين)","owes");
   }else if(k==="hinv"){
     t="💼 فلوس المستثمرين";
-    h+=T.inv.list.length?T.inv.list.map(function(o){return '<div class="kv" data-act="inv" data-id="'+o.id+'" style="cursor:pointer"><span>'+esc(o.name||"مستثمر")+'<br><span class="sub">حرة '+m(o.free)+(o.working>0.5?" · في عربيات "+m(o.working):"")+(o.lent+o.cdebt>0.5?" · بره "+m(o.lent+o.cdebt):"")+(o.profAvail>0.5?" · أرباح متاحة "+m(o.profAvail):"")+'</span></span><b>'+m(o.bal)+' <span class="sub">‹</span></b></div>'}).join(""):tnone("مفيش مستثمرين");
+    h+=T.inv.list.length?T.inv.list.map(function(o){return '<div class="kv" data-act="inv" data-id="'+o.id+'" style="cursor:pointer"><span>'+esc(o.name||"مستثمر")+'<br><span class="sub">كاش '+m(o.free)+(o.working>0.5?" · في عربيات "+m(o.working):"")+(o.lent+o.cdebt>0.5?" · بره "+m(o.lent+o.cdebt):"")+(o.profAvail>0.5?" · أرباح متاحة "+m(o.profAvail):"")+'</span></span><b>'+m(o.bal)+' <span class="sub">‹</span></b></div>'}).join(""):tnone("مفيش مستثمرين");
     h+=ttot("الإجمالي",m(T.inv.bal));
-    h+=tsec("متقسمة إزاي")+tkv("💵 حرة في الخزنة",m(T.inv.free))+tkv("🚗 في عربيات",m(T.inv.working))+(T.inv.lent+T.inv.cdebt>0.5?tkv("📥 بره (سلف ومديونيات)",m(T.inv.lent+T.inv.cdebt)):"");
+    h+=tsec("متقسمة إزاي")+tkv("💵 كاش في الخزنة",m(T.inv.free))+tkv("🚗 في عربيات",m(T.inv.working))+(T.inv.lent+T.inv.cdebt>0.5?tkv("📥 بره (سلف ومديونيات)",m(T.inv.lent+T.inv.cdebt)):"");
   }else if(k==="htot"){
     t="📊 الإجمالي";
     h+=tkv("🏦 أصل رأس المال",m(base))+tkv("💰 الأرباح",m(prof,prof<0?"bad":"good"))+ttot("الإجمالي (رأس المال + الأرباح)",m(T.value));
@@ -787,7 +787,7 @@ function heroHtml(T){
     hb("💰","الأرباح",m(prof),"أرباح عربيات "+m(T.undist)+"<br>عمولات خارجية "+m(T.extAvail)+(T.lossRem>0.5?"<br>خسائر لسه −"+m(T.lossRem):""),prof<-0.5?"neg":"pos","hprof")+
     hb("📥","ليك عند الناس",m(T.recv),"سلف لسه مارجعتش",T.recv>0.5?"pos":"","hrecv")+
     hb("📤","عليك للناس",m(T.owe),T.sOwe>0.5?"منها لبايعي عربيات "+m(T.sOwe):"سلف وأمانات",T.owe>0.5?"neg":"","howe")+
-    (T.inv.list.length?hb("💼","فلوس المستثمرين",m(T.inv.bal),"حرة في الخزنة "+m(T.inv.free)+" · في عربيات "+m(T.inv.working),"w","hinv"):"")+
+    (T.inv.list.length?hb("💼","فلوس المستثمرين",m(T.inv.bal),"كاش في الخزنة "+m(T.inv.free)+" · في عربيات "+m(T.inv.working),"w","hinv"):"")+
   '</div>';
   var ch=[["📊 الإجمالي (رأس المال + الأرباح) "+m(T.value),"htot"]];
   if(Math.abs(T.pOwed)>=0.5)ch.push(["🤝 مستحق للشركاء "+m(T.pOwed),"hpart"]);
@@ -2246,7 +2246,7 @@ function renderInv(){
   var T=calc(),I=T.inv;
   var h='<div class="top"><h1>تشغيل أموال</h1><button class="btn small" data-act="form" data-kind="investor">+ مستثمر جديد</button></div>'+invSeg()+
     '<div class="hero"><div class="l">فلوس المستثمرين اللي معاك</div><div class="v">'+m(I.bal)+'</div>'+
-    '<div class="s">حرة في الخزنة: '+m(I.free)+' · شغالة في عربيات: '+m(I.working)+(I.cdebt>0.5?' · عند عملاء: '+m(I.cdebt):'')+'</div>'+
+    '<div class="s">كاش في الخزنة: '+m(I.free)+' · شغالة في عربيات: '+m(I.working)+(I.cdebt>0.5?' · عند عملاء: '+m(I.cdebt):'')+'</div>'+
     (I.lossRem>0.5?'<div class="s">خسائر عليهم لسه ما اتسددتش: '+m(I.lossRem)+'</div>':'')+
     '<div class="s">الفلوس دي مش من رأس مالك، كل مستثمر ليه حسابه لوحده.</div></div>'+
     '<div class="actions"><button class="abtn" data-act="form" data-kind="invmove" data-sub="dep"><span class="ic">➕</span>إيداع من مستثمر</button><button class="abtn" data-act="form" data-kind="invmove" data-sub="wd"><span class="ic">➖</span>سحب لمستثمر</button><button class="abtn" data-act="form" data-kind="invmove" data-sub="pwd"><span class="ic">💵</span>سحب أرباح</button></div>';
@@ -2270,7 +2270,7 @@ function renderInvDetail(){
     '<div class="kv" style="padding-right:14px"><span class="sub">· شغال في عربيات</span><b>'+m(o.working)+'</b></div>'+
     (o.lent>0.5?'<div class="kv" style="padding-right:14px"><span class="sub">· في سلف ('+o.loans.filter(function(x){return x.v.left>0.5}).map(function(x){return esc(x.l.person)}).join("، ")+')</span><b>'+m(o.lent)+'</b></div>':'')+
     (o.cdebt>0.5?'<div class="kv" style="padding-right:14px"><span class="sub">· لسه عند عملاء ('+o.cdebts.map(function(x){return esc(x.c.name)}).join("، ")+')</span><b class="warn">'+m(o.cdebt)+'</b></div>':'')+
-    '<div class="kv" style="padding-right:14px"><span class="sub">· حر في الخزنة</span><b>'+m(o.free,o.free<0?"bad":"")+'</b></div>'+
+    '<div class="kv" style="padding-right:14px"><span class="sub">· كاش في الخزنة</span><b>'+m(o.free,o.free<0?"bad":"")+'</b></div>'+
     (o.note?'<div class="kv"><span>ملاحظة</span><b>'+esc(o.note)+'</b></div>':'')+'</div>';
   h+='<div class="two" style="margin-bottom:10px"><button class="btn" data-act="form" data-kind="invmove" data-sub="dep" data-iid="'+esc(o.id)+'">➕ إيداع</button><button class="btn sec" data-act="form" data-kind="invmove" data-sub="wd" data-iid="'+esc(o.id)+'">➖ سحب</button></div>'+
     '<button class="btn" style="margin-bottom:10px" data-act="form" data-kind="invmove" data-sub="pwd" data-iid="'+esc(o.id)+'">💵 سحب أرباح'+(o.profAvail>0.5?' (متاح '+fmt(o.profAvail)+')':'')+'</button>';

@@ -898,9 +898,9 @@ function heroTap(k,T){
     h+=hbtn("💳 كل اللي عليك (مع الشركاء والمستثمرين)","owes");
   }else if(k==="hinv"){
     t="💼 فلوس المستثمرين";
-    h+=T.inv.list.length?T.inv.list.map(function(o){return '<div class="kv" data-act="inv" data-id="'+o.id+'" style="cursor:pointer"><span>'+esc(o.name||"مستثمر")+'<br><span class="sub">حرة '+m(o.free)+(o.working>0.5?" · في عربيات "+m(o.working):"")+(o.lent+o.cdebt>0.5?" · بره "+m(o.lent+o.cdebt):"")+(o.profAvail>0.5?" · أرباح متاحة "+m(o.profAvail):"")+'</span></span><b>'+m(o.bal)+' <span class="sub">‹</span></b></div>'}).join(""):tnone("مفيش مستثمرين");
+    h+=T.inv.list.length?T.inv.list.map(function(o){return '<div class="kv" data-act="inv" data-id="'+o.id+'" style="cursor:pointer"><span>'+esc(o.name||"مستثمر")+'<br><span class="sub">كاش '+m(o.free)+(o.working>0.5?" · في عربيات "+m(o.working):"")+(o.lent+o.cdebt>0.5?" · بره "+m(o.lent+o.cdebt):"")+(o.profAvail>0.5?" · أرباح متاحة "+m(o.profAvail):"")+'</span></span><b>'+m(o.bal)+' <span class="sub">‹</span></b></div>'}).join(""):tnone("مفيش مستثمرين");
     h+=ttot("الإجمالي",m(T.inv.bal));
-    h+=tsec("متقسمة إزاي")+tkv("💵 حرة في الخزنة",m(T.inv.free))+tkv("🚗 في عربيات",m(T.inv.working))+(T.inv.lent+T.inv.cdebt>0.5?tkv("📥 بره (سلف ومديونيات)",m(T.inv.lent+T.inv.cdebt)):"");
+    h+=tsec("متقسمة إزاي")+tkv("💵 كاش في الخزنة",m(T.inv.free))+tkv("🚗 في عربيات",m(T.inv.working))+(T.inv.lent+T.inv.cdebt>0.5?tkv("📥 بره (سلف ومديونيات)",m(T.inv.lent+T.inv.cdebt)):"");
   }else if(k==="htot"){
     t="📊 الإجمالي";
     h+=tkv("🏦 أصل رأس المال",m(base))+tkv("💰 الأرباح",m(prof,prof<0?"bad":"good"))+ttot("الإجمالي (رأس المال + الأرباح)",m(T.value));
@@ -962,7 +962,7 @@ function heroHtml(T){
     hb("💰","الأرباح",m(prof),"أرباح عربيات "+m(T.undist)+"<br>عمولات خارجية "+m(T.extAvail)+(T.lossRem>0.5?"<br>خسائر لسه −"+m(T.lossRem):""),prof<-0.5?"neg":"pos","hprof")+
     hb("📥","ليك عند الناس",m(T.recv),"سلف لسه مارجعتش",T.recv>0.5?"pos":"","hrecv")+
     hb("📤","عليك للناس",m(T.owe),T.sOwe>0.5?"منها لبايعي عربيات "+m(T.sOwe):"سلف وأمانات",T.owe>0.5?"neg":"","howe")+
-    (T.inv.list.length?hb("💼","فلوس المستثمرين",m(T.inv.bal),"حرة في الخزنة "+m(T.inv.free)+" · في عربيات "+m(T.inv.working),"w","hinv"):"")+
+    (T.inv.list.length?hb("💼","فلوس المستثمرين",m(T.inv.bal),"كاش في الخزنة "+m(T.inv.free)+" · في عربيات "+m(T.inv.working),"w","hinv"):"")+
   '</div>';
   var ch=[["📊 الإجمالي (رأس المال + الأرباح) "+m(T.value),"htot"]];
   if(Math.abs(T.pOwed)>=0.5)ch.push(["🤝 مستحق للشركاء "+m(T.pOwed),"hpart"]);
@@ -2536,7 +2536,7 @@ function renderInv(){
   var T=calc(),I=T.inv;
   var h='<div class="top"><h1>تشغيل أموال</h1><button class="btn small" data-act="form" data-kind="investor">+ مستثمر جديد</button></div>'+invSeg()+
     '<div class="hero"><div class="l">فلوس المستثمرين اللي معاك</div><div class="v">'+m(I.bal)+'</div>'+
-    '<div class="s">حرة في الخزنة: '+m(I.free)+' · شغالة في عربيات: '+m(I.working)+(I.cdebt>0.5?' · عند عملاء: '+m(I.cdebt):'')+'</div>'+
+    '<div class="s">كاش في الخزنة: '+m(I.free)+' · شغالة في عربيات: '+m(I.working)+(I.cdebt>0.5?' · عند عملاء: '+m(I.cdebt):'')+'</div>'+
     (I.lossRem>0.5?'<div class="s">خسائر عليهم لسه ما اتسددتش: '+m(I.lossRem)+'</div>':'')+
     '<div class="s">الفلوس دي مش من رأس مالك، كل مستثمر ليه حسابه لوحده.</div></div>'+
     '<div class="actions"><button class="abtn" data-act="form" data-kind="invmove" data-sub="dep"><span class="ic">➕</span>إيداع من مستثمر</button><button class="abtn" data-act="form" data-kind="invmove" data-sub="wd"><span class="ic">➖</span>سحب لمستثمر</button><button class="abtn" data-act="form" data-kind="invmove" data-sub="pwd"><span class="ic">💵</span>سحب أرباح</button></div>';
@@ -2558,7 +2558,7 @@ function invInstaRaw(iid){var s=0;
 function invLoc(o){var f=Math.max(0,o.free||0),i=Math.min(f,Math.max(0,invInstaRaw(o.id)));return {insta:i,cash:f-i}}
 function invMoveLoc(iid){var o=calc().inv.list.find(function(x){return x.id===iid});if(!o)return;var L=invLoc(o);modal={type:"invloc",iid:iid};
   openSheet(sheetHead("⇄ نقل فلوس "+esc(o.name))+
-    '<div class="preview" style="display:block">فلوسه الحرة معاك: في الخزنة <b>'+m(L.cash)+'</b> · في الإنستاباي <b>'+m(L.insta)+'</b><br>رصيده مش هيتغيّر، اللي بيتغيّر مكان الفلوس بس (وخزنتك والإنستاباي بيتظبطوا معاها).</div>'+
+    '<div class="preview" style="display:block">فلوسه الكاش معاك: في الخزنة <b>'+m(L.cash)+'</b> · في الإنستاباي <b>'+m(L.insta)+'</b><br>رصيده مش هيتغيّر، اللي بيتغيّر مكان الفلوس بس (وخزنتك والإنستاباي بيتظبطوا معاها).</div>'+
     fld("من فين لفين",'<select name="ildir"><option value="toInsta">من الخزنة ← للإنستاباي</option><option value="toSafe">من الإنستاباي ← للخزنة</option></select>')+
     '<div class="two">'+fld("المبلغ",minp("ilamt"))+fld("التاريخ",dinp("ildate"))+'</div>'+fld("ملاحظة (اختياري)",'<input name="ilnote" autocomplete="off">')+
     '<button class="btn" onclick="invLocSave()">حفظ</button><button class="btn sec" style="margin-top:8px" onclick="openInv(\''+esc(iid)+'\')">رجوع</button>')}
@@ -2624,7 +2624,7 @@ function invSend(iid){
   var sel=IL.some(function(x){return x.id===iid})?iid:IL[0].id;
   modal={type:"invsend",back:modal&&modal.type==="inv"?modal.id:null};
   openSheet(sheetHead("💼 تحويل لمستثمر من الإنستاباي")+
-    fld("المستثمر",'<select name="svi">'+IL.map(function(x){return '<option value="'+esc(x.id)+'"'+(x.id===sel?" selected":"")+'>'+esc(x.name)+' (حر معاك '+fmt(x.free)+')</option>'}).join("")+'</select>')+
+    fld("المستثمر",'<select name="svi">'+IL.map(function(x){return '<option value="'+esc(x.id)+'"'+(x.id===sel?" selected":"")+'>'+esc(x.name)+' (كاش معاك '+fmt(x.free)+')</option>'}).join("")+'</select>')+
     '<div class="two">'+fld("المبلغ",minp("sva"))+fld("التاريخ",dinp("svd"))+'</div>'+
     fld("الفلوس راحت فين؟",'<select name="svk">'+Object.keys(ISEND).map(function(k){return '<option value="'+k+'">'+ISEND[k]+'</option>'}).join("")+'</select>')+
     fld("ملاحظة (اختياري)",'<input name="svn" autocomplete="off">')+
@@ -2636,12 +2636,12 @@ function invSendBack(){var b=modal&&modal.back;if(b)openInv(b);else openInsta()}
 function invSendPv(){
   var el=$("#isv");if(!el)return;var T=calc(),o=T.inv.list.find(function(x){return x.id===val("svi")});if(!o){el.innerHTML="";return}
   var a=parseNum(val("sva")),k=val("svk"),L=invLoc(o),h="";
-  h+='فلوس '+esc(o.name)+' الحرة معاك: <b>'+m(o.free)+'</b> (في الإنستاباي '+m(L.insta)+' · في الخزنة '+m(L.cash)+')'+(o.held>0.5?'<br>ومعاه على حسابه من قبل: '+m(o.held):'');
+  h+='فلوس '+esc(o.name)+' الكاش معاك: <b>'+m(o.free)+'</b> (في الإنستاباي '+m(L.insta)+' · في الخزنة '+m(L.cash)+')'+(o.held>0.5?'<br>ومعاه على حسابه من قبل: '+m(o.held):'');
   if(k==="acct")h+='<br>رصيده هيفضل <b>'+m(o.bal)+'</b> زي ما هو، والفلوس هتتسجل إنها معاه على حسابه. ولو رجّعها أو حبيت تعتبرها سحب، تعملها من صفحته.';
   else if(k==="safe")h+='<br>رصيده هيفضل <b>'+m(o.bal)+'</b>، والفلوس بتتنقل من الإنستاباي للخزنة بس.';
   else h+='<br>رصيده بعد السحب: <b>'+m(o.bal-a)+'</b>'+(k==="pwd"?' · أرباحه المتاحة '+m(o.profAvail):'');
   var mx=k==="safe"?L.insta:o.free;
-  if(a>mx+0.5)h+='<br><b class="bad">المبلغ أكبر من '+(k==="safe"?"فلوسه اللي في الإنستاباي":"فلوسه الحرة معاك")+' ('+fmt(mx)+')</b>';
+  if(a>mx+0.5)h+='<br><b class="bad">المبلغ أكبر من '+(k==="safe"?"فلوسه اللي في الإنستاباي":"فلوسه الكاش معاك")+' ('+fmt(mx)+')</b>';
   else if(k==="pwd"&&a>o.profAvail+0.5)h+='<br><b class="bad">المبلغ أكبر من أرباحه المتاحة ('+fmt(o.profAvail)+')</b>';
   var ib=T.instaBal-a;h+='<br>الإنستاباي بعد التحويل: <b class="'+(ib<0?"bad":"")+'">'+m(ib)+'</b>'+(k==="safe"?' · الخزنة '+m(T.safeBal+a):'');
   if(ib<-0.5)h+='<br><b class="bad">⚠️ رصيد الإنستاباي مش مكفّي</b>';
@@ -2652,7 +2652,7 @@ async function invSendSave(){if(submitting)return;
   if(!o)return toast("اختار المستثمر");if(a<=0)return toast("اكتب المبلغ");
   var L=invLoc(o);
   if(k==="safe"&&a>L.insta+0.5)return toast("فلوسه في الإنستاباي "+fmt(L.insta)+" بس");
-  if(k!=="safe"&&a>o.free+0.5)return toast("فلوسه الحرة معاك "+fmt(o.free)+" بس (الباقي شغال في عربيات أو بره)");
+  if(k!=="safe"&&a>o.free+0.5)return toast("فلوسه الكاش معاك "+fmt(o.free)+" بس (الباقي شغال في عربيات أو بره)");
   if(k==="pwd"&&a>o.profAvail+0.5)return toast(o.profAvail>0.5?"أرباحه المتاحة "+fmt(o.profAvail)+" بس":"مفيش أرباح متاحة للسحب");
   submitting=true;var ok=false;try{
     if(k==="acct")ok=await create("transfers",{dir:"toInv",src:"insta",iid:iid,amount:a,date:d,note:nt||("فلوس "+o.name+" اتحولت على حسابه")});
@@ -2697,7 +2697,7 @@ function renderInvDetail(){
     '<div class="kv" style="padding-right:14px"><span class="sub">· شغال في عربيات</span><b>'+m(o.working)+'</b></div>'+
     (o.lent>0.5?'<div class="kv" style="padding-right:14px"><span class="sub">· في سلف ('+o.loans.filter(function(x){return x.v.left>0.5}).map(function(x){return esc(x.l.person)}).join("، ")+')</span><b>'+m(o.lent)+'</b></div>':'')+
     (o.cdebt>0.5?'<div class="kv" style="padding-right:14px"><span class="sub">· لسه عند عملاء ('+o.cdebts.map(function(x){return esc(x.c.name)}).join("، ")+')</span><b class="warn">'+m(o.cdebt)+'</b></div>':'')+
-    '<div class="kv" style="padding-right:14px"><span class="sub">· حر معاك</span><b>'+m(o.free,o.free<0?"bad":"")+'</b></div>'+
+    '<div class="kv" style="padding-right:14px"><span class="sub">· كاش معاك</span><b>'+m(o.free,o.free<0?"bad":"")+'</b></div>'+
     (o.free>0.5?(function(){var L=invLoc(o);return '<div class="kv" style="padding-right:28px"><span class="sub">↳ في الخزنة</span><b>'+m(L.cash)+'</b></div><div class="kv" style="padding-right:28px"><span class="sub">↳ في الإنستاباي</span><b>'+m(L.insta)+'</b></div>'})():'')+
     (o.held>0.5?'<div class="kv" style="padding-right:14px"><span class="sub">· معاه على حسابه (لسه في رصيده)</span><b>'+m(o.held)+'</b></div>':'')+
     (o.note?'<div class="kv"><span>ملاحظة</span><b>'+esc(o.note)+'</b></div>':'')+'</div>';
@@ -2880,7 +2880,7 @@ function rbInvestor(){
   var T=calc(),o=T.inv.list.find(function(x){return x.id===modal.inv});if(!o)return null;
   var pc=function(x){return (Math.round((x||0)*1000)/10)+"%"},fz=function(x){return String(x).replace(/[\\\/:*?"<>|\s]+/g,"-")};
   var it=[{l:"رصيده الحالي",v:rnum(o.bal)+" ج",acc:true},{l:"رأس ماله (اللي جابه − اللي سحبه)",v:rnum(o.cap)+" ج"},{l:"أرباحه من العربيات",v:rnum(o.prof)+" ج",c:RK.good},{l:"أرباح اتسحبت له",v:rnum(o.pwd)+" ج",c:RK.bad},{l:"أرباح متاحة للسحب",v:rnum(o.profAvail)+" ج",c:RK.good},
-    {l:"شغال في عربيات",v:rnum(o.working)+" ج"},{l:"حر في الخزنة",v:rnum(invLoc(o).cash)+" ج"},{l:"حر في الإنستاباي",v:rnum(invLoc(o).insta)+" ج"}];if(o.held>0.5)it.push({l:"معاه على حسابه",v:rnum(o.held)+" ج"});if(o.cdebt>0.5)it.push({l:"عند عملاء (باقي بيع)",v:rnum(o.cdebt)+" ج",c:RK.warn});
+    {l:"شغال في عربيات",v:rnum(o.working)+" ج"},{l:"كاش في الخزنة",v:rnum(invLoc(o).cash)+" ج"},{l:"كاش في الإنستاباي",v:rnum(invLoc(o).insta)+" ج"}];if(o.held>0.5)it.push({l:"معاه على حسابه",v:rnum(o.held)+" ج"});if(o.cdebt>0.5)it.push({l:"عند عملاء (باقي بيع)",v:rnum(o.cdebt)+" ج",c:RK.warn});
   if(o.loss>0.5)it.push({l:"خسائره من العربيات",v:rnum(o.loss)+" ج",c:RK.bad},{l:"خسارة عليه لسه",v:rnum(Math.max(o.lossRem,0))+" ج",c:o.lossRem>0.5?RK.warn:RK.good});
   var B=[{t:"tiles",items:it}];
   var cars=o.cars.slice().sort(function(a,b){return (a.c.buyDate||"").localeCompare(b.c.buyDate||"")});
