@@ -38,6 +38,25 @@ const MT = { d: 'سحب بضاعة / فلوس', p: 'دفعة', x: 'خصم', r: '
 const MCOL = { d: 'var(--red2)', p: 'var(--green)', x: 'var(--gold2)', r: 'var(--blue)', s: 'var(--green)', o: 'var(--red2)' };
 const DOT = { d: '＋', p: '－', x: '٪', r: '↩', s: '＋', o: '－' };
 const ROLES = { owner: 'صاحب البرنامج', acc: 'يسجّل ويعدّل', view: 'مشاهدة بس' };
+/* ====== لون البرنامج (بيتحفظ للشركة كلها) ====== */
+const THEMES = {
+  gold: ['ذهبي', '#e7b53c', '#ffd76a', '#1d1508', '#4a3a14', '#2a2112', '#e9d8a6', '231,181,60'],
+  blue: ['أزرق', '#3b8ff0', '#7db8ff', '#0c1626', '#1f3e66', '#13233b', '#cfe2ff', '59,143,240'],
+  teal: ['تركواز', '#1fb5a6', '#5fe0d2', '#08201e', '#174b46', '#0f312e', '#c9f1ec', '31,181,166'],
+  purple: ['بنفسجي', '#9b6bf0', '#c4a3ff', '#170f26', '#3d2a66', '#26193f', '#e6dbff', '155,107,240'],
+  orange: ['برتقالي', '#f08a2c', '#ffb46b', '#22140a', '#5c3615', '#3b2410', '#ffe2c6', '240,138,44'],
+  silver: ['فضي', '#b9c0c9', '#e3e8ee', '#141619', '#3a3f46', '#23262b', '#e6e9ee', '185,192,201'],
+};
+let THEME = 'gold';
+function applyTheme(k) {
+  const t = THEMES[k] || THEMES.gold; THEME = THEMES[k] ? k : 'gold';
+  const r = document.documentElement.style;
+  [['--gold', 1], ['--gold2', 2], ['--tint', 3], ['--tintb', 4], ['--av', 5], ['--nt', 6]].forEach(([v, i]) => r.setProperty(v, t[i]));
+  r.setProperty('--soft', `rgba(${t[7]},.15)`); r.setProperty('--glow', `rgba(${t[7]},.25)`);
+  try { localStorage.setItem('elnour-theme', THEME) } catch (e) { }
+}
+const cssv = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+try { applyTheme(localStorage.getItem('elnour-theme') || 'gold') } catch (e) { }
 function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.appendChild(e); setTimeout(() => e.remove(), 2000) }
 function parseAmt(v) { return Number(String(v).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/٫/g, '.').replace(/[,،\s]/g, '')) || 0 }
 function liveComma(el) { const p = parseAmt(el.value); el.value = p ? fmt(p) : '' }
@@ -85,6 +104,7 @@ function start() {
     render();
   }, quiet ? e => console.warn(name, e) : fail));
   live('customers', 'customers'); live('moves', 'moves'); live('items', 'items', 1); live('invoices', 'invoices', 1);
+  unsubs.push(onSnapshot(doc(fs, 'settings', 'app'), s => { const t = s.exists() && s.data().theme; if (t && t !== THEME) { applyTheme(t); render() } }, e => console.warn('settings', e)));
   if (isOwner()) live('members', 'members');
   go('home');
 }
@@ -236,7 +256,7 @@ function viewCust() {
       <button class="btn btn-red" onclick="openMove('${c.id}','d')">＋ سحب جديد (يزوّد)</button>
       <button class="btn btn-green" onclick="openMove('${c.id}','p')">－ دفعة (تقلّل)</button>
     </div>
-    <button class="btn btn-ghost" style="margin-top:8px;color:var(--gold2);border-color:#4a3a14" onclick="openDiscount('${c.id}')">٪ عمل خصم للعميل</button>` : ''}
+    <button class="btn btn-ghost" style="margin-top:8px;color:var(--gold2);border-color:var(--tintb)" onclick="openDiscount('${c.id}')">٪ عمل خصم للعميل</button>` : ''}
     <div class="acts2">
       <button class="btn btn-ghost" onclick="sendWA('${c.id}')">كشف حساب واتساب</button>
       ${canEdit() ? `<button class="btn btn-ghost" onclick="openCustomerForm('${c.id}')">تعديل بيانات العميل</button>` : `<button class="btn btn-ghost" onclick="callC('${c.id}')">اتصال</button>`}
@@ -381,7 +401,7 @@ async function statementImage(c) {
   const H = top + 150 + 230 + 70 + 20 + Math.max(rows.length, 1) * RH + (cut ? 50 : 0) + 230;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const x = cv.getContext('2d');
-  const GOLD = '#e7b53c', TXT = '#f4f1ea', MUT = '#9b978e', RED = '#ff4a52', GRN = '#2fbf71', LINE = '#2c2c31';
+  const GOLD = cssv('--gold'), TXT = '#f4f1ea', MUT = '#9b978e', RED = '#ff4a52', GRN = '#2fbf71', LINE = '#2c2c31';
   x.fillStyle = '#0b0b0c'; x.fillRect(0, 0, W, H);
   x.fillStyle = GOLD; x.fillRect(0, 0, W, 10); x.fillRect(0, H - 10, W, 10);
   if (logo) x.drawImage(logo, (W - lw) / 2, P, lw, logoH);
@@ -436,7 +456,7 @@ async function allImage() {
   const H = top + 120 + 230 + 70 + list.length * RH + 90 + 160;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const x = cv.getContext('2d');
-  const GOLD = '#e7b53c', TXT = '#f4f1ea', MUT = '#9b978e', RED = '#ff4a52', GRN = '#2fbf71', LINE = '#2c2c31';
+  const GOLD = cssv('--gold'), TXT = '#f4f1ea', MUT = '#9b978e', RED = '#ff4a52', GRN = '#2fbf71', LINE = '#2c2c31';
   x.fillStyle = '#0b0b0c'; x.fillRect(0, 0, W, H);
   x.fillStyle = GOLD; x.fillRect(0, 0, W, 10); x.fillRect(0, H - 10, W, 10);
   if (logo) x.drawImage(logo, (W - lw) / 2, P, lw, logoH);
@@ -538,7 +558,7 @@ function viewLog() {
    ===================================================================== */
 const KIND = { sale: 'فاتورة بيع', ret: 'مرتجع', quote: 'عرض سعر', in: 'إضافة بضاعة' };
 const KCOL = { sale: 'var(--red2)', ret: 'var(--blue)', quote: 'var(--gold2)', in: 'var(--green)' };
-const KBG = { sale: 'rgba(214,34,42,.15)', ret: 'rgba(90,160,255,.15)', quote: 'rgba(231,181,60,.15)', in: 'rgba(47,191,113,.15)' };
+const KBG = { sale: 'rgba(214,34,42,.15)', ret: 'rgba(90,160,255,.15)', quote: 'var(--soft)', in: 'rgba(47,191,113,.15)' };
 const KSIGN = { sale: -1, ret: 1, in: 1, quote: 0 }; // أثر كل نوع على المخزن
 const fmtP = n => (+n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const item = id => DB.items.find(i => i.id === id);
@@ -968,8 +988,8 @@ async function invImage(v) {
   const W = 1080, P0 = 50, RH = 66, F = 'Cairo, sans-serif';
   const lw = logo ? Math.min(W - 2 * P0 - 380, 340 * logo.width / logo.height) : 0, logoH = logo ? Math.round(lw * logo.height / logo.width) : 0;
   const tl = [];
-  if (v.disc) tl.push(['الإجمالي قبل الخصم', fmtP(v.sub)], ['خصم', '− ' + fmtP(v.disc), '#e7b53c']);
-  tl.push([v.kind === 'ret' ? 'قيمة المرتجع' : 'الإجمالي', fmtP(v.total) + ' ج', '#ffd76a', 1]);
+  if (v.disc) tl.push(['الإجمالي قبل الخصم', fmtP(v.sub)], ['خصم', '− ' + fmtP(v.disc), cssv('--gold')]);
+  tl.push([v.kind === 'ret' ? 'قيمة المرتجع' : 'الإجمالي', fmtP(v.total) + ' ج', cssv('--gold2'), 1]);
   if (v.kind === 'sale') {
     tl.push(['المدفوع', fmt(P), '#2fbf71']);
     if (c && P < v.total) tl.push(['الباقي (اتضاف على الحساب)', fmt(v.total - P), '#ff4a52']);
@@ -980,7 +1000,7 @@ async function invImage(v) {
   const H = top + 150 + 70 + v.lines.length * RH + 40 + tl.length * 62 + 40 + (v.kind === 'quote' ? 50 : 0) + 170;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const x = cv.getContext('2d');
-  const GOLD = '#e7b53c', TXT = '#f4f1ea', MUT = '#9b978e', LINE = '#2c2c31';
+  const GOLD = cssv('--gold'), TXT = '#f4f1ea', MUT = '#9b978e', LINE = '#2c2c31';
   x.fillStyle = '#0b0b0c'; x.fillRect(0, 0, W, H);
   x.fillStyle = GOLD; x.fillRect(0, 0, W, 10); x.fillRect(0, H - 10, W, 10);
   if (logo) x.drawImage(logo, (W - lw) / 2, P0, lw, logoH);
@@ -1039,7 +1059,16 @@ function viewMore() {
     <div class="f"><b>${esc(m.name || '—')}</b><small class="num" style="text-align:right">${esc(m.id)}</small></div>
     <span class="badge">${ROLES[m.role] || ''}</span>
     <button class="iconbtn" onclick="openMember('${esc(m.id)}')">تعديل</button></div>`).join('') : '<div class="empty">مفيش مستخدمين غيرك. دوس «إضافة مستخدم» وحط إيميل Gmail بتاعه.</div>'}` : ''}
+  ${isOwner() ? `<div class="sec-t"><span>لون البرنامج</span><small>بيتغيّر عند كل المستخدمين</small></div>
+  <div class="sw">${Object.entries(THEMES).map(([k, t]) => `<button class="${k === THEME ? 'on' : ''}" onclick="setTheme('${k}')"><i style="background:linear-gradient(135deg,${t[2]},${t[1]})"></i>${t[0]}</button>`).join('')}</div>` : ''}
   <button class="btn btn-ghost" style="margin-top:12px" onclick="logout()">تسجيل خروج</button>`;
+}
+function setTheme(k) {
+  if (k === THEME) return;
+  const old = THEME; applyTheme(k); render();
+  setDoc(doc(fs, 'settings', 'app'), { theme: k, by: ME.email, at: Date.now() }, { merge: true })
+    .then(() => toast('اتغيّر اللون عند كل المستخدمين'))
+    .catch(e => { applyTheme(old); render(); fail(e) });
 }
 function openMember(id) {
   const m = id ? DB.members.find(x => x.id === id) : null;
@@ -1070,5 +1099,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll });
+Object.assign(window, { setTheme, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
