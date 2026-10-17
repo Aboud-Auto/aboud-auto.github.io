@@ -34,5 +34,13 @@ service cloud.firestore {
       allow read: if canRead();
       allow write: if canWrite();
     }
+    match /items/{id} {
+      allow read: if canRead();
+      allow write: if canWrite();
+    }
+    match /invoices/{id} {
+      allow read: if canRead();
+      allow write: if canWrite();
+    }
   }
 }
