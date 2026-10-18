@@ -1695,29 +1695,13 @@ function openQuick(dir){
   }
   QF=null;modal={type:"quick",dir:dir};
   var h=sheetHead(inn?"⬇️ فلوس داخلة":"⬆️ فلوس خارجة")+
-    '<div class="two">'+fld("المبلغ",minp("qamt"))+fld(inn?"دخلت في":"خرجت من",'<select name="qsrc"><option value="cash">الخزنة - كاش</option><option value="insta">إنستاباي</option></select>')+'</div>'+
-    (!inn&&T.inv.list.length?fld("الفلوس دي من فلوس مين؟",'<select name="qwho" onchange="var b=document.getElementById(\'qinv\'),p=document.getElementById(\'qipart\');b.style.display=this.value===\'mine\'?\'none\':\'\';p.style.display=this.value===\'both\'?\'\':\'none\'"><option value="mine">👤 من فلوسي</option><option value="inv">💼 من مستثمر</option><option value="both">🤝 أنا والمستثمر</option></select>')+
-      '<div id="qinv" style="display:none"><div class="two">'+fld("المستثمر",'<select name="qiid">'+T.inv.list.map(function(x){return '<option value="'+esc(x.id)+'">'+esc(x.name)+' (كاش '+fmt(x.free)+')</option>'}).join("")+'</select>')+
-      '<div id="qipart" style="display:none">'+fld("نصيب المستثمر",minp("qia"))+'</div></div><div class="sub" style="margin:-4px 2px 10px">💼 فلوس المستثمر بتنفع مع شراء عربية أو سلفة لحد. ولو داخل أكتر من مستثمر تقدر تضيفهم جوه الفورم.</div></div>':'')+
     '<div class="sect">'+(inn?"الفلوس دي جت من إيه؟":"الفلوس دي راحت في إيه؟")+'</div>'+
     '<div class="actions qcats">'+L.map(function(x){return '<button class="abtn" data-act="qgo" data-kind="'+x[2]+'" data-sub="'+(x[3]||"")+'"><span class="ic">'+x[0]+'</span>'+x[1]+'</button>'}).join("")+'</div>'+
     (inn?'':'<div class="sub" style="margin:10px 2px 0">💸 مصاريف العربيات بتتسجل زي ما هي من «تسجيل مصروف».</div>');
   openSheet(h);
-  setTimeout(function(){var e=$("#sheet [name='qamt']");if(e)e.focus()},150);
 }
 function quickGo(kind,sub){
-  var a=parseNum(val("qamt"));
-  if(!(a>0)){toast("اكتب المبلغ الأول");var e=$("#sheet [name='qamt']");if(e)e.focus();return}
-  QF={a:a,s:val("qsrc")==="insta"?"insta":"cash"};
-  var who=val("qwho")||"mine";
-  if(who!=="mine"){
-    if(!(kind==="buy"||(kind==="loan"&&sub==="out"))){QF=null;return toast("فلوس المستثمر بتنفع مع شراء عربية أو سلفة لحد بس")}
-    var ia=who==="inv"?a:parseNum(val("qia"));
-    if(!(ia>0)){QF=null;toast("اكتب نصيب المستثمر");var qe=$("#sheet [name='qia']");if(qe)qe.focus();return}
-    if(ia>a){QF=null;return toast("نصيب المستثمر أكبر من المبلغ كله")}
-    if(who==="both"&&ia>=a){QF=null;return toast("لو المبلغ كله من المستثمر اختار «من مستثمر»")}
-    QF.inv={iid:val("qiid"),a:ia};
-  }
+  QF=null;
   if(kind==="qpick")return quickPick(sub);
   openForm(kind,{sub:sub||undefined});
 }
@@ -1738,7 +1722,7 @@ function quickPick(sub){
     T.cars.forEach(function(c){c.parts.forEach(function(p){if(p.remaining>0.5)rows.push(row('data-kind="payout" data-car="'+c.id+'" data-pid="'+esc(p.id)+'"',esc(p.name),esc(c.name),fmt(p.remaining)))})});
   }
   modal={type:"quick"};
-  openSheet(sheetHead(t)+'<div class="sub" style="margin:0 2px 10px">المبلغ: <b>'+fmt(QF.a)+'</b> · '+(QF.s==="insta"?"إنستاباي":"كاش")+'</div>'+(rows.length?'<div class="card" style="padding:6px 16px">'+rows.join("")+'</div>':'<div class="empty">مفيش حاجة هنا</div>'));
+  openSheet(sheetHead(t)+(rows.length?'<div class="card" style="padding:6px 16px">'+rows.join("")+'</div>':'<div class="empty">مفيش حاجة هنا</div>'));
 }
 
 function updatePreview(){
