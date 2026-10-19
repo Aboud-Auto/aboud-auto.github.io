@@ -314,8 +314,7 @@ function viewCust() {
     </div>
     <button class="btn btn-ghost" style="margin-top:8px;color:var(--gold2);border-color:#4a3a14" onclick="openDiscount('${c.id}')">٪ عمل خصم للعميل</button>` : ''}
     <div class="acts2">
-      <button class="btn btn-ghost" onclick="sendWA('${c.id}')">كشف حساب (صورة)</button>
-      <button class="btn btn-ghost" onclick="sendPDF('${c.id}')">📄 كشف حساب PDF</button>
+      <button class="btn btn-ghost" onclick="openStatement('${c.id}')">📤 ابعت كشف حساب</button>
       ${canEdit() ? `<button class="btn btn-ghost" onclick="openCustomerForm('${c.id}')">تعديل بيانات العميل</button>` : `<button class="btn btn-ghost" onclick="callC('${c.id}')">اتصال</button>`}
     </div>
     ${nInv ? `<button class="btn btn-ghost" style="margin-top:8px" onclick="custInvs('${c.id}')">🧾 فواتير العميل وعروض الأسعار (${nInv})</button>` : ''}
@@ -460,10 +459,19 @@ function delMove(id) {
 /* ====== كشف حساب واتساب (صورة بلوجو الشركة) ====== */
 const loadImg = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src });
 function fitText(ctx, t, w) { t = String(t || ''); if (ctx.measureText(t).width <= w) return t; while (t.length && ctx.measureText(t + '…').width > w) t = t.slice(0, -1); return t + '…' }
-async function statementImage(c) {
+// آخر عملية = آخر حاجة اتسجلت (مع الحركات اللي اتسجلت معاها في نفس اللحظة، زي دفعة بكذا طريقة + خصم)
+function lastOp(mv, b) {
+  if (!mv.length) return { rows: [], before: b };
+  const lt = Math.max(...mv.map(m => +m.ts || 0));
+  const g = mv.filter(m => Math.abs((+m.ts || 0) - lt) < 100);
+  const before = b - g.reduce((s, m) => s + (m.type === 'd' ? m.amt : -m.amt), 0);
+  let run = before; return { rows: g.map(m => { run += m.type === 'd' ? m.amt : -m.amt; return { ...m, run } }), before };
+}
+async function statementImage(c, last) {
   const b = balance(c.id), mv = DB.moves.filter(m => m.cid === c.id).sort(ord);
   let run = 0; const all = mv.map(m => { run += m.type === 'd' ? m.amt : -m.amt; return { ...m, run } });
-  const MAX = 30, rows = all.slice(-MAX), cut = all.length > MAX;
+  const LO = last ? lastOp(mv, b) : null;
+  const MAX = 30, rows = last ? LO.rows : all.slice(-MAX), cut = !last && all.length > MAX;
   const td = mv.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), tp = mv.filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0), tx = mv.filter(m => m.type === 'x').reduce((s, m) => s + m.amt, 0), tr = mv.filter(m => m.type === 'r').reduce((s, m) => s + m.amt, 0);
   try { await Promise.all(['400', '700', '800'].map(w => document.fonts.load(w + ' 30px Cairo'))) } catch (e) { }
   const logo = await loadImg('logo.jpg').catch(() => null);
@@ -479,14 +487,14 @@ async function statementImage(c) {
   if (logo) x.drawImage(logo, (W - lw) / 2, P, lw, logoH);
   const T = (t, px, py, o = {}) => { x.font = `${o.w || 700} ${o.s || 30}px ${F}`; x.fillStyle = o.c || TXT; x.textAlign = o.a || 'right'; x.direction = o.ltr ? 'ltr' : 'rtl'; x.fillText(o.max ? fitText(x, t, o.max) : t, px, py) };
   let y = top;
-  T('كشف حساب', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 62;
+  T(last ? 'آخر عملية على الحساب' : 'كشف حساب', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 62;
   T(c.name, W / 2, y, { a: 'center', s: 38, w: 700, max: W - 2 * P }); y += 46;
   T(`بتاريخ ${dshow(today())}${c.phone ? '   •   ' + c.phone : ''}`, W / 2, y, { a: 'center', s: 26, w: 400, c: MUT }); y += 40;
   // البوكس الرئيسي
   x.fillStyle = '#17171a'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 200, 22); x.fill();
   T(b > 0 ? 'الرصيد المستحق عليكم' : b < 0 ? 'رصيد لكم عندنا' : 'الحساب خالص', W / 2, y + 50, { a: 'center', s: 28, c: MUT });
   T(fmt(Math.abs(b)) + ' ج', W / 2, y + 128, { a: 'center', s: 66, w: 800, c: b > 0 ? RED : b < 0 ? GRN : TXT });
-  T(`إجمالي السحب ${fmt(td)}   •   إجمالي المدفوع ${fmt(tp)}${tx ? '   •   الخصومات ' + fmt(tx) : ''}${tr ? '   •   المرتجع ' + fmt(tr) : ''}`, W / 2, y + 178, { a: 'center', s: 22, w: 400, c: MUT });
+  T(last ? `الرصيد قبل العملية دي: ${fmt(LO.before)} ج` : `إجمالي السحب ${fmt(td)}   •   إجمالي المدفوع ${fmt(tp)}${tx ? '   •   الخصومات ' + fmt(tx) : ''}${tr ? '   •   المرتجع ' + fmt(tr) : ''}`, W / 2, y + 178, { a: 'center', s: 22, w: 400, c: MUT });
   y += 230;
   // رأس الجدول
   const cols = { date: W - P - 20, note: W - P - 210, d: P + 380, p: P + 220, r: P + 20 };
@@ -521,10 +529,11 @@ function loadJsPDF() {
     s.onload = () => { jsPDFlib = window.jspdf.jsPDF; ok(jsPDFlib) }; s.onerror = no; document.head.appendChild(s);
   });
 }
-async function statementPDF(c) {
+async function statementPDF(c, last) {
   const JsPDF = await loadJsPDF();
   const b = balance(c.id), mv = DB.moves.filter(m => m.cid === c.id).sort(ord);
-  let run = 0; const rows = mv.map(m => { run += m.type === 'd' ? m.amt : -m.amt; return { ...m, run } });
+  let run = 0; const LO = last ? lastOp(mv, b) : null;
+  const rows = last ? LO.rows : mv.map(m => { run += m.type === 'd' ? m.amt : -m.amt; return { ...m, run } });
   const td = mv.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), tp = mv.filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0), tx = mv.filter(m => m.type === 'x').reduce((s, m) => s + m.amt, 0), tr = mv.filter(m => m.type === 'r').reduce((s, m) => s + m.amt, 0);
   try { await Promise.all(['400', '700', '800'].map(w => document.fonts.load(w + ' 30px Cairo'))) } catch (e) { }
   const logo = await loadImg('logo.jpg').catch(() => null);
@@ -559,13 +568,13 @@ async function statementPDF(c) {
     if (pi === 0) {
       if (logo) x.drawImage(logo, (W - lw) / 2, P, lw, logoH);
       y = P + logoH + 70;
-      T('كشف حساب', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 62;
+      T(last ? 'آخر عملية على الحساب' : 'كشف حساب', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 62;
       T(c.name, W / 2, y, { a: 'center', s: 38, w: 700, max: W - 2 * P }); y += 46;
       T(`بتاريخ ${dshow(today())}${c.phone ? '   •   ' + c.phone : ''}`, W / 2, y, { a: 'center', s: 26, w: 400, c: MUT }); y += 42;
       x.fillStyle = '#17171a'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 200, 22); x.fill();
       T(b > 0 ? 'الرصيد المستحق عليكم' : b < 0 ? 'رصيد لكم عندنا' : 'الحساب خالص', W / 2, y + 50, { a: 'center', s: 28, c: MUT });
       T(fmt(Math.abs(b)) + ' ج', W / 2, y + 128, { a: 'center', s: 66, w: 800, c: b > 0 ? RED : b < 0 ? GRN : TXT });
-      T(`إجمالي السحب ${fmt(td)}   •   إجمالي المدفوع ${fmt(tp)}${tx ? '   •   الخصومات ' + fmt(tx) : ''}${tr ? '   •   المرتجع ' + fmt(tr) : ''}`, W / 2, y + 178, { a: 'center', s: 22, w: 400, c: MUT });
+      T(last ? `الرصيد قبل العملية دي: ${fmt(LO.before)} ج` : `إجمالي السحب ${fmt(td)}   •   إجمالي المدفوع ${fmt(tp)}${tx ? '   •   الخصومات ' + fmt(tx) : ''}${tr ? '   •   المرتجع ' + fmt(tr) : ''}`, W / 2, y + 178, { a: 'center', s: 22, w: 400, c: MUT });
       y = top1;
     } else {
       T(`كشف حساب — ${c.name} (تابع)`, W - P, P + 40, { s: 28, w: 700, c: GOLD, max: W - 2 * P - 200 });
@@ -601,12 +610,20 @@ async function statementPDF(c) {
   });
   return pdf.output('blob');
 }
-function sendPDF(cid) {
+function openStatement(cid) {
+  const c = DB.customers.find(x => x.id === cid); if (!c) return;
+  const row = (t, sub, last) => `<div class="field"><span>${t}</span><div class="note" style="margin:4px 0 8px">${sub}</div>
+    <div class="acts2" style="margin-top:0"><button class="btn btn-ghost" onclick="closeM();sendWA('${cid}',${last})">🖼 صورة</button><button class="btn btn-ghost" onclick="closeM();sendPDF('${cid}',${last})">📄 PDF</button></div></div>`;
+  sheet(`<h3>كشف حساب ${esc(c.name)}</h3>
+    ${row('آخر عملية بس', 'آخر حاجة اتسجلت على الحساب، والرصيد قبلها وبعدها', true)}
+    ${row('كشف حساب كامل', 'كل الحركات من أول التعامل بالتفصيل', false)}`);
+}
+function sendPDF(cid, last) {
   once(async () => {
     const c = DB.customers.find(x => x.id === cid); if (!c) return;
     toast('بيتجهّز ملف الـ PDF...');
-    let blob; try { blob = await statementPDF(c) } catch (e) { console.error(e); return toast(navigator.onLine ? 'حصلت مشكلة في تجهيز الـ PDF' : 'الـ PDF محتاج نت أول مرة') }
-    const file = new File([blob], `كشف حساب - ${c.name}.pdf`, { type: 'application/pdf' });
+    let blob; try { blob = await statementPDF(c, last) } catch (e) { console.error(e); return toast(navigator.onLine ? 'حصلت مشكلة في تجهيز الـ PDF' : 'الـ PDF محتاج نت أول مرة') }
+    const file = new File([blob], `${last ? 'آخر عملية' : 'كشف حساب'} - ${c.name}.pdf`, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file] }) } catch (e) { if (e.name !== 'AbortError') toast('ماقدرتش أفتح المشاركة') }
       return;
@@ -690,12 +707,12 @@ function sendAll() {
     await shareImage(blob, `تقرير أرصدة العملاء ${today()}.png`);
   });
 }
-function sendWA(cid) {
+function sendWA(cid, last) {
   once(async () => {
     const c = DB.customers.find(x => x.id === cid); if (!c) return;
     toast('بيتجهّز كشف الحساب...');
-    let blob; try { blob = await statementImage(c) } catch (e) { console.error(e); return toast('حصلت مشكلة في تجهيز الصورة') }
-    const file = new File([blob], `كشف حساب - ${c.name}.png`, { type: 'image/png' });
+    let blob; try { blob = await statementImage(c, last) } catch (e) { console.error(e); return toast('حصلت مشكلة في تجهيز الصورة') }
+    const file = new File([blob], `${last ? 'آخر عملية' : 'كشف حساب'} - ${c.name}.png`, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file] }) } catch (e) { if (e.name !== 'AbortError') toast('ماقدرتش أفتح المشاركة') }
       return;
@@ -1353,5 +1370,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, sendPDF, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll });
+Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
