@@ -314,7 +314,8 @@ function viewCust() {
     </div>
     <button class="btn btn-ghost" style="margin-top:8px;color:var(--gold2);border-color:#4a3a14" onclick="openDiscount('${c.id}')">٪ عمل خصم للعميل</button>` : ''}
     <div class="acts2">
-      <button class="btn btn-ghost" onclick="sendWA('${c.id}')">كشف حساب واتساب</button>
+      <button class="btn btn-ghost" onclick="sendWA('${c.id}')">كشف حساب (صورة)</button>
+      <button class="btn btn-ghost" onclick="sendPDF('${c.id}')">📄 كشف حساب PDF</button>
       ${canEdit() ? `<button class="btn btn-ghost" onclick="openCustomerForm('${c.id}')">تعديل بيانات العميل</button>` : `<button class="btn btn-ghost" onclick="callC('${c.id}')">اتصال</button>`}
     </div>
     ${nInv ? `<button class="btn btn-ghost" style="margin-top:8px" onclick="custInvs('${c.id}')">🧾 فواتير العميل وعروض الأسعار (${nInv})</button>` : ''}
@@ -510,6 +511,112 @@ async function statementImage(c) {
   T('شكراً لتعاملكم معنا', W / 2, y, { a: 'center', s: 32, w: 700, c: GOLD }); y += 50;
   T('شركة النور والفتح', W / 2, y, { a: 'center', s: 26, w: 400, c: MUT });
   return await new Promise(r => cv.toBlob(r, 'image/png'));
+}
+/* ====== كشف حساب PDF (صفحات A4 بجودة عالية، كل الحركات من غير قص) ====== */
+let jsPDFlib = null;
+function loadJsPDF() {
+  if (jsPDFlib) return Promise.resolve(jsPDFlib);
+  return new Promise((ok, no) => {
+    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = () => { jsPDFlib = window.jspdf.jsPDF; ok(jsPDFlib) }; s.onerror = no; document.head.appendChild(s);
+  });
+}
+async function statementPDF(c) {
+  const JsPDF = await loadJsPDF();
+  const b = balance(c.id), mv = DB.moves.filter(m => m.cid === c.id).sort(ord);
+  let run = 0; const rows = mv.map(m => { run += m.type === 'd' ? m.amt : -m.amt; return { ...m, run } });
+  const td = mv.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), tp = mv.filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0), tx = mv.filter(m => m.type === 'x').reduce((s, m) => s + m.amt, 0), tr = mv.filter(m => m.type === 'r').reduce((s, m) => s + m.amt, 0);
+  try { await Promise.all(['400', '700', '800'].map(w => document.fonts.load(w + ' 30px Cairo'))) } catch (e) { }
+  const logo = await loadImg('logo.jpg').catch(() => null);
+  const W = 1080, PH = Math.round(W * 297 / 210), P = 50, RH = 60, S = 2, F = 'Cairo, sans-serif';
+  const lw = logo ? Math.min(W - 2 * P - 420, 300 * logo.width / logo.height) : 0, logoH = logo ? Math.round(lw * logo.height / logo.width) : 0;
+  const FOOT = 90, END = 130;               // مساحة رقم الصفحة تحت + مساحة "شكراً" في آخر صفحة
+  const top1 = P + logoH + 70 + 150 + 230;  // أول صفحة: لوجو + عنوان + بوكس الرصيد
+  const topN = P + 90;                      // باقي الصفحات: سطر عنوان صغير
+  const HEAD = 70;                          // رأس الجدول
+  // نقسّم الحركات على الصفحات
+  const pages = []; let i = 0, first = true;
+  do {
+    const room = PH - FOOT - (first ? top1 : topN) - HEAD;
+    let n = Math.max(1, Math.floor(room / RH));
+    if (i + n >= rows.length && (rows.length - i) * RH > room - END) n = Math.max(1, Math.floor((room - END) / RH));
+    pages.push(rows.slice(i, i + n)); i += n; first = false;
+  } while (i < rows.length);
+  if (pages.length > 1 && !pages[pages.length - 1].length) pages.pop();
+  const lastRoom = PH - FOOT - (pages.length > 1 ? topN : top1) - HEAD - pages[pages.length - 1].length * RH;
+  if (lastRoom < END) pages.push([]);
+  const GOLD = '#e7b53c', TXT = '#f4f1ea', MUT = '#9b978e', RED = '#ff4a52', GRN = '#2fbf71', LINE = '#2c2c31';
+  const cols = { date: W - P - 20, note: W - P - 210, d: P + 380, p: P + 220, r: P + 20 };
+  const pdf = new JsPDF({ unit: 'pt', format: 'a4', compress: true });
+  const cv = document.createElement('canvas'); cv.width = W * S; cv.height = PH * S;
+  const x = cv.getContext('2d');
+  const T = (t, px, py, o = {}) => { x.font = `${o.w || 700} ${o.s || 30}px ${F}`; x.fillStyle = o.c || TXT; x.textAlign = o.a || 'right'; x.direction = o.ltr ? 'ltr' : 'rtl'; x.fillText(o.max ? fitText(x, t, o.max) : t, px, py) };
+  pages.forEach((pg, pi) => {
+    x.setTransform(S, 0, 0, S, 0, 0);
+    x.fillStyle = '#0b0b0c'; x.fillRect(0, 0, W, PH);
+    x.fillStyle = GOLD; x.fillRect(0, 0, W, 10); x.fillRect(0, PH - 10, W, 10);
+    let y;
+    if (pi === 0) {
+      if (logo) x.drawImage(logo, (W - lw) / 2, P, lw, logoH);
+      y = P + logoH + 70;
+      T('كشف حساب', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 62;
+      T(c.name, W / 2, y, { a: 'center', s: 38, w: 700, max: W - 2 * P }); y += 46;
+      T(`بتاريخ ${dshow(today())}${c.phone ? '   •   ' + c.phone : ''}`, W / 2, y, { a: 'center', s: 26, w: 400, c: MUT }); y += 42;
+      x.fillStyle = '#17171a'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 200, 22); x.fill();
+      T(b > 0 ? 'الرصيد المستحق عليكم' : b < 0 ? 'رصيد لكم عندنا' : 'الحساب خالص', W / 2, y + 50, { a: 'center', s: 28, c: MUT });
+      T(fmt(Math.abs(b)) + ' ج', W / 2, y + 128, { a: 'center', s: 66, w: 800, c: b > 0 ? RED : b < 0 ? GRN : TXT });
+      T(`إجمالي السحب ${fmt(td)}   •   إجمالي المدفوع ${fmt(tp)}${tx ? '   •   الخصومات ' + fmt(tx) : ''}${tr ? '   •   المرتجع ' + fmt(tr) : ''}`, W / 2, y + 178, { a: 'center', s: 22, w: 400, c: MUT });
+      y = top1;
+    } else {
+      T(`كشف حساب — ${c.name} (تابع)`, W - P, P + 40, { s: 28, w: 700, c: GOLD, max: W - 2 * P - 200 });
+      T(dshow(today()), P, P + 40, { a: 'left', s: 22, w: 400, c: MUT, ltr: true });
+      y = topN;
+    }
+    if (pg.length || pi === 0) {
+      x.fillStyle = '#202024'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 58, 14); x.fill();
+      [['التاريخ', cols.date, 'right'], ['البيان', cols.note, 'right'], ['سحب', cols.d, 'left'], ['دفعة / مرتجع', cols.p, 'left'], ['الرصيد', cols.r, 'left']]
+        .forEach(([t, px, a]) => T(t, px, y + 39, { s: 24, c: GOLD, a }));
+      y += HEAD;
+    }
+    if (!rows.length) { T('لا توجد حركات', W / 2, y + 40, { a: 'center', s: 26, c: MUT }); y += RH }
+    pg.forEach((m, k) => {
+      if (k % 2) { x.fillStyle = '#121214'; x.fillRect(P, y, W - 2 * P, RH) }
+      const cy = y + 40;
+      T(dshow(m.date), cols.date, cy, { s: 23, w: 400 });
+      T(m.type === 'x' ? ['خصم', m.note].filter(Boolean).join(' — ') : mdesc(m) || (m.type === 'd' ? 'سحب' : m.type === 'r' ? 'مرتجع' : 'دفعة'), cols.note, cy, { s: 23, w: 400, max: cols.note - (cols.d + 150) });
+      T(m.type === 'd' ? fmt(m.amt) : '', cols.d, cy, { a: 'left', s: 25, c: RED, ltr: true });
+      T(m.type !== 'd' ? fmt(m.amt) : '', cols.p, cy, { a: 'left', s: 25, c: m.type === 'x' ? GOLD : m.type === 'r' ? '#7fb3ff' : GRN, ltr: true });
+      T(fmt(m.run), cols.r, cy, { a: 'left', s: 25, ltr: true });
+      x.fillStyle = LINE; x.fillRect(P, y + RH - 1, W - 2 * P, 1);
+      y += RH;
+    });
+    if (pi === pages.length - 1) {
+      y += 70;
+      T('شكراً لتعاملكم معنا', W / 2, y, { a: 'center', s: 32, w: 700, c: GOLD }); y += 46;
+      T('شركة النور والفتح', W / 2, y, { a: 'center', s: 26, w: 400, c: MUT });
+    }
+    if (pages.length > 1) T(`صفحة ${pi + 1} من ${pages.length}`, W / 2, PH - 40, { a: 'center', s: 22, w: 400, c: MUT });
+    if (pi) pdf.addPage('a4');
+    pdf.addImage(cv.toDataURL('image/png'), 'PNG', 0, 0, 595.28, 841.89, undefined, 'FAST');
+  });
+  return pdf.output('blob');
+}
+function sendPDF(cid) {
+  once(async () => {
+    const c = DB.customers.find(x => x.id === cid); if (!c) return;
+    toast('بيتجهّز ملف الـ PDF...');
+    let blob; try { blob = await statementPDF(c) } catch (e) { console.error(e); return toast(navigator.onLine ? 'حصلت مشكلة في تجهيز الـ PDF' : 'الـ PDF محتاج نت أول مرة') }
+    const file = new File([blob], `كشف حساب - ${c.name}.pdf`, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }) } catch (e) { if (e.name !== 'AbortError') toast('ماقدرتش أفتح المشاركة') }
+      return;
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    let ph = (c.phone || '').replace(/\D/g, ''); if (ph.startsWith('0')) ph = '2' + ph;
+    toast('الملف نزل — ابعته في الشات');
+    if (ph) window.open('https://wa.me/' + ph, '_blank');
+  });
 }
 async function allImage() {
   const list = DB.customers.map(c => {
@@ -1246,5 +1353,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll });
+Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, sendPDF, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
