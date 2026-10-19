@@ -400,7 +400,7 @@ function viewCust() {
       <div class="i"><b>${m.inv && m.type === 'd' ? 'فاتورة بيع' : MT[m.type]}</b>
         <small>${dshow(m.date)}${mdesc(m) ? ' — ' + esc(mdesc(m)) : ''}</small>
         <small>سجّلها: ${esc(m.by)}</small>
-        ${m.inv ? `<button class="x" style="color:var(--gold)" onclick="go('inv','${m.inv}')">عرض الفاتورة ←</button>` : canEdit() ? `<button class="x" onclick="delMove('${m.id}')">حذف الحركة</button>` : ''}</div>
+        ${m.inv ? `<button class="x" style="color:var(--gold)" onclick="go('inv','${m.inv}')">عرض الفاتورة ←</button>` : canEdit() ? `<span style="display:flex;gap:14px"><button class="x" style="color:var(--gold)" onclick="openEditMove('${m.id}')">✎ تعديل</button><button class="x" style="color:var(--red2)" onclick="delMove('${m.id}')">✕ إلغاء</button></span>` : ''}</div>
       <div class="a"><span class="num" style="color:${MCOL[m.type]}">${m.type === 'd' ? '+' : '−'}${fmt(m.amt)}</span>
         <small>الرصيد بعدها <span class="num">${fmt(m.run)}</span></small></div>
     </div>`).join('') : '<div class="empty">لسه مفيش حركات على العميل ده</div>'}`;
@@ -525,9 +525,42 @@ function saveMove(cid, type) {
   });
 }
 function delMove(id) {
-  const m = DB.moves.find(x => x.id === id);
-  if (m && m.inv) return toast('الحركة دي تبع فاتورة — افتح الفاتورة وعدّلها أو احذفها');
-  if (!confirm('متأكد إنك عايز تحذف الحركة دي؟')) return; deleteDoc(doc(fs, 'moves', id)).catch(fail)
+  const m = DB.moves.find(x => x.id === id); if (!m) return;
+  if (m.inv) return toast('الحركة دي تبع فاتورة — افتح الفاتورة وعدّلها أو احذفها');
+  // دفعة متقسمة على كذا طريقة لنفس العميل: نسأل نلغيها كلها ولا الجزء ده بس
+  const sib = m.grp && m.cid ? DB.moves.filter(x => x.grp === m.grp && x.cid === m.cid && x.id !== m.id) : [];
+  if (sib.length) {
+    const all = confirm(`الدفعة دي متسجلة على ${sib.length + 1} طرق دفع (${[m, ...sib].map(x => x.method + ' ' + fmt(x.amt)).join('، ')}).\n\nدوس «OK» تلغي الدفعة كلها، أو «Cancel» تلغي الجزء ده بس (${fmt(m.amt)} ج).`);
+    if (!all && !confirm(`تلغي ${fmt(m.amt)} ج (${m.method}) بس؟`)) return;
+    const b = writeBatch(fs); [m, ...(all ? sib : [])].forEach(x => b.delete(doc(fs, 'moves', x.id))); b.commit().catch(fail);
+    return toast('اتلغت');
+  }
+  const what = m.type === 'p' ? `الدفعة (${fmt(m.amt)} ج)` : m.type === 'x' ? `الخصم (${fmt(m.amt)} ج)` : m.type === 'd' ? `السحب (${fmt(m.amt)} ج)` : `الحركة (${fmt(m.amt)} ج)`;
+  if (!confirm(`متأكد إنك عايز تلغي ${what}؟${m.cid ? ' رصيد العميل هيرجع زي ما كان قبلها.' : ''}`)) return;
+  deleteDoc(doc(fs, 'moves', id)).catch(fail); toast('اتلغت');
+}
+function openEditMove(id) {
+  const m = DB.moves.find(x => x.id === id); if (!m) return;
+  if (m.inv) return toast('الحركة دي تبع فاتورة — افتح الفاتورة وعدّلها');
+  const c = DB.customers.find(x => x.id === m.cid);
+  const ttl = m.type === 'p' ? 'تعديل دفعة' : m.type === 'x' ? 'تعديل خصم' : m.type === 'd' ? 'تعديل سحب' : 'تعديل حركة';
+  sheet(`<h3>${ttl}${c ? ' — ' + esc(c.name) : ''}</h3>
+    <label class="field"><span>المبلغ</span><input id="ea" inputmode="numeric" value="${fmt(m.amt)}" oninput="liveComma(this)" style="font-size:22px;font-weight:800"></label>
+    ${m.type === 'p' ? `<label class="field"><span>طريقة الدفع</span><select id="em">${PAY.map(w => `<option ${w === m.method ? 'selected' : ''}>${w}</option>`).join('')}</select></label>` : ''}
+    <label class="field"><span>التاريخ</span><input id="ed" type="date" value="${m.date}"></label>
+    <label class="field"><span>${m.type === 'd' ? 'البيان' : 'ملاحظة'}</span><input id="en" value="${esc(m.note || '')}"></label>
+    <button class="btn btn-gold" onclick="saveEditMove('${id}')">حفظ التعديل</button>
+    <button class="btn btn-ghost" style="margin-top:8px;color:var(--red2)" onclick="closeM();delMove('${id}')">✕ إلغاء الحركة دي خالص</button>`);
+}
+function saveEditMove(id) {
+  once(async () => {
+    const m = DB.moves.find(x => x.id === id); if (!m) return closeM();
+    const amt = Math.round(parseAmt($('#ea').value)); if (amt <= 0) return toast('اكتب المبلغ');
+    const d = { amt, date: $('#ed').value || m.date, note: $('#en').value.trim(), edited: ME.name };
+    if (m.type === 'p') d.method = $('#em').value;
+    updateDoc(doc(fs, 'moves', id), d).catch(fail);
+    closeM(); toast('اتعدّلت');
+  });
 }
 
 /* ====== كشف حساب واتساب (صورة بلوجو الشركة) ====== */
@@ -1561,5 +1594,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, openRecv, rvAdd, rvHint, saveRecv, sendAll, sendAllPDF, shareReady, dlReady });
+Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, openEditMove, saveEditMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, openRecv, rvAdd, rvHint, saveRecv, sendAll, sendAllPDF, shareReady, dlReady });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
