@@ -481,14 +481,18 @@ function lastOp(mv, b) {
   const lt = Math.max(...mv.map(m => +m.ts || 0));
   const g = mv.filter(m => Math.abs((+m.ts || 0) - lt) < 100);
   const before = b - g.reduce((s, m) => s + (m.type === 'd' ? m.amt : -m.amt), 0);
-  let run = before; return { rows: g.map(m => { run += m.type === 'd' ? m.amt : -m.amt; return { ...m, run } }), before };
+  // أول سطر = الرصيد اللي كان عليه قبل العملية (زي سطر "رصيد قديم")، وبعده العملية نفسها
+  const rest = mv.filter(m => !g.includes(m)), pd = rest.length ? rest.map(m => m.date).sort().pop() : g[0].date;
+  let run = before;
+  const op = g.map(m => { run += m.type === 'd' ? m.amt : -m.amt; return { ...m, run } });
+  return { rows: before ? [{ type: before > 0 ? 'd' : 'p', amt: Math.abs(before), note: 'رصيد سابق', date: pd, run: before, ts: '0' }, ...op] : op, before };
 }
 async function statementImage(c, last) {
   const b = balance(c.id), mv = DB.moves.filter(m => m.cid === c.id).sort(ord);
   let run = 0; const all = mv.map(m => { run += m.type === 'd' ? m.amt : -m.amt; return { ...m, run } });
   const LO = last ? lastOp(mv, b) : null;
   const MAX = 30, rows = last ? LO.rows : all.slice(-MAX), cut = !last && all.length > MAX;
-  const td = mv.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), tp = mv.filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0), tx = mv.filter(m => m.type === 'x').reduce((s, m) => s + m.amt, 0), tr = mv.filter(m => m.type === 'r').reduce((s, m) => s + m.amt, 0);
+  const td = (last ? LO.rows : mv).filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), tp = (last ? LO.rows : mv).filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0), tx = (last ? LO.rows : mv).filter(m => m.type === 'x').reduce((s, m) => s + m.amt, 0), tr = (last ? LO.rows : mv).filter(m => m.type === 'r').reduce((s, m) => s + m.amt, 0);
   try { await Promise.all(['400', '700', '800'].map(w => document.fonts.load(w + ' 30px Cairo'))) } catch (e) { }
   const logo = await loadImg('logo.jpg').catch(() => null);
   const W = 1080, P = 50, RH = 64, F = 'Cairo, sans-serif';
@@ -503,14 +507,14 @@ async function statementImage(c, last) {
   if (logo) x.drawImage(logo, (W - lw) / 2, P, lw, logoH);
   const T = (t, px, py, o = {}) => { x.font = `${o.w || 700} ${o.s || 30}px ${F}`; x.fillStyle = o.c || TXT; x.textAlign = o.a || 'right'; x.direction = o.ltr ? 'ltr' : 'rtl'; x.fillText(o.max ? fitText(x, t, o.max) : t, px, py) };
   let y = top;
-  T(last ? 'آخر عملية على الحساب' : 'كشف حساب', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 62;
+  T('كشف حساب', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 62;
   T(c.name, W / 2, y, { a: 'center', s: 38, w: 700, max: W - 2 * P }); y += 46;
   T(`بتاريخ ${dshow(today())}${c.phone ? '   •   ' + c.phone : ''}`, W / 2, y, { a: 'center', s: 26, w: 400, c: MUT }); y += 40;
   // البوكس الرئيسي
   x.fillStyle = '#17171a'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 200, 22); x.fill();
   T(b > 0 ? 'الرصيد المستحق عليكم' : b < 0 ? 'رصيد لكم عندنا' : 'الحساب خالص', W / 2, y + 50, { a: 'center', s: 28, c: MUT });
   T(fmt(Math.abs(b)) + ' ج', W / 2, y + 128, { a: 'center', s: 66, w: 800, c: b > 0 ? RED : b < 0 ? GRN : TXT });
-  T(last ? `الرصيد قبل العملية دي: ${fmt(LO.before)} ج` : `إجمالي السحب ${fmt(td)}   •   إجمالي المدفوع ${fmt(tp)}${tx ? '   •   الخصومات ' + fmt(tx) : ''}${tr ? '   •   المرتجع ' + fmt(tr) : ''}`, W / 2, y + 178, { a: 'center', s: 22, w: 400, c: MUT });
+  T(`إجمالي السحب ${fmt(td)}   •   إجمالي المدفوع ${fmt(tp)}${tx ? '   •   الخصومات ' + fmt(tx) : ''}${tr ? '   •   المرتجع ' + fmt(tr) : ''}`, W / 2, y + 178, { a: 'center', s: 22, w: 400, c: MUT });
   y += 230;
   // رأس الجدول
   const cols = { date: W - P - 20, note: W - P - 210, d: P + 380, p: P + 220, r: P + 20 };
@@ -550,7 +554,7 @@ async function statementPDF(c, last) {
   const b = balance(c.id), mv = DB.moves.filter(m => m.cid === c.id).sort(ord);
   let run = 0; const LO = last ? lastOp(mv, b) : null;
   const rows = last ? LO.rows : mv.map(m => { run += m.type === 'd' ? m.amt : -m.amt; return { ...m, run } });
-  const td = mv.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), tp = mv.filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0), tx = mv.filter(m => m.type === 'x').reduce((s, m) => s + m.amt, 0), tr = mv.filter(m => m.type === 'r').reduce((s, m) => s + m.amt, 0);
+  const td = (last ? LO.rows : mv).filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), tp = (last ? LO.rows : mv).filter(m => m.type === 'p').reduce((s, m) => s + m.amt, 0), tx = (last ? LO.rows : mv).filter(m => m.type === 'x').reduce((s, m) => s + m.amt, 0), tr = (last ? LO.rows : mv).filter(m => m.type === 'r').reduce((s, m) => s + m.amt, 0);
   try { await Promise.all(['400', '700', '800'].map(w => document.fonts.load(w + ' 30px Cairo'))) } catch (e) { }
   const logo = await loadImg('logo.jpg').catch(() => null);
   const W = 1080, PH = Math.round(W * 297 / 210), P = 50, RH = 60, S = 2, F = 'Cairo, sans-serif';
@@ -584,13 +588,13 @@ async function statementPDF(c, last) {
     if (pi === 0) {
       if (logo) x.drawImage(logo, (W - lw) / 2, P, lw, logoH);
       y = P + logoH + 70;
-      T(last ? 'آخر عملية على الحساب' : 'كشف حساب', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 62;
+      T('كشف حساب', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 62;
       T(c.name, W / 2, y, { a: 'center', s: 38, w: 700, max: W - 2 * P }); y += 46;
       T(`بتاريخ ${dshow(today())}${c.phone ? '   •   ' + c.phone : ''}`, W / 2, y, { a: 'center', s: 26, w: 400, c: MUT }); y += 42;
       x.fillStyle = '#17171a'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 200, 22); x.fill();
       T(b > 0 ? 'الرصيد المستحق عليكم' : b < 0 ? 'رصيد لكم عندنا' : 'الحساب خالص', W / 2, y + 50, { a: 'center', s: 28, c: MUT });
       T(fmt(Math.abs(b)) + ' ج', W / 2, y + 128, { a: 'center', s: 66, w: 800, c: b > 0 ? RED : b < 0 ? GRN : TXT });
-      T(last ? `الرصيد قبل العملية دي: ${fmt(LO.before)} ج` : `إجمالي السحب ${fmt(td)}   •   إجمالي المدفوع ${fmt(tp)}${tx ? '   •   الخصومات ' + fmt(tx) : ''}${tr ? '   •   المرتجع ' + fmt(tr) : ''}`, W / 2, y + 178, { a: 'center', s: 22, w: 400, c: MUT });
+      T(`إجمالي السحب ${fmt(td)}   •   إجمالي المدفوع ${fmt(tp)}${tx ? '   •   الخصومات ' + fmt(tx) : ''}${tr ? '   •   المرتجع ' + fmt(tr) : ''}`, W / 2, y + 178, { a: 'center', s: 22, w: 400, c: MUT });
       y = top1;
     } else {
       T(`كشف حساب — ${c.name} (تابع)`, W - P, P + 40, { s: 28, w: 700, c: GOLD, max: W - 2 * P - 200 });
