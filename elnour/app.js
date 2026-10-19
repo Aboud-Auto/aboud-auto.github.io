@@ -182,7 +182,7 @@ function walletList() {
 function wallets() {
   const mo = today().slice(0, 7);
   const list = walletList().map(w => ({ w, bal: walletBal(w), mon: DB.moves.filter(m => (m.type === 'p' || m.type === 's') && (m.method || 'غير محدد') === w && m.date.startsWith(mo)).reduce((s, m) => s + m.amt, 0) }));
-  return `<div class="sec-t"><span>الفلوس اللي في كل محفظة دلوقتي</span>${canEdit() ? `<span class="chip on" onclick="openTransfer()">⇄ تحويل</span>` : ''}</div>
+  return `<div class="sec-t"><span>الفلوس اللي في كل محفظة دلوقتي</span>${canEdit() ? `<span style="display:flex;gap:6px"><span class="chip on" onclick="openRecv()">＋ استلام</span><span class="chip on" onclick="openTransfer()">⇄ تحويل</span></span>` : ''}</div>
   ${canEdit() ? `<small style="display:block;color:var(--muted);margin:-4px 2px 8px">دوس على أي محفظة عشان تظبط رصيدها أو تسجّل سحب / توريد منها</small>` : ''}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${list.map(x => `
     <div onclick="openWallet('${esc(x.w)}')" style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;cursor:pointer">
@@ -214,6 +214,63 @@ function saveTransfer() {
     closeM(); toast('تم التحويل');
   });
 }
+/* ---------- استلام دفعة على محفظة وتقسيمها على كذا عميل ---------- */
+let RV = null;
+function rvLabels() { // اسم العميل (ولو في اسمين زي بعض نزوّد الرقم)
+  const cnt = {}; DB.customers.forEach(c => cnt[c.name] = (cnt[c.name] || 0) + 1);
+  const m = {}; DB.customers.forEach(c => m[cnt[c.name] > 1 ? `${c.name} (${c.phone || c.id.slice(-4)})` : c.name] = c.id); return m;
+}
+function openRecv(w) {
+  RV = { n: 2 };
+  const L = rvLabels();
+  sheet(`<h3>استلام دفعة</h3>
+    <div class="note">مثلاً: وصل تحويل إنستاباي جزء منه لعميل وجزء لعميل تاني. كل جزء هيتخصم من حساب العميل بتاعه، والمبلغ كله هيدخل المحفظة.</div>
+    <label class="field"><span>المحفظة</span><select id="rw">${PAY.map(x => `<option ${x === (w || PAY[1]) ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+    <label class="field"><span>المبلغ اللي وصل كله</span><input id="rt" inputmode="numeric" oninput="liveComma(this);rvHint()" placeholder="اختياري" style="font-size:22px;font-weight:800"></label>
+    <datalist id="rvc">${Object.keys(L).sort((a, b) => a.localeCompare(b, 'ar')).map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+    <div class="field"><span>اتقسم على مين؟</span><div id="rvl">${[0, 1].map(rvRow).join('')}</div>
+      <button class="btn btn-ghost" style="margin-top:8px" onclick="rvAdd()">＋ عميل تاني</button></div>
+    <div class="note" id="rvh"></div>
+    <label class="field"><span>التاريخ</span><input id="rd" type="date" value="${today()}"></label>
+    <label class="field"><span>ملاحظة (اختياري)</span><input id="rn" placeholder="مثلاً: تحويل من محمد"></label>
+    <button class="btn btn-green" onclick="saveRecv()">تسجيل</button>`);
+  rvHint();
+}
+function rvRow(i) {
+  return `<div style="display:flex;gap:8px;margin-top:8px"><input id="rc${i}" list="rvc" placeholder="اسم العميل" oninput="rvHint()" style="flex:3;font-size:16px">
+    <input id="ra${i}" inputmode="numeric" placeholder="المبلغ" oninput="liveComma(this);rvHint()" style="flex:2;font-size:18px;font-weight:800"></div>`;
+}
+function rvAdd() { $('#rvl').insertAdjacentHTML('beforeend', rvRow(RV.n++)); $('#rc' + (RV.n - 1)).focus() }
+function rvParts() {
+  const L = rvLabels(), out = [];
+  for (let i = 0; i < RV.n; i++) {
+    const n = ($('#rc' + i)?.value || '').trim(), a = parseAmt($('#ra' + i)?.value || '');
+    if (!n && !a) continue; out.push({ n, a, cid: L[n] });
+  }
+  return out;
+}
+function rvHint() {
+  const ps = rvParts(), sum = ps.reduce((s, x) => s + x.a, 0), t = parseAmt($('#rt').value), bad = ps.filter(x => x.n && !x.cid);
+  $('#rvh').innerHTML = `اتقسم: <b class="num" style="color:var(--green)">${fmt(sum)}</b> ج` +
+    (t ? ` من <b class="num">${fmt(t)}</b> — ${t === sum ? '<b style="color:var(--green)">مظبوط ✓</b>' : t > sum ? `فاضل <b class="num" style="color:var(--red2)">${fmt(t - sum)}</b> ج مش متقسم` : `زيادة <b class="num" style="color:var(--red2)">${fmt(sum - t)}</b> ج عن المبلغ`}` : '') +
+    (bad.length ? `<br><span style="color:var(--red2)">مش لاقي عميل اسمه: ${bad.map(x => esc(x.n)).join('، ')}</span>` : '');
+}
+function saveRecv() {
+  once(async () => {
+    const ps = rvParts(), w = $('#rw').value, t = parseAmt($('#rt').value), date = $('#rd').value || today(), note = $('#rn').value.trim();
+    if (!ps.length) return toast('اكتب العملاء والمبالغ');
+    if (ps.some(x => !x.cid)) return toast('في اسم عميل مش موجود — اختاره من القايمة');
+    if (ps.some(x => x.a <= 0)) return toast('اكتب مبلغ كل عميل');
+    if (new Set(ps.map(x => x.cid)).size < ps.length) return toast('في عميل متكرر — اجمع مبلغه في سطر واحد');
+    const sum = ps.reduce((s, x) => s + x.a, 0);
+    if (t && t !== sum) return toast(t > sum ? `لسه فاضل ${fmt(t - sum)} ج مش متقسم` : `المتقسم زيادة ${fmt(sum - t)} ج عن المبلغ`);
+    const b = writeBatch(fs), grp = ps.length > 1 ? uid() : null, ts = Date.now();
+    const nt = [ps.length > 1 ? `جزء من دفعة ${fmt(sum)} ج` : '', note].filter(Boolean).join(' — ');
+    ps.forEach((x, i) => b.set(doc(fs, 'moves', uid()), { cid: x.cid, type: 'p', amt: x.a, method: w, date, note: nt, ...(grp ? { grp } : {}), by: ME.name, ts: (ts + i) + '' }));
+    b.commit().catch(fail);
+    closeM(); toast(`تم تسجيل ${fmt(sum)} ج على ${w}${ps.length > 1 ? ` (${ps.length} عملاء)` : ''}`);
+  });
+}
 /* ---------- المحفظة: تظبيط الرصيد + سحب / توريد ---------- */
 const WHY = ['توريد', 'مصروفات', 'سحب شخصي', 'أخرى'];
 function walletMoves(w) {
@@ -234,7 +291,8 @@ function openWallet(w) {
     ${canEdit() ? `<div class="acts">
       <button class="btn btn-red" onclick="openOut('${esc(w)}')">－ سحب / توريد</button>
       ${isPay ? `<button class="btn btn-ghost" onclick="openAdjust('${esc(w)}')">✎ تظبيط الرصيد</button>` : `<button class="btn btn-ghost" onclick="openTransfer()">⇄ تحويل</button>`}
-    </div>` : ''}
+    </div>
+    ${isPay ? `<button class="btn btn-green" style="margin-top:8px" onclick="openRecv('${esc(w)}')">＋ استلام دفعة (ممكن تتقسم على كذا عميل)</button>` : ''}` : ''}
     <div class="sec-t"><span>آخر الحركات</span></div>
     ${mv.length ? mv.map(x => `<div class="list-item" style="padding:10px 12px">
       <div class="f"><b style="font-size:14px">${esc(x.t)}</b><small>${dshow(x.m.date)}${x.m.note && x.m.type === 't' ? ' — ' + esc(x.m.note) : ''} — ${esc(x.m.by || '')}</small>
@@ -1503,5 +1561,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll, sendAllPDF, shareReady, dlReady });
+Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, openRecv, rvAdd, rvHint, saveRecv, sendAll, sendAllPDF, shareReady, dlReady });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
