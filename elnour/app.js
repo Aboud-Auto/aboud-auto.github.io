@@ -384,10 +384,16 @@ function openMove(cid, type) {
       ${PAY.map((t, i) => `<div style="display:flex;align-items:center;gap:10px;margin-top:8px">
         <b style="flex:0 0 120px;font-size:15px">${t}</b>
         <input id="pa${i}" inputmode="numeric" oninput="liveComma(this);payTotal()" placeholder="0" style="flex:1;font-size:20px;font-weight:800"></div>`).join('')}
-      <div class="note" style="margin-top:10px">إجمالي الدفعة: <b class="num" id="ptot" style="color:var(--green)">0</b> ج</div></div>`}
+      <div class="note" style="margin-top:10px">إجمالي الدفعة: <b class="num" id="ptot" style="color:var(--green)">0</b> ج</div></div>
+    <div style="display:flex;gap:10px">
+      <label class="field" style="flex:2"><span>خصم (اختياري)</span><input id="xa" inputmode="numeric" placeholder="0" oninput="liveComma(this);$('#xp').value='';payTotal()" style="font-size:20px;font-weight:800"></label>
+      <label class="field" style="flex:1"><span>أو نسبة ٪</span><input id="xp" inputmode="decimal" placeholder="مثلاً 10" oninput="payPct()" style="font-size:20px;font-weight:800"></label>
+    </div>
+    <div class="note" id="pafter">الرصيد بعد الدفعة: <b class="num">${fmt(balance(cid))}</b> ج</div>`}
     <label class="field"><span>التاريخ</span><input id="md" type="date" value="${today()}"></label>
     <label class="field"><span>${type === 'd' ? 'البيان (أخد إيه؟)' : 'ملاحظة (اختياري)'}</span><input id="mn" placeholder="${type === 'd' ? 'مثلاً: 20 مفتاح خام + جهاز' : ''}"></label>
     <button class="btn ${type === 'd' ? 'btn-red' : 'btn-green'}" onclick="saveMove('${cid}','${type}')">تسجيل</button>`);
+  if (type !== 'd') $('#xa').dataset.b = balance(cid);
   setTimeout(() => $(type === 'd' ? '#ma' : '#pa0').focus(), 50);
 }
 function openDiscount(cid) {
@@ -418,7 +424,12 @@ function saveDiscount(cid) {
     closeM(); toast('تم تسجيل خصم ' + fmt(amt) + ' ج');
   });
 }
-function payTotal() { $('#ptot').textContent = fmt(PAY.reduce((s, _, i) => s + parseAmt($('#pa' + i).value), 0)) }
+const payParts = () => PAY.reduce((s, _, i) => s + parseAmt($('#pa' + i).value), 0);
+function payTotal() {
+  const t = payParts(); $('#ptot').textContent = fmt(t);
+  if ($('#xa')) { const d = parseAmt($('#xa').value); $('#pafter').innerHTML = `الرصيد بعد الدفعة${d > 0 ? ' والخصم' : ''}: <b class="num">${fmt(+$('#xa').dataset.b - t - d)}</b> ج` }
+}
+function payPct() { const p = parseAmt($('#xp').value), b = +$('#xa').dataset.b; $('#xa').value = p > 0 && b > 0 ? fmt(Math.round(b * p / 100)) : ''; payTotal() }
 function saveMove(cid, type) {
   once(async () => {
     const date = $('#md').value || today(), note = $('#mn').value.trim(), ts = Date.now();
@@ -428,11 +439,15 @@ function saveMove(cid, type) {
       closeM(); return toast('تم تسجيل السحب');
     }
     const parts = PAY.map((method, i) => ({ method, amt: parseAmt($('#pa' + i).value) })).filter(x => x.amt > 0);
-    if (!parts.length) return toast('اكتب المبلغ في طريقة دفع واحدة على الأقل');
+    const disc = Math.round(parseAmt($('#xa').value)), pct = parseAmt($('#xp').value);
+    if (!parts.length && disc <= 0) return toast('اكتب المبلغ في طريقة دفع واحدة على الأقل أو اكتب الخصم');
+    const paid = parts.reduce((s, x) => s + x.amt, 0);
+    if (disc > 0 && paid + disc > balance(cid) && !confirm('الدفعة والخصم مع بعض أكبر من الرصيد اللي عليه، والعميل هيبقى ليه فلوس عندكم. تسجّلهم برضه؟')) return;
     const b = writeBatch(fs), grp = parts.length > 1 ? uid() : null;
     parts.forEach((x, i) => b.set(doc(fs, 'moves', uid()), { cid, type, amt: x.amt, method: x.method, date, note, ...(grp ? { grp } : {}), by: ME.name, ts: (ts + i) + '' }));
+    if (disc > 0) b.set(doc(fs, 'moves', uid()), { cid, type: 'x', amt: disc, date, note: [pct > 0 ? `خصم ${pct}٪` : '', parts.length ? 'مع دفعة' : '', note].filter(Boolean).join(' — '), by: ME.name, ts: (ts + parts.length) + '' });
     b.commit().catch(fail);
-    closeM(); toast('تم تسجيل دفعة ' + fmt(parts.reduce((s, x) => s + x.amt, 0)) + ' ج');
+    closeM(); toast([paid ? 'تم تسجيل دفعة ' + fmt(paid) + ' ج' : '', disc ? (paid ? 'وخصم ' : 'تم تسجيل خصم ') + fmt(disc) + ' ج' : ''].filter(Boolean).join(' '));
   });
 }
 function delMove(id) {
@@ -1231,5 +1246,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll });
+Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
