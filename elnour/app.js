@@ -22,7 +22,7 @@ const fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabMana
 /* ====== حالة البرنامج ====== */
 let DB = { customers: [], moves: [], members: [], items: [], invoices: [] };
 let ME = null, unsubs = [];
-let route = { v: 'home' }, filter = 'all', q = '', HIST = [];
+let route = { v: 'invs' }, filter = 'all', q = '', HIST = [];
 
 const $ = s => document.querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -86,7 +86,7 @@ function start() {
   }, quiet ? e => console.warn(name, e) : fail));
   live('customers', 'customers'); live('moves', 'moves'); live('items', 'items', 1); live('invoices', 'invoices', 1);
   if (isOwner()) live('members', 'members');
-  go('home');
+  go('invs', undefined, true);
 }
 
 /* ====== التنقل ====== */
@@ -100,7 +100,7 @@ function tab(v) { if (route.v === 'newinv' && !leaveEditor()) return; HIST = [];
 function back() {
   if (route.v === 'newinv' && !leaveEditor()) return;
   let r = HIST.pop(); while (r && r.v === 'newinv') r = HIST.pop();
-  route = r || { v: 'home' }; $('#view').innerHTML = ''; render(); window.scrollTo(0, 0);
+  route = r || { v: 'invs' }; $('#view').innerHTML = ''; render(); window.scrollTo(0, 0);
 }
 function fabAct() { FAB[route.v] && FAB[route.v][1]() }
 function render() {
