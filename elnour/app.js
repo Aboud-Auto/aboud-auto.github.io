@@ -536,6 +536,24 @@ async function statementImage(c, last) {
   T('شركة النور والفتح', W / 2, y, { a: 'center', s: 26, w: 400, c: MUT });
   return await new Promise(r => cv.toBlob(r, 'image/png'));
 }
+/* ====== المشاركة ======
+   الموبايل بيسمح بالمشاركة بس لو جت بعد ضغطة على طول. لو الملف خد وقت يتجهّز (زي PDF كل العملاء)
+   المشاركة بتترفض، فنطلّع زرار «مشاركة» يتداس عليه تاني. */
+let READY = null;
+async function shareNow(file) {
+  try { await navigator.share({ files: [file] }) }
+  catch (e) {
+    if (e.name === 'AbortError') return;
+    READY = file;
+    sheet(`<h3>✅ الملف جاهز</h3><div class="note">${esc(file.name)}</div>
+      <button class="btn btn-green" onclick="shareReady()">📤 مشاركة (واتساب)</button>
+      <button class="btn btn-ghost" style="margin-top:8px" onclick="dlReady()">⬇ تنزيل على الموبايل</button>`);
+  }
+}
+function dlFile(f) { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('الملف نزل') }
+async function shareReady() { const f = READY; closeM(); if (!f) return; try { await navigator.share({ files: [f] }) } catch (e) { if (e.name !== 'AbortError') { toast('ماقدرتش أفتح المشاركة، هنزّله على الموبايل'); dlFile(f) } } }
+function dlReady() { closeM(); if (READY) dlFile(READY) }
+
 /* ====== كشف حساب PDF (صفحات A4 بجودة عالية، كل الحركات من غير قص) ====== */
 let jsPDFlib = null;
 function loadJsPDF() {
@@ -641,7 +659,7 @@ function sendPDF(cid, last) {
     let blob; try { blob = await statementPDF(c, last) } catch (e) { console.error(e); return toast(navigator.onLine ? 'حصلت مشكلة في تجهيز الـ PDF' : 'الـ PDF محتاج نت أول مرة') }
     const file = new File([blob], `${last ? 'آخر عملية' : 'كشف حساب'} - ${c.name}.pdf`, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file] }) } catch (e) { if (e.name !== 'AbortError') toast('ماقدرتش أفتح المشاركة') }
+      await shareNow(file)
       return;
     }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
@@ -739,7 +757,7 @@ function sendAllPDF() {
     let blob; try { blob = await allPDF() } catch (e) { console.error(e); return toast(navigator.onLine ? 'حصلت مشكلة في تجهيز الـ PDF' : 'الـ PDF محتاج نت أول مرة') }
     const file = new File([blob], `تقرير أرصدة العملاء ${today()}.pdf`, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file] }) } catch (e) { if (e.name !== 'AbortError') toast('ماقدرتش أفتح المشاركة') }
+      await shareNow(file)
       return;
     }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
@@ -802,7 +820,7 @@ async function allImage() {
 async function shareImage(blob, name, ph) {
   const file = new File([blob], name, { type: 'image/png' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file] }) } catch (e) { if (e.name !== 'AbortError') toast('ماقدرتش أفتح المشاركة') }
+    await shareNow(file)
     return;
   }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
@@ -825,7 +843,7 @@ function sendWA(cid, last) {
     let blob; try { blob = await statementImage(c, last) } catch (e) { console.error(e); return toast('حصلت مشكلة في تجهيز الصورة') }
     const file = new File([blob], `${last ? 'آخر عملية' : 'كشف حساب'} - ${c.name}.png`, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file] }) } catch (e) { if (e.name !== 'AbortError') toast('ماقدرتش أفتح المشاركة') }
+      await shareNow(file)
       return;
     }
     // الكمبيوتر: نزّل الصورة وافتح واتساب على رقم العميل
@@ -1481,5 +1499,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll, sendAllPDF });
+Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll, sendAllPDF, shareReady, dlReady });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
