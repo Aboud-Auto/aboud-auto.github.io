@@ -809,6 +809,7 @@ function renderHome(){
      tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"لسه ماتحوّلش للخزنة")+'</div>'+
      '<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="transfer">🔁 تحويل بين إنستاباي والخزنة</button>';
   h+='<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف</button>';
+  h+='<button class="btn sec" style="margin-bottom:12px" data-act="price">🏷️ تسعير عربية (من صفقاتك القديمة)</button>';
   h+='<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="dep">🔖 تسجيل عربون على عربية</button>';
   h+='<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="ext">🤝 تسجيل عمولة خارجية</button>';
   h+='<div class="card row" data-act="tab" data-tab="day" style="cursor:pointer"><div><div class="tl">النهاردة</div><div style="font-weight:700">مصاريف '+m(D.expT)+' · تحصيل '+m(D.cashT+D.instaT)+'</div></div><span class="sub">تقفيل اليوم ‹</span></div>';
@@ -843,7 +844,7 @@ function carListHtml(){
 }
 function renderCars(){
   var F=[["stock","في المعرض"],["sold","اتباعت"],["debt","عليها فلوس"],["partner","شراكة"],["all","الكل"]];
-  return '<div class="top"><h1>العربيات</h1><div style="display:flex;gap:8px"><button class="btn small sec" data-act="report" data-kind="settle">🧾 تقفيل</button><button class="btn small" data-act="form" data-kind="buy">+ شراء عربية</button></div></div>'+
+  return '<div class="top"><h1>العربيات</h1><div style="display:flex;gap:8px"><button class="btn small sec" data-act="price">🏷️ تسعير</button><button class="btn small sec" data-act="report" data-kind="settle">🧾 تقفيل</button><button class="btn small" data-act="form" data-kind="buy">+ شراء عربية</button></div></div>'+
     '<input class="search" id="q" placeholder="ابحث باسم العربية أو اللوحة" value="'+esc(S.q)+'">'+
     '<div class="chips">'+F.map(function(f){return '<button class="chip '+(S.filter===f[0]?"on":"")+'" data-act="filter" data-f="'+f[0]+'">'+f[1]+'</button>'}).join("")+'</div>'+
     '<div id="carList">'+carListHtml()+'</div>';
@@ -1292,6 +1293,77 @@ function refresh(){
   if(modal&&modal.type==="tinfo"&&modal.k==="ext")tileTap("ext");
 }
 function renderListOnly(){var l=$("#carList");if(l)l.innerHTML=carListHtml();if(modal&&modal.type==="detail")renderDetail()}
+
+/* ---------- التسعير: سعر العربية من الصفقات القديمة ---------- */
+function prNorm(s){return String(s||"").replace(/[٠-٩]/g,function(d){return AR.indexOf(d)}).replace(/[أإآ]/g,"ا").replace(/ة/g,"ه").replace(/ى/g,"ي").replace(/ـ/g,"").toLowerCase().replace(/[اويه]/g,"").replace(/\s+/g," ").trim()}
+function prBase(n){return String(n||"").split(/\s[-–—]\s|\s[-–—]|[-–—]\s/)[0].trim()||String(n||"").trim()}
+function prDays(a,b){if(!a||!b)return null;var d=(new Date(b)-new Date(a))/864e5;return isFinite(d)&&d>=0?Math.round(d):null}
+function prAgo(d){var n=prDays(d,todayStr());if(n==null)return "";if(n<1)return "النهاردة";if(n<30)return "من "+n+" يوم";var mo=Math.round(n/30);if(mo<12)return "من "+(mo===1?"شهر":mo===2?"شهرين":mo+" شهور");var y=Math.round(n/365);return "من "+(y===1?"سنة":y===2?"سنتين":y+" سنين")}
+function prGroups(){
+  var G={};calc().cars.forEach(function(c){var b=prBase(c.name),k=prNorm(b);if(!k)return;var g=G[k]||(G[k]={k:k,name:b,sold:[],stock:[],last:""});(c.sold?g.sold:g.stock).push(c);var d=c.sold?c.sellDate:c.buyDate;if((d||"")>=g.last){g.last=d||"";g.name=b}});
+  return Object.keys(G).map(function(k){var g=G[k];g.sold.sort(function(a,b){return (b.sellDate||"").localeCompare(a.sellDate||"")});return g});
+}
+function prMatch(q){var t=prNorm(q).split(" ").filter(Boolean);return prGroups().filter(function(g){return t.every(function(w){return g.k.indexOf(w)>=0})}).sort(function(a,b){return (b.sold.length-a.sold.length)||(b.last||"").localeCompare(a.last||"")})}
+function prStats(g){
+  var L=g.sold,n=L.length;if(!n)return null;
+  function avg(f){return L.reduce(function(a,c){return a+f(c)},0)/n}
+  var buys=L.map(function(c){return +c.buyPrice||0}),sells=L.map(function(c){return c.sellPrice}),rec=buys.slice(0,3);
+  var dd=L.map(function(c){return prDays(c.buyDate,c.sellDate)}).filter(function(x){return x!=null});
+  return {n:n,aBuy:avg(function(c){return +c.buyPrice||0}),aSell:avg(function(c){return c.sellPrice}),aExp:avg(function(c){return c.exp}),aNet:avg(function(c){return c.profit}),
+    minB:Math.min.apply(null,buys),maxB:Math.max.apply(null,buys),minS:Math.min.apply(null,sells),maxS:Math.max.apply(null,sells),
+    rLo:Math.min.apply(null,rec),rHi:Math.max.apply(null,rec),days:dd.length?Math.round(dd.reduce(function(a,b){return a+b},0)/dd.length):null,last:L[0].sellDate};
+}
+function openPrice(){modal={type:"price",q:"",k:null,offer:""};drawPrice();setTimeout(function(){var i=$("#pq");if(i)i.focus()},150)}
+function drawPrice(){
+  var P=modal,h;
+  if(P.k){
+    var g=prGroups().find(function(x){return x.k===P.k});if(!g){P.k=null;return drawPrice()}
+    var s=prStats(g);P.g=g;P.s=s;
+    h='<div class="sh"><button class="x" data-act="pback" aria-label="رجوع">›</button><h2 style="flex:1;margin:0 10px">'+esc(g.name)+'</h2><button class="x" data-act="close" aria-label="إغلاق">✕</button></div>';
+    if(!s){
+      h+='<div class="banner">العربية دي لسه ماتباعتش قبل كده، فمفيش سعر بيع أقيس عليه.</div>';
+    }else{
+      h+='<div class="hero"><div class="l" style="font-weight:600">🏷️ سعر الشراء المقترح</div><div class="v" style="font-size:28px;font-weight:800;margin:4px 0">'+(Math.round(s.rLo)===Math.round(s.rHi)?fmt(s.rLo):fmt(s.rLo)+" – "+fmt(s.rHi))+' ج</div>'+
+        '<div class="s" style="font-size:13px">من '+(s.n===1?"صفقة واحدة":'<span class="num">'+s.n+'</span> صفقات')+' · آخر بيعة '+prAgo(s.last)+(s.n>3?" · محسوب من آخر 3":"")+'</div></div>';
+      h+='<div class="grid2">'+tile("متوسط الشراء",m(s.aBuy),"من "+fmt(s.minB)+" لـ "+fmt(s.maxB))+tile("متوسط البيع",m(s.aSell),"من "+fmt(s.minS)+" لـ "+fmt(s.maxS))+
+        tile("متوسط المصاريف",m(s.aExp),"")+tile("متوسط صافي المكسب",m(s.aNet,s.aNet>=0?"good":"bad"),s.days!=null?"بتتباع في متوسط "+s.days+" يوم":"")+'</div>';
+      h+='<div class="card"><div class="sect" style="margin-top:0">💬 السعر المعروض عليك</div><label class="fld"><span>صاحب العربية طالب كام؟</span><input name="poffer" data-money="1" inputmode="numeric" autocomplete="off" placeholder="0" value="'+esc(P.offer)+'"></label><div id="ppv"></div></div>';
+      h+='<div class="sect">كل الصفقات (الأحدث الأول)</div><div class="card">'+g.sold.map(function(c){var d=prDays(c.buyDate,c.sellDate);
+        return '<div class="item" data-act="car" data-id="'+c.id+'" style="cursor:pointer;display:block"><div class="row sub"><span>'+esc(c.name)+'</span><span>'+fdate(c.sellDate)+(d!=null?" · "+d+" يوم":"")+'</span></div>'+
+          '<div class="row" style="margin-top:4px"><span>شراء '+m(c.buyPrice)+'</span><span>بيع '+m(c.sellPrice)+'</span><b>'+m(c.profit,c.profit>=0?"good":"bad")+'</b></div>'+(c.exp>0.5?'<div class="ts">مصاريف '+fmt(c.exp)+'</div>':'')+'</div>'}).join("")+'</div>';
+    }
+    if(g.stock.length)h+='<div class="sect">عندك منها في المعرض دلوقتي</div><div class="card">'+g.stock.map(function(c){return '<div class="item" data-act="car" data-id="'+c.id+'" style="cursor:pointer"><span>'+esc(c.name)+'</span><span class="sub">التكلفة '+m(c.cost)+'</span></div>'}).join("")+'</div>';
+    h+='<button class="btn" data-act="pbuy" style="margin-top:6px">🚗 سجّل شراء العربية دي</button>';
+  }else{
+    h=sheetHead("🏷️ التسعير")+'<input class="search" id="pq" placeholder="اكتب اسم العربية والموديل، مثال: إلنترا 2016" value="'+esc(P.q)+'" autocomplete="off"><div id="plist">'+prListHtml()+'</div>';
+  }
+  openSheet(h);if(P.k&&P.s)prOffer();
+}
+function prListHtml(){
+  var q=modal.q.trim(),L=prMatch(q);
+  if(!S.cars.length)return '<div class="empty">لسه مفيش عربيات متسجلة. التسعير بيتحسب من العربيات اللي اشتريتها وبعتها.</div>';
+  if(!L.length)return '<div class="empty">مفيش عربية بالاسم ده اتعاملت فيها قبل كده.</div>';
+  return '<div class="sub" style="margin:0 2px 8px">'+(q?"النتايج":"كل العربيات اللي اتعاملت فيها")+'</div>'+L.slice(0,60).map(function(g){
+    var sub=g.sold.length?(g.sold.length===1?"صفقة واحدة":'<span class="num">'+g.sold.length+'</span> صفقات')+" · آخرها "+prAgo(g.sold[0].sellDate):"لسه ماتباعتش";
+    if(g.stock.length)sub+=" · في المعرض "+g.stock.length;
+    return '<div class="card row" data-act="ppick" data-k="'+esc(g.k)+'" style="cursor:pointer"><div><div style="font-weight:700;font-size:17px">'+esc(g.name)+'</div><div class="sub">'+sub+'</div></div><span class="sub">‹</span></div>'}).join("")+
+    '<div class="sub" style="margin:10px 2px">العربيات بتتجمع بالاسم والموديل والسنة (من غير اللوحة). كل ما تسجل أكتر التسعير بيبقى أدق.</div>';
+}
+function prOffer(){
+  var el=$("#ppv"),s=modal&&modal.s;if(!el||!s)return;
+  var v=+String(modal.offer||"").replace(/[٠-٩]/g,function(d){return AR.indexOf(d)}).replace(/\D/g,"");
+  if(!v){el.innerHTML='<div class="sub">اكتب السعر وهقولك هو رخيص ولا غالي والمكسب المتوقع.</div>';return}
+  var pos,cls;if(v<s.minB){pos="أرخص من أي مرة اشتريتها بيها";cls="good"}else if(v>s.maxB){pos="أغلى من أي مرة اشتريتها بيها";cls="bad"}else{pos="في حدود أسعار شراك القديمة";cls="warn"}
+  var net=s.aSell-s.aExp-v;
+  el.innerHTML='<div class="preview"><div class="kv"><span>مكانه من أسعارك</span><b class="'+cls+'">'+pos+'</b></div>'+
+    '<div class="kv"><span>متوسط البيع</span><b>'+m(s.aSell)+'</b></div><div class="kv"><span>مصاريف متوقعة</span><b>− '+m(s.aExp)+'</b></div><div class="kv"><span>سعر الشراء</span><b>− '+m(v)+'</b></div>'+
+    '<div class="kv"><span>المكسب المتوقع تقريبًا</span><b style="font-size:19px">'+m(net,net>=0?"good":"bad")+'</b></div></div>'+
+    (prDays(s.last,todayStr())>180?'<div class="sub">⚠️ آخر بيعة للعربية دي '+prAgo(s.last)+'، والسوق ممكن يكون اتغير.</div>':'');
+}
+function prBuy(){
+  var g=modal&&modal.g,off=modal&&modal.offer;closeSheet();openForm("buy",{});
+  setTimeout(function(){var n=$('#sheet input[name="name"]'),p=$('#sheet input[name="price"]');if(n&&g){n.value=g.name+" - ";n.focus()}if(p&&off){p.value=fmtIn(off);p.dispatchEvent(new Event("input",{bubbles:true}))}},60);
+}
 
 /* ---------- sheets ---------- */
 function openSheet(html){$("#sheet").innerHTML=html;$("#ov").classList.add("show");$("#sheet").scrollTop=0}
@@ -3315,6 +3387,10 @@ document.addEventListener("click",async function(e){
   else if(a==="close")closeSheet();
   else if(a==="tsok"){var lc=t.dataset.id;closeSheet();setTimeout(function(){invLossPrompt(lc)},200)}
   else if(a==="qio")openQuick(t.dataset.dir);
+  else if(a==="price")openPrice();
+  else if(a==="ppick"){modal.k=t.dataset.k;modal.offer="";drawPrice()}
+  else if(a==="pback"){modal.k=null;drawPrice()}
+  else if(a==="pbuy")prBuy();
   else if(a==="qgo")quickGo(t.dataset.kind,t.dataset.sub);
   else if(a==="form")openForm(t.dataset.kind,{carId:t.dataset.car,id:t.dataset.car,pid:t.dataset.pid,sub:t.dataset.sub,loanId:t.dataset.loan,iid:t.dataset.iid,from:t.dataset.from});
   else if(a==="submit")submitForm();
@@ -3422,6 +3498,8 @@ document.addEventListener("click",async function(e){
 function liveKind(){return modal&&modal.type==="form"&&(modal.kind==="sell"||modal.kind==="collect"||modal.kind==="buy"||modal.kind==="edit"||modal.kind==="invmove"||modal.kind==="transfer"||modal.kind==="loan"||modal.kind==="loanpay"||modal.kind==="sellerpay"||modal.kind==="invdebt")}
 document.addEventListener("input",function(e){
   if(e.target&&e.target.dataset&&e.target.dataset.money)moneyInput(e.target);
+  if(e.target.id==="pq"&&modal&&modal.type==="price"){modal.q=e.target.value;var pl=$("#plist");if(pl)pl.innerHTML=prListHtml();return}
+  if(e.target.name==="poffer"&&modal&&modal.type==="price"){modal.offer=e.target.value;prOffer();return}
   if(e.target.id==="q"){S.q=e.target.value;var l=$("#carList");if(l)l.innerHTML=carListHtml();return}
   if(e.target.name==="amt"&&$("#rbpv"))rbPreview();
   if((e.target.name==="amount"||e.target.name==="efrom")&&$("#efw"))expFromWarn();
