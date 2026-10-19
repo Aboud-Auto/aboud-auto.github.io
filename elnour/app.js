@@ -144,7 +144,7 @@ function viewHome() {
   </div>
   ${wallets()}
   <div class="search"><input id="qbox" placeholder="ابحث باسم العميل أو رقمه" value="${esc(q)}" oninput="setQ(this.value)"></div>
-  ${DB.customers.length ? `<button class="btn btn-ghost" style="margin-top:12px" onclick="sendAll()">📄 تقرير أرصدة كل العملاء (صورة)</button>` : ''}
+  ${DB.customers.length ? `<div class="sec-t" style="margin-top:14px"><span>تقرير أرصدة كل العملاء</span></div><div class="acts2" style="margin-top:6px"><button class="btn btn-ghost" onclick="sendAll()">🖼 صورة</button><button class="btn btn-ghost" onclick="sendAllPDF()">📄 PDF</button></div>` : ''}
   <div class="sec-t"><span>العملاء (${DB.customers.length})</span>
     <div class="chips">${[['all', 'الكل'], ['owe', 'عليهم فلوس'], ['clear', 'خالصين']].map(([k, l]) => `<span class="chip ${filter === k ? 'on' : ''}" onclick="setFilter('${k}')">${l}</span>`).join('')}</div></div>
   <div id="clist"></div>`;
@@ -635,6 +635,101 @@ function sendPDF(cid, last) {
     if (ph) window.open('https://wa.me/' + ph, '_blank');
   });
 }
+/* ====== تقرير أرصدة كل العملاء PDF (صفحات A4) ====== */
+async function allPDF() {
+  const JsPDF = await loadJsPDF();
+  const list = DB.customers.map(c => {
+    const ms = DB.moves.filter(m => m.cid === c.id);
+    const d = ms.filter(m => m.type === 'd').reduce((s, m) => s + m.amt, 0), p = ms.filter(m => m.type === 'p' || m.type === 'x' || m.type === 'r').reduce((s, m) => s + m.amt, 0);
+    return { name: c.name, d, p, bal: d - p };
+  }).sort((a, b) => b.bal - a.bal);
+  const owe = list.filter(x => x.bal > 0), tot = owe.reduce((s, x) => s + x.bal, 0);
+  const TD = list.reduce((s, x) => s + x.d, 0), TP = list.reduce((s, x) => s + x.p, 0);
+  try { await Promise.all(['400', '700', '800'].map(w => document.fonts.load(w + ' 30px Cairo'))) } catch (e) { }
+  const logo = await loadImg('logo.jpg').catch(() => null);
+  const W = 1080, PH = Math.round(W * 297 / 210), P = 50, RH = 58, S = 2, F = 'Cairo, sans-serif';
+  const lw = logo ? Math.min(W - 2 * P - 420, 300 * logo.width / logo.height) : 0, logoH = logo ? Math.round(lw * logo.height / logo.width) : 0;
+  const FOOT = 90, END = 200, HEAD = 70;      // END = سطر الإجمالي + اسم الشركة في آخر صفحة
+  const top1 = P + logoH + 70 + 90 + 230, topN = P + 90;
+  const pages = []; let i = 0, first = true;
+  do {
+    const room = PH - FOOT - (first ? top1 : topN) - HEAD;
+    let n = Math.max(1, Math.floor(room / RH));
+    if (i + n >= list.length && (list.length - i) * RH > room - END) n = Math.max(1, Math.floor((room - END) / RH));
+    pages.push(list.slice(i, i + n)); i += n; first = false;
+  } while (i < list.length);
+  const lastRoom = PH - FOOT - (pages.length > 1 ? topN : top1) - HEAD - pages[pages.length - 1].length * RH;
+  if (lastRoom < END) pages.push([]);
+  const GOLD = '#e7b53c', TXT = '#f4f1ea', MUT = '#9b978e', RED = '#ff4a52', GRN = '#2fbf71', LINE = '#2c2c31';
+  const cols = { n: W - P - 20, name: W - P - 80, d: P + 420, p: P + 230, r: P + 20 };
+  const pdf = new JsPDF({ unit: 'pt', format: 'a4', compress: true });
+  const cv = document.createElement('canvas'); cv.width = W * S; cv.height = PH * S;
+  const x = cv.getContext('2d');
+  const T = (t, px, py, o = {}) => { x.font = `${o.w || 700} ${o.s || 30}px ${F}`; x.fillStyle = o.c || TXT; x.textAlign = o.a || 'right'; x.direction = o.ltr ? 'ltr' : 'rtl'; x.fillText(o.max ? fitText(x, t, o.max) : t, px, py) };
+  let no = 0;
+  pages.forEach((pg, pi) => {
+    x.setTransform(S, 0, 0, S, 0, 0);
+    x.fillStyle = '#0b0b0c'; x.fillRect(0, 0, W, PH);
+    x.fillStyle = GOLD; x.fillRect(0, 0, W, 10); x.fillRect(0, PH - 10, W, 10);
+    let y;
+    if (pi === 0) {
+      if (logo) x.drawImage(logo, (W - lw) / 2, P, lw, logoH);
+      y = P + logoH + 70;
+      T('تقرير أرصدة العملاء', W / 2, y, { a: 'center', s: 46, w: 800, c: GOLD }); y += 50;
+      T(`بتاريخ ${dshow(today())}   •   ${list.length} عميل`, W / 2, y, { a: 'center', s: 26, w: 400, c: MUT }); y += 40;
+      x.fillStyle = '#17171a'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 200, 22); x.fill();
+      T('إجمالي الفلوس اللي برّه', W / 2, y + 50, { a: 'center', s: 28, c: MUT });
+      T(fmt(tot) + ' ج', W / 2, y + 128, { a: 'center', s: 66, w: 800, c: RED });
+      T(`${owe.length} عميل عليهم فلوس   •   إجمالي السحب ${fmt(TD)}   •   إجمالي المدفوع ${fmt(TP)}`, W / 2, y + 178, { a: 'center', s: 21, w: 400, c: MUT });
+      y = top1;
+    } else {
+      T('تقرير أرصدة العملاء (تابع)', W - P, P + 40, { s: 28, w: 700, c: GOLD });
+      T(dshow(today()), P, P + 40, { a: 'left', s: 22, w: 400, c: MUT, ltr: true });
+      y = topN;
+    }
+    if (pg.length) {
+      x.fillStyle = '#202024'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 58, 14); x.fill();
+      [['#', cols.n, 'right'], ['العميل', cols.name, 'right'], ['السحب', cols.d, 'left'], ['المدفوع والخصم', cols.p, 'left'], ['الرصيد', cols.r, 'left']].forEach(([t, px, a]) => T(t, px, y + 39, { s: 24, c: GOLD, a }));
+      y += HEAD;
+    }
+    pg.forEach((c, k) => {
+      if (k % 2) { x.fillStyle = '#121214'; x.fillRect(P, y, W - 2 * P, RH) }
+      const cy = y + 39;
+      T(String(++no), cols.n, cy, { s: 22, w: 400, c: MUT });
+      T(c.name, cols.name, cy, { s: 25, w: 700, max: cols.name - (cols.d + 150) });
+      T(fmt(c.d), cols.d, cy, { a: 'left', s: 24, w: 400, c: MUT, ltr: true });
+      T(fmt(c.p), cols.p, cy, { a: 'left', s: 24, w: 400, c: GRN, ltr: true });
+      T(fmt(Math.abs(c.bal)) + (c.bal < 0 ? ' ليه' : ''), cols.r, cy, { a: 'left', s: 26, c: c.bal > 0 ? RED : c.bal < 0 ? GRN : MUT });
+      x.fillStyle = LINE; x.fillRect(P, y + RH - 1, W - 2 * P, 1);
+      y += RH;
+    });
+    if (pi === pages.length - 1) {
+      x.fillStyle = '#202024'; x.beginPath(); x.roundRect(P, y + 10, W - 2 * P, 62, 14); x.fill();
+      T('الإجمالي', cols.name, y + 52, { s: 26, c: GOLD });
+      T(fmt(TD), cols.d, y + 52, { a: 'left', s: 24, c: TXT, ltr: true });
+      T(fmt(TP), cols.p, y + 52, { a: 'left', s: 24, c: GRN, ltr: true });
+      T(fmt(TD - TP), cols.r, y + 52, { a: 'left', s: 26, w: 800, c: RED, ltr: true });
+      T('شركة النور والفتح', W / 2, y + 150, { a: 'center', s: 28, w: 700, c: GOLD });
+    }
+    if (pages.length > 1) T(`صفحة ${pi + 1} من ${pages.length}`, W / 2, PH - 40, { a: 'center', s: 22, w: 400, c: MUT });
+    if (pi) pdf.addPage('a4');
+    pdf.addImage(cv.toDataURL('image/png'), 'PNG', 0, 0, 595.28, 841.89, undefined, 'FAST');
+  });
+  return pdf.output('blob');
+}
+function sendAllPDF() {
+  once(async () => {
+    toast('بيتجهّز ملف الـ PDF...');
+    let blob; try { blob = await allPDF() } catch (e) { console.error(e); return toast(navigator.onLine ? 'حصلت مشكلة في تجهيز الـ PDF' : 'الـ PDF محتاج نت أول مرة') }
+    const file = new File([blob], `تقرير أرصدة العملاء ${today()}.pdf`, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }) } catch (e) { if (e.name !== 'AbortError') toast('ماقدرتش أفتح المشاركة') }
+      return;
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('الملف نزل');
+  });
+}
 async function allImage() {
   const list = DB.customers.map(c => {
     const ms = DB.moves.filter(m => m.cid === c.id);
@@ -666,7 +761,7 @@ async function allImage() {
   y += 230;
   const cols = { n: W - P - 20, name: W - P - 80, d: P + 420, p: P + 230, r: P + 20 };
   x.fillStyle = '#202024'; x.beginPath(); x.roundRect(P, y, W - 2 * P, 58, 14); x.fill();
-  [['#', cols.n, 'right'], ['العميل', cols.name, 'right'], ['السحب', cols.d, 'left'], ['المدفوع والخصم والمرتجع', cols.p, 'left'], ['الرصيد', cols.r, 'left']].forEach(([t, px, a]) => T(t, px, y + 39, { s: 24, c: GOLD, a }));
+  [['#', cols.n, 'right'], ['العميل', cols.name, 'right'], ['السحب', cols.d, 'left'], ['المدفوع والخصم', cols.p, 'left'], ['الرصيد', cols.r, 'left']].forEach(([t, px, a]) => T(t, px, y + 39, { s: 24, c: GOLD, a }));
   y += 70;
   list.forEach((c, i) => {
     if (i % 2) { x.fillStyle = '#121214'; x.fillRect(P, y, W - 2 * P, RH) }
@@ -1370,5 +1465,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll });
+Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, sendAll, sendAllPDF });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
