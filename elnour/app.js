@@ -176,6 +176,23 @@ function walletBal(w) {
     return s;
   }, 0);
 }
+/* ---------- الفلوس اللي في كل محفظة: عند مين؟ ----------
+   المحفظة ليها إجمالي، وجزء منه ممكن يبقى متحدد عند أشخاص (حركة نوع h = تسليم داخل المحفظة).
+   اللي مش متحدد عند حد = الإجمالي − مجموع اللي عند الأشخاص */
+const NOH = 'من غير تحديد', NEWP = '＋ شخص جديد';
+function holderAmts(w) {
+  const h = {};
+  DB.moves.forEach(m => {
+    if (m.type === 'h' && m.w === w) { if (m.to) h[m.to] = (h[m.to] || 0) + m.amt; if (m.from) h[m.from] = (h[m.from] || 0) - m.amt }
+    if (m.type === 't') { if (m.from === w && m.fh) h[m.fh] = (h[m.fh] || 0) - m.amt; if (m.to === w && m.th) h[m.th] = (h[m.th] || 0) + m.amt }
+  });
+  return h;
+}
+function holders(w) { const h = holderAmts(w); return Object.keys(h).filter(k => Math.round(h[k])).sort((a, b) => h[b] - h[a]).map(k => ({ n: k, a: h[k] })) }
+function allPeople() {
+  const s = new Set(); DB.moves.forEach(m => { if (m.type === 'h') { m.to && s.add(m.to); m.from && s.add(m.from) } if (m.type === 't') { m.fh && s.add(m.fh); m.th && s.add(m.th) } });
+  return [...s].sort((a, b) => a.localeCompare(b, 'ar'));
+}
 function walletList() {
   return [...PAY, 'غير محدد'].filter(w => PAY.includes(w) || DB.moves.some(m => ((m.type === 'p' || m.type === 's' || m.type === 'o') && !m.method) || (m.type === 't' && (m.from === w || m.to === w))));
 }
@@ -188,6 +205,7 @@ function wallets() {
     <div onclick="openWallet('${esc(x.w)}')" style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;cursor:pointer">
       <small style="display:block;color:var(--muted)">${x.w}</small>
       <b class="num" style="display:block;font-size:20px;color:${x.bal < 0 ? 'var(--red2)' : 'var(--green)'};text-align:right">${fmt(x.bal)}</b>
+      ${holders(x.w).map(h => `<small style="display:flex;justify-content:space-between;color:var(--gold2)"><span>عند ${esc(h.n)}</span><span class="num">${fmt(h.a)}</span></small>`).join('')}
       <small style="color:var(--muted)">اتحصّل الشهر ده: <span class="num">${fmt(x.mon)}</span></small></div>`).join('')}</div>`;
 }
 function openTransfer() {
@@ -195,6 +213,7 @@ function openTransfer() {
   sheet(`<h3>تحويل فلوس من محفظة</h3>
     <div class="note">مثلاً: سحبت فلوس الإنستاباي وحطيتها في الخزنة. الرقم هيتخصم من المحفظة الأولى ويتزوّد على التانية، ومش هيأثر على حسابات العملاء.</div>
     <label class="field"><span>من</span><select id="tf" onchange="trHint()">${opt(ws, ws.find(w => w !== PAY[0] && walletBal(w) > 0) || PAY[1])}</select></label>
+    <label class="field" id="tfhw"><span>من عند مين؟</span><select id="tfh"></select></label>
     <label class="field"><span>إلى</span><select id="tt">${opt([...PAY, OUT], PAY[0])}</select></label>
     <label class="field"><span>المبلغ</span><input id="ta" inputmode="numeric" oninput="liveComma(this)" style="font-size:22px;font-weight:800"></label>
     <div class="note" id="thint"></div>
@@ -203,15 +222,76 @@ function openTransfer() {
     <button class="btn btn-gold" onclick="saveTransfer()">تسجيل</button>`);
   trHint();
 }
-function trHint() { const w = $('#tf').value, b = walletBal(w); $('#thint').innerHTML = `الموجود في ${esc(w)}: <b class="num">${fmt(b)}</b> ج — <span style="color:var(--gold);cursor:pointer" onclick="$('#ta').value='${fmt(Math.max(b, 0))}'">حوّل الكل</span>` }
+function trHint() {
+  const w = $('#tf').value, hs = holders(w), sel = $('#tfh'), cur = sel.value;
+  $('#tfhw').classList.toggle('hidden', !hs.length);
+  sel.innerHTML = hOpt([NOH, ...hs.map(h => h.n)], hs.some(h => h.n === cur) ? cur : NOH);
+  trHint2();
+}
+function trHint2() { const w = $('#tf').value, b = walletBal(w); $('#thint').innerHTML = `الموجود في ${esc(w)}: <b class="num">${fmt(b)}</b> ج — <span style="color:var(--gold);cursor:pointer" onclick="$('#ta').value='${fmt(Math.max(b, 0))}'">حوّل الكل</span>` }
 function saveTransfer() {
   once(async () => {
     const from = $('#tf').value, to = $('#tt').value, amt = parseAmt($('#ta').value);
     if (from === to) return toast('اختار محفظتين مختلفين');
     if (amt <= 0) return toast('اكتب المبلغ');
     if (amt > walletBal(from) && !confirm('المبلغ أكبر من اللي في المحفظة. تسجّله برضه؟')) return;
-    setDoc(doc(fs, 'moves', uid()), { type: 't', from, to, amt, date: $('#tdt').value || today(), note: $('#tn').value.trim(), by: ME.name, ts: Date.now() + '' }).catch(fail);
+    const fh = $('#tfh').value && $('#tfh').value !== NOH ? $('#tfh').value : '';
+    setDoc(doc(fs, 'moves', uid()), { type: 't', from, to, amt, ...(fh ? { fh } : {}), date: $('#tdt').value || today(), note: $('#tn').value.trim(), by: ME.name, ts: Date.now() + '' }).catch(fail);
     closeM(); toast('تم التحويل');
+  });
+}
+/* ---------- تحديد الفلوس عند مين (جوه نفس المحفظة) ---------- */
+let AS = null;
+const hOpt = (arr, sel) => arr.map(w => `<option ${w === sel ? 'selected' : ''}>${esc(w)}</option>`).join('');
+function openAssign(w, from) {
+  AS = { w, n: 1 };
+  const hs = holders(w), b = walletBal(w), rest = b - hs.reduce((s, h) => s + h.a, 0);
+  sheet(`<h3>${esc(w)} — الفلوس عند مين؟</h3>
+    <div class="note">الإجمالي في ${esc(w)}: <b class="num">${fmt(b)}</b> ج. هنا بتحدد جزء منه بقى عند مين، أو حد سلّم اللي معاه لحد تاني. إجمالي المحفظة مش هيتغيّر.</div>
+    <label class="field"><span>الفلوس جاية من</span><select id="af" onchange="asHint()">${hOpt([NOH, ...hs.map(h => h.n)], from || NOH)}</select></label>
+    <div class="field"><span>بقت عند مين؟</span><div id="asl">${asRow(0)}</div>
+      <button class="btn btn-ghost" style="margin-top:8px" onclick="asAdd()">＋ شخص تاني</button></div>
+    <div class="note" id="ash"></div>
+    <label class="field"><span>التاريخ</span><input id="adt" type="date" value="${today()}"></label>
+    <label class="field"><span>ملاحظة (اختياري)</span><input id="an"></label>
+    <button class="btn btn-gold" onclick="saveAssign()">تسجيل</button>`);
+  asPick(0); asHint();
+}
+function asRow(i) {
+  const ppl = allPeople();
+  return `<div style="margin-top:8px"><div style="display:flex;gap:8px">
+    <select id="at${i}" onchange="asPick(${i});asHint()" style="flex:3">${hOpt([...ppl, NEWP, NOH], ppl[0] || NEWP)}</select>
+    <input id="aa${i}" inputmode="numeric" placeholder="المبلغ" oninput="liveComma(this);asHint()" style="flex:2;font-size:18px;font-weight:800"></div>
+    <input id="ap${i}" class="hidden" placeholder="اسم الشخص" oninput="asHint()" style="margin-top:6px;width:100%"></div>`;
+}
+function asAdd() { $('#asl').insertAdjacentHTML('beforeend', asRow(AS.n)); asPick(AS.n); AS.n++ }
+function asPick(i) { const p = $('#ap' + i); if (p) { p.classList.toggle('hidden', $('#at' + i).value !== NEWP); if (!p.classList.contains('hidden')) p.focus() } }
+function asParts() {
+  const o = [];
+  for (let i = 0; i < AS.n; i++) {
+    const sel = $('#at' + i)?.value, a = parseAmt($('#aa' + i)?.value || ''); if (!sel) continue;
+    const to = sel === NEWP ? ($('#ap' + i).value || '').trim() : sel;
+    if (!a && AS.n > 1) continue; o.push({ to, a });
+  }
+  return o;
+}
+function asAvail() { const f = $('#af').value, b = walletBal(AS.w), hs = holders(AS.w); return f === NOH ? b - hs.reduce((s, h) => s + h.a, 0) : (hs.find(h => h.n === f)?.a || 0) }
+function asHint() {
+  const av = asAvail(), sum = asParts().reduce((s, x) => s + x.a, 0), f = $('#af').value;
+  $('#ash').innerHTML = `${f === NOH ? 'اللي مش متحدد عند حد' : 'اللي عند ' + esc(f)}: <b class="num">${fmt(av)}</b> ج${sum ? ` — هيتنقل <b class="num">${fmt(sum)}</b> ويفضل <b class="num">${fmt(av - sum)}</b>` : ''}`;
+}
+function saveAssign() {
+  once(async () => {
+    const w = AS.w, f = $('#af').value, ps = asParts();
+    if (!ps.length || ps.some(x => x.a <= 0)) return toast('اكتب المبلغ');
+    if (ps.some(x => !x.to)) return toast('اكتب اسم الشخص');
+    if (ps.some(x => x.to === f)) return toast('اختار شخص غير اللي الفلوس جاية منه');
+    if (ps.some(x => x.to !== NOH && (PAY.includes(x.to) || x.to === NEWP))) return toast('الاسم ده مينفعش');
+    const sum = ps.reduce((s, x) => s + x.a, 0);
+    if (sum > asAvail() && !confirm('المبلغ أكبر من المتاح. تسجّله برضه؟')) return;
+    const b = writeBatch(fs), ts = Date.now(), date = $('#adt').value || today(), note = $('#an').value.trim();
+    ps.forEach((x, i) => b.set(doc(fs, 'moves', uid()), { type: 'h', w, from: f === NOH ? '' : f, to: x.to === NOH ? '' : x.to, amt: x.a, date, note, by: ME.name, ts: (ts + i) + '' }));
+    b.commit().catch(fail); closeM(); toast('اتسجّل');
   });
 }
 /* ---------- استلام دفعة على محفظة وتقسيمها على كذا عميل ---------- */
@@ -274,11 +354,12 @@ function saveRecv() {
 /* ---------- المحفظة: تظبيط الرصيد + سحب / توريد ---------- */
 const WHY = ['توريد', 'مصروفات', 'سحب شخصي', 'أخرى'];
 function walletMoves(w) {
-  return DB.moves.filter(m => ((m.type === 'p' || m.type === 's' || m.type === 'o') && (m.method || 'غير محدد') === w) || (m.type === 'w' && m.method === w) || (m.type === 't' && (m.from === w || m.to === w)))
+  return DB.moves.filter(m => ((m.type === 'p' || m.type === 's' || m.type === 'o') && (m.method || 'غير محدد') === w) || (m.type === 'w' && m.method === w) || (m.type === 't' && (m.from === w || m.to === w)) || (m.type === 'h' && m.w === w))
     .map(m => {
       const name = m.cid ? DB.customers.find(c => c.id === m.cid)?.name || '—' : '';
       if (m.type === 'w') return { m, t: m.note || 'تظبيط رصيد', a: m.amt };
-      if (m.type === 't') return m.from === w ? { m, t: m.to === OUT ? 'خرج: ' + (m.why || 'سحب') : 'تحويل لـ ' + m.to, a: -m.amt } : { m, t: 'تحويل من ' + m.from, a: m.amt };
+      if (m.type === 'h') return { m, t: `👤 ${m.from ? 'من عند ' + m.from : ''}${m.from && m.to ? ' ← ' : ''}${m.to ? 'بقت عند ' + m.to : ' رجعت ' + NOH}`, a: 0, h: 1 };
+      if (m.type === 't') return m.from === w ? { m, t: (m.to === OUT ? 'خرج: ' + (m.why || 'سحب') : 'تحويل لـ ' + m.to) + (m.fh ? ' (من عند ' + m.fh + ')' : ''), a: -m.amt } : { m, t: 'تحويل من ' + m.from, a: m.amt };
       if (m.type === 'o') return { m, t: 'رد فلوس مرتجع', a: -m.amt };
       return { m, t: m.type === 's' ? 'بيع كاش' : 'دفعة من ' + name, a: m.amt };
     }).sort((x, y) => ord(y.m, x.m));
@@ -287,17 +368,21 @@ function openWallet(w) {
   const b = walletBal(w), mv = walletMoves(w).slice(0, 15), isPay = PAY.includes(w);
   sheet(`<h3>${esc(w)}</h3>
     <div class="cbox" style="margin-top:0"><small style="color:var(--muted)">الموجود فيها دلوقتي</small>
-      <div class="bl num" style="color:${b < 0 ? 'var(--red2)' : 'var(--green)'}">${fmt(b)} <span style="font-size:18px">ج</span></div></div>
+      <div class="bl num" style="color:${b < 0 ? 'var(--red2)' : 'var(--green)'}">${fmt(b)} <span style="font-size:18px">ج</span></div>
+      ${(() => { const hs = holders(w); if (!hs.length) return ''; const rest = b - hs.reduce((s, h) => s + h.a, 0);
+        return `<div style="margin-top:10px;text-align:right">${hs.map(h => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--line)"><span>عند ${esc(h.n)}</span><b class="num" style="color:var(--gold2)">${fmt(h.a)}</b></div>`).join('')}
+          ${Math.round(rest) ? `<div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--line);color:var(--muted)"><span>${NOH}</span><b class="num">${fmt(rest)}</b></div>` : ''}</div>` })()}</div>
     ${canEdit() ? `<div class="acts">
       <button class="btn btn-red" onclick="openOut('${esc(w)}')">－ سحب / توريد</button>
       ${isPay ? `<button class="btn btn-ghost" onclick="openAdjust('${esc(w)}')">✎ تظبيط الرصيد</button>` : `<button class="btn btn-ghost" onclick="openTransfer()">⇄ تحويل</button>`}
     </div>
-    ${isPay ? `<button class="btn btn-green" style="margin-top:8px" onclick="openRecv('${esc(w)}')">＋ استلام دفعة (ممكن تتقسم على كذا عميل)</button>` : ''}` : ''}
+    ${isPay ? `<button class="btn btn-ghost" style="margin-top:8px;color:var(--gold2);border-color:#4a3a14" onclick="openAssign('${esc(w)}')">👤 حدد الفلوس دي عند مين</button>
+      <button class="btn btn-green" style="margin-top:8px" onclick="openRecv('${esc(w)}')">＋ استلام دفعة (ممكن تتقسم على كذا عميل)</button>` : ''}` : ''}
     <div class="sec-t"><span>آخر الحركات</span></div>
     ${mv.length ? mv.map(x => `<div class="list-item" style="padding:10px 12px">
-      <div class="f"><b style="font-size:14px">${esc(x.t)}</b><small>${dshow(x.m.date)}${x.m.note && x.m.type === 't' ? ' — ' + esc(x.m.note) : ''} — ${esc(x.m.by || '')}</small>
-      ${canEdit() && (x.m.type === 'w' || x.m.type === 't') ? `<button class="x" style="background:none;border:0;color:var(--muted);font-size:12px;padding:0;cursor:pointer" onclick="delMove('${x.m.id}');closeM()">حذف</button>` : ''}</div>
-      <b class="num" style="color:${x.a < 0 ? 'var(--red2)' : 'var(--green)'}">${x.a < 0 ? '−' : '+'}${fmt(Math.abs(x.a))}</b></div>`).join('') : '<div class="empty" style="padding:20px">مفيش حركات لسه</div>'}`);
+      <div class="f"><b style="font-size:14px">${esc(x.t)}</b><small>${dshow(x.m.date)}${x.m.note && (x.m.type === 't' || x.m.type === 'h') ? ' — ' + esc(x.m.note) : ''} — ${esc(x.m.by || '')}</small>
+      ${canEdit() && (x.m.type === 'w' || x.m.type === 't' || x.m.type === 'h') ? `<button class="x" style="background:none;border:0;color:var(--muted);font-size:12px;padding:0;cursor:pointer" onclick="delMove('${x.m.id}');closeM()">حذف</button>` : ''}</div>
+      ${x.h ? `<b class="num" style="color:var(--gold2)">${fmt(x.m.amt)}</b>` : `<b class="num" style="color:${x.a < 0 ? 'var(--red2)' : 'var(--green)'}">${x.a < 0 ? '−' : '+'}${fmt(Math.abs(x.a))}</b>`}</div>`).join('') : '<div class="empty" style="padding:20px">مفيش حركات لسه</div>'}`);
 }
 function openAdjust(w) {
   const b = walletBal(w), first = !walletMoves(w).length;
@@ -329,6 +414,7 @@ function openOut(w) {
   const b = walletBal(w);
   sheet(`<h3>سحب / توريد من ${esc(w)}</h3>
     <div class="note">الموجود فيها: <b class="num">${fmt(b)}</b> ج — المبلغ هيتخصم منها، ومش هيأثر على حسابات العملاء.</div>
+    ${holders(w).length ? `<label class="field"><span>من عند مين؟</span><select id="ofh">${hOpt([NOH, ...holders(w).map(h => h.n)], NOH)}</select></label>` : ''}
     <label class="field"><span>المبلغ اللي خرج</span><input id="oa" inputmode="numeric" oninput="liveComma(this)" style="font-size:24px;font-weight:800"></label>
     <div class="field"><span>نوعه</span><div class="seg" id="ow">${WHY.map((x, i) => `<button class="${i ? '' : 'on'}" onclick="document.querySelectorAll('#ow button').forEach(b=>b.classList.remove('on'));this.classList.add('on')">${x}</button>`).join('')}</div></div>
     <label class="field"><span>ملاحظة (اتورّد لمين / اتصرف على إيه) — اختياري</span><input id="on"></label>
@@ -341,7 +427,8 @@ function saveOut(w) {
     const amt = parseAmt($('#oa').value); if (amt <= 0) return toast('اكتب المبلغ');
     if (amt > walletBal(w) && !confirm('المبلغ أكبر من اللي في المحفظة. تسجّله برضه؟')) return;
     const why = $('#ow .on').textContent;
-    setDoc(doc(fs, 'moves', uid()), { type: 't', from: w, to: OUT, why, amt, date: $('#od').value || today(), note: $('#on').value.trim(), by: ME.name, ts: Date.now() + '' }).catch(fail);
+    const fh = $('#ofh') && $('#ofh').value !== NOH ? $('#ofh').value : '';
+    setDoc(doc(fs, 'moves', uid()), { type: 't', from: w, to: OUT, why, amt, ...(fh ? { fh } : {}), date: $('#od').value || today(), note: $('#on').value.trim(), by: ME.name, ts: Date.now() + '' }).catch(fail);
     closeM(); toast(`اتسجّل ${why} ${fmt(amt)} ج من ${w}`);
   });
 }
@@ -463,11 +550,16 @@ function openMove(cid, type) {
       <label class="field" style="flex:2"><span>خصم (اختياري)</span><input id="xa" inputmode="numeric" placeholder="0" oninput="liveComma(this);$('#xp').value='';payTotal()" style="font-size:20px;font-weight:800"></label>
       <label class="field" style="flex:1"><span>أو نسبة ٪</span><input id="xp" inputmode="decimal" placeholder="مثلاً 10" oninput="payPct()" style="font-size:20px;font-weight:800"></label>
     </div>
-    <div class="note" id="pafter">الرصيد بعد الدفعة: <b class="num">${fmt(balance(cid))}</b> ج</div>`}
+    <div class="note" id="pafter">الرصيد بعد الدفعة: <b class="num">${fmt(balance(cid))}</b> ج</div>
+    <details id="gvbox" style="margin:4px 0 10px"><summary style="color:var(--gold2);cursor:pointer;padding:6px 0">👤 الفلوس دي عند مين؟ (اختياري)</summary>
+      <div class="note" style="margin-top:6px">لو الدفعة جزء منها عند حد وجزء عند حد تاني، اكتبهم هنا. الباقي بيفضل في المحفظة من غير تحديد.</div>
+      <datalist id="gvp">${allPeople().map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      <div class="field" style="margin:0"><div id="gvl">${gvRow(0)}</div>
+      <button class="btn btn-ghost" style="margin-top:8px" onclick="gvAdd()">＋ شخص تاني</button></div></details>`}
     <label class="field"><span>التاريخ</span><input id="md" type="date" value="${today()}"></label>
     <label class="field"><span>${type === 'd' ? 'البيان (أخد إيه؟)' : 'ملاحظة (اختياري)'}</span><input id="mn" placeholder="${type === 'd' ? 'مثلاً: 20 مفتاح خام + جهاز' : ''}"></label>
     <button class="btn ${type === 'd' ? 'btn-red' : 'btn-green'}" onclick="saveMove('${cid}','${type}')">تسجيل</button>`);
-  if (type !== 'd') $('#xa').dataset.b = balance(cid);
+  if (type !== 'd') { $('#xa').dataset.b = balance(cid); GV = 1 }
   setTimeout(() => $(type === 'd' ? '#ma' : '#pa0').focus(), 50);
 }
 function openDiscount(cid) {
@@ -499,6 +591,10 @@ function saveDiscount(cid) {
   });
 }
 const payParts = () => PAY.reduce((s, _, i) => s + parseAmt($('#pa' + i).value), 0);
+let GV = 1;
+function gvRow(i) { return `<div style="display:flex;gap:8px;margin-top:8px"><input id="gn${i}" list="gvp" placeholder="عند مين؟" style="flex:3;font-size:16px"><input id="ga${i}" inputmode="numeric" placeholder="المبلغ" oninput="liveComma(this)" style="flex:2;font-size:18px;font-weight:800"></div>` }
+function gvAdd() { $('#gvl').insertAdjacentHTML('beforeend', gvRow(GV++)) }
+function gvParts() { const o = []; for (let i = 0; i < GV; i++) { const n = ($('#gn' + i)?.value || '').trim(), a = parseAmt($('#ga' + i)?.value || ''); if (n || a) o.push({ n, a }) } return o }
 function payTotal() {
   const t = payParts(); $('#ptot').textContent = fmt(t);
   if ($('#xa')) { const d = parseAmt($('#xa').value); $('#pafter').innerHTML = `الرصيد بعد الدفعة${d > 0 ? ' والخصم' : ''}: <b class="num">${fmt(+$('#xa').dataset.b - t - d)}</b> ج` }
@@ -517,8 +613,17 @@ function saveMove(cid, type) {
     if (!parts.length && disc <= 0) return toast('اكتب المبلغ في طريقة دفع واحدة على الأقل أو اكتب الخصم');
     const paid = parts.reduce((s, x) => s + x.amt, 0);
     if (disc > 0 && paid + disc > balance(cid) && !confirm('الدفعة والخصم مع بعض أكبر من الرصيد اللي عليه، والعميل هيبقى ليه فلوس عندكم. تسجّلهم برضه؟')) return;
+    const gv = gvParts();
+    if (gv.length) {
+      if (gv.some(x => !x.n || x.a <= 0)) return toast('اكتب اسم ومبلغ كل شخص');
+      if (gv.some(x => PAY.includes(x.n))) return toast('اكتب اسم الشخص مش اسم المحفظة');
+      if (parts.length !== 1) return toast('الدفعة على أكتر من طريقة — حدد عند مين من المحفظة نفسها');
+      if (gv.reduce((s, x) => s + x.a, 0) > paid) return toast('المبالغ أكبر من الدفعة');
+    }
     const b = writeBatch(fs), grp = parts.length > 1 ? uid() : null;
     parts.forEach((x, i) => b.set(doc(fs, 'moves', uid()), { cid, type, amt: x.amt, method: x.method, date, note, ...(grp ? { grp } : {}), by: ME.name, ts: (ts + i) + '' }));
+    const cn = DB.customers.find(c => c.id === cid)?.name || '';
+    gv.forEach((x, i) => b.set(doc(fs, 'moves', uid()), { type: 'h', w: parts[0].method, from: '', to: x.n, amt: x.a, date, note: 'من دفعة ' + cn, by: ME.name, ts: (ts + 500 + i) + '' }));
     if (disc > 0) b.set(doc(fs, 'moves', uid()), { cid, type: 'x', amt: disc, date, note: [pct > 0 ? `خصم ${pct}٪` : '', parts.length ? 'مع دفعة' : '', note].filter(Boolean).join(' — '), by: ME.name, ts: (ts + parts.length) + '' });
     b.commit().catch(fail);
     closeM(); toast([paid ? 'تم تسجيل دفعة ' + fmt(paid) + ' ج' : '', disc ? (paid ? 'وخصم ' : 'تم تسجيل خصم ') + fmt(disc) + ' ج' : ''].filter(Boolean).join(' '));
@@ -962,6 +1067,10 @@ function viewLog() {
     <div class="a"><span class="num" style="color:${m.amt < 0 ? 'var(--red2)' : 'var(--green)'}">${m.amt < 0 ? '−' : '+'}${fmt(Math.abs(m.amt))}</span></div></div>` : m.type === 't' ? `<div class="mv">
     <div class="dot" style="background:var(--card2);color:var(--gold)">⇄</div>
     <div class="i"><b>${m.to === OUT ? (m.why ? esc(m.why) + ' من ' : 'سحب من ') + esc(m.from) : 'تحويل: ' + esc(m.from) + ' ← ' + esc(m.to)}</b><small>${dshow(m.date)}${m.note ? ' — ' + esc(m.note) : ''}</small><small>سجّلها: ${esc(m.by)}</small>
+      ${canEdit() ? `<button class="x" onclick="delMove('${m.id}')">حذف</button>` : ''}</div>
+    <div class="a"><span class="num" style="color:var(--gold)">${fmt(m.amt)}</span></div></div>` : m.type === 'h' ? `<div class="mv">
+    <div class="dot" style="background:var(--card2);color:var(--gold)">👤</div>
+    <div class="i"><b>${esc(m.w)}: ${m.from ? 'من عند ' + esc(m.from) + ' ' : ''}${m.to ? '← عند ' + esc(m.to) : '← رجعت ' + NOH}</b><small>${dshow(m.date)}${m.note ? ' — ' + esc(m.note) : ''}</small><small>سجّلها: ${esc(m.by)}</small>
       ${canEdit() ? `<button class="x" onclick="delMove('${m.id}')">حذف</button>` : ''}</div>
     <div class="a"><span class="num" style="color:var(--gold)">${fmt(m.amt)}</span></div></div>` : !m.cid ? `<div class="mv" onclick="go('inv','${m.inv}')" style="cursor:pointer">
     <div class="dot ${m.type}">${DOT[m.type]}</div>
@@ -1594,5 +1703,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, openEditMove, saveEditMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, openRecv, rvAdd, rvHint, saveRecv, sendAll, sendAllPDF, shareReady, dlReady });
+Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, openEditMove, saveEditMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, gvAdd, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, openAssign, asAdd, asPick, asHint, saveAssign, openRecv, rvAdd, rvHint, saveRecv, sendAll, sendAllPDF, shareReady, dlReady });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
