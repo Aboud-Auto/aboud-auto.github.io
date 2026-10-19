@@ -1280,6 +1280,7 @@ function render(){
   renderNav();
 }
 function refresh(){
+  mkSchedule();
   var act=document.activeElement;
   if(act&&(act.id==="q")){renderListOnly();return}
   render();
@@ -1313,20 +1314,23 @@ function prStats(g){
     minB:Math.min.apply(null,buys),maxB:Math.max.apply(null,buys),minS:Math.min.apply(null,sells),maxS:Math.max.apply(null,sells),
     rLo:Math.min.apply(null,rec),rHi:Math.max.apply(null,rec),days:dd.length?Math.round(dd.reduce(function(a,b){return a+b},0)/dd.length):null,last:L[0].sellDate};
 }
-function openPrice(){modal={type:"price",q:"",k:null,offer:""};drawPrice();setTimeout(function(){var i=$("#pq");if(i)i.focus()},150)}
+function openPrice(){modal={type:"price",q:"",k:null,offer:""};drawPrice();mkLoad();setTimeout(function(){var i=$("#pq");if(i)i.focus()},150)}
 function drawPrice(){
   var P=modal,h;
   if(P.k){
-    var g=prGroups().find(function(x){return x.k===P.k});if(!g){P.k=null;return drawPrice()}
+    var g=prGroups().find(function(x){return x.k===P.k})||mkGroup(P.k);if(!g){P.k=null;return drawPrice()}
     var s=prStats(g);P.g=g;P.s=s;
     h='<div class="sh"><button class="x" data-act="pback" aria-label="رجوع">›</button><h2 style="flex:1;margin:0 10px">'+esc(g.name)+'</h2><button class="x" data-act="close" aria-label="إغلاق">✕</button></div>';
     if(!s){
-      h+='<div class="banner">العربية دي لسه ماتباعتش قبل كده، فمفيش سعر بيع أقيس عليه.</div>';
+      h+='<div class="banner">'+(g.mkOnly?'انت لسه ماتعاملتش في العربية دي، دي أسعار السوق بس.':'العربية دي لسه ماتباعتش عندك قبل كده، فمفيش سعر بيع من صفقاتك أقيس عليه.')+'</div>';
+      h+='<div id="pmk">'+mkHtml(g.k)+'</div>';
+      h+='<div class="card"><div class="sect" style="margin-top:0">💬 السعر المعروض عليك</div><label class="fld"><span>صاحب العربية طالب كام؟</span><input name="poffer" data-money="1" inputmode="numeric" autocomplete="off" placeholder="0" value="'+esc(P.offer)+'"></label><div id="ppv"></div></div>';
     }else{
       h+='<div class="hero"><div class="l" style="font-weight:600">🏷️ سعر الشراء المقترح</div><div class="v" style="font-size:28px;font-weight:800;margin:4px 0">'+(Math.round(s.rLo)===Math.round(s.rHi)?fmt(s.rLo):fmt(s.rLo)+" – "+fmt(s.rHi))+' ج</div>'+
         '<div class="s" style="font-size:13px">من '+(s.n===1?"صفقة واحدة":'<span class="num">'+s.n+'</span> صفقات')+' · آخر بيعة '+prAgo(s.last)+(s.n>3?" · محسوب من آخر 3":"")+'</div></div>';
       h+='<div class="grid2">'+tile("متوسط الشراء",m(s.aBuy),"من "+fmt(s.minB)+" لـ "+fmt(s.maxB))+tile("متوسط البيع",m(s.aSell),"من "+fmt(s.minS)+" لـ "+fmt(s.maxS))+
         tile("متوسط المصاريف",m(s.aExp),"")+tile("متوسط صافي المكسب",m(s.aNet,s.aNet>=0?"good":"bad"),s.days!=null?"بتتباع في متوسط "+s.days+" يوم":"")+'</div>';
+      h+='<div id="pmk">'+mkHtml(g.k)+'</div>';
       h+='<div class="card"><div class="sect" style="margin-top:0">💬 السعر المعروض عليك</div><label class="fld"><span>صاحب العربية طالب كام؟</span><input name="poffer" data-money="1" inputmode="numeric" autocomplete="off" placeholder="0" value="'+esc(P.offer)+'"></label><div id="ppv"></div></div>';
       h+='<div class="sect">كل الصفقات (الأحدث الأول)</div><div class="card">'+g.sold.map(function(c){var d=prDays(c.buyDate,c.sellDate);
         return '<div class="item" data-act="car" data-id="'+c.id+'" style="cursor:pointer;display:block"><div class="row sub"><span>'+esc(c.name)+'</span><span>'+fdate(c.sellDate)+(d!=null?" · "+d+" يوم":"")+'</span></div>'+
@@ -1337,29 +1341,103 @@ function drawPrice(){
   }else{
     h=sheetHead("🏷️ التسعير")+'<input class="search" id="pq" placeholder="اكتب اسم العربية والموديل، مثال: إلنترا 2016" value="'+esc(P.q)+'" autocomplete="off"><div id="plist">'+prListHtml()+'</div>';
   }
-  openSheet(h);if(P.k&&P.s)prOffer();
+  openSheet(h);if(P.k)prOffer();
 }
 function prListHtml(){
   var q=modal.q.trim(),L=prMatch(q);
-  if(!S.cars.length)return '<div class="empty">لسه مفيش عربيات متسجلة. التسعير بيتحسب من العربيات اللي اشتريتها وبعتها.</div>';
-  if(!L.length)return '<div class="empty">مفيش عربية بالاسم ده اتعاملت فيها قبل كده.</div>';
+  var MO=mkOnlyGroups(q);
+  if(!L.length&&!MO.length)return '<div class="empty">'+(S.cars.length?'مفيش عربية بالاسم ده اتعاملت فيها قبل كده، ولا ليها أسعار كفاية في السوق.':'لسه مفيش عربيات متسجلة. التسعير بيتحسب من العربيات اللي اشتريتها وبعتها ومن أسعار السوق.')+'</div>';
+  var mo=MO.length?'<div class="sub" style="margin:14px 2px 8px">📊 من السوق بس (انت ماتعاملتش فيها)</div>'+MO.slice(0,30).map(function(g){
+    return '<div class="card row" data-act="ppick" data-k="'+esc(g.k)+'" style="cursor:pointer"><div><div style="font-weight:700;font-size:17px">'+esc(g.name)+'</div><div class="sub">السوق: <span class="num">'+g.s.n+'</span> صفقة · بيبيعوها '+mkRange(g.s.sLo,g.s.sHi)+'</div></div><span class="sub">‹</span></div>'}).join(""):"";
+  if(!L.length)return mo;
   return '<div class="sub" style="margin:0 2px 8px">'+(q?"النتايج":"كل العربيات اللي اتعاملت فيها")+'</div>'+L.slice(0,60).map(function(g){
     var sub=g.sold.length?(g.sold.length===1?"صفقة واحدة":'<span class="num">'+g.sold.length+'</span> صفقات')+" · آخرها "+prAgo(g.sold[0].sellDate):"لسه ماتباعتش";
     if(g.stock.length)sub+=" · في المعرض "+g.stock.length;
+    var ms=MK.all?mkStats(g.k):null;if(ms&&ms.ok)sub+=" · 📊 في السوق";
     return '<div class="card row" data-act="ppick" data-k="'+esc(g.k)+'" style="cursor:pointer"><div><div style="font-weight:700;font-size:17px">'+esc(g.name)+'</div><div class="sub">'+sub+'</div></div><span class="sub">‹</span></div>'}).join("")+
-    '<div class="sub" style="margin:10px 2px">العربيات بتتجمع بالاسم والموديل والسنة (من غير اللوحة). كل ما تسجل أكتر التسعير بيبقى أدق.</div>';
+    mo+'<div class="sub" style="margin:10px 2px">العربيات بتتجمع بالاسم والموديل والسنة (من غير اللوحة). كل ما تسجل أكتر التسعير بيبقى أدق.</div>';
 }
 function prOffer(){
-  var el=$("#ppv"),s=modal&&modal.s;if(!el||!s)return;
+  var el=$("#ppv"),s=modal&&modal.s;if(!el)return;
   var v=+String(modal.offer||"").replace(/[٠-٩]/g,function(d){return AR.indexOf(d)}).replace(/\D/g,"");
-  if(!v){el.innerHTML='<div class="sub">اكتب السعر وهقولك هو رخيص ولا غالي والمكسب المتوقع.</div>';return}
+  var ms=modal.k&&MK.all?mkStats(modal.k):null;ms=ms&&ms.ok?ms:null;
+  if(!v){el.innerHTML='<div class="sub">اكتب السعر وهقولك هو رخيص ولا غالي'+(s?' والمكسب المتوقع':' بالنسبة للسوق')+'.</div>';return}
+  var mkl="";if(ms){var mp,mc;if(v<ms.bLo){mp="أرخص من أسعار شراء السوق";mc="good"}else if(v>ms.bHi){mp="أغلى من أسعار شراء السوق";mc="bad"}else{mp="في حدود أسعار شراء السوق";mc="warn"}
+    var mn=ms.sMed-v;mkl='<div class="kv"><span>📊 مكانه من السوق</span><b class="'+mc+'">'+mp+'</b></div><div class="kv"><span>الفرق عن متوسط بيع السوق</span><b>'+m(mn,mn>=0?"good":"bad")+'</b></div>'}
+  if(!s){el.innerHTML=mkl?'<div class="preview">'+mkl+'</div>':'<div class="sub">مفيش أسعار كفاية أقارن بيها لسه.</div>';return}
   var pos,cls;if(v<s.minB){pos="أرخص من أي مرة اشتريتها بيها";cls="good"}else if(v>s.maxB){pos="أغلى من أي مرة اشتريتها بيها";cls="bad"}else{pos="في حدود أسعار شراك القديمة";cls="warn"}
   var net=s.aSell-s.aExp-v;
   el.innerHTML='<div class="preview"><div class="kv"><span>مكانه من أسعارك</span><b class="'+cls+'">'+pos+'</b></div>'+
     '<div class="kv"><span>متوسط البيع</span><b>'+m(s.aSell)+'</b></div><div class="kv"><span>مصاريف متوقعة</span><b>− '+m(s.aExp)+'</b></div><div class="kv"><span>سعر الشراء</span><b>− '+m(v)+'</b></div>'+
-    '<div class="kv"><span>المكسب المتوقع تقريبًا</span><b style="font-size:19px">'+m(net,net>=0?"good":"bad")+'</b></div></div>'+
+    '<div class="kv"><span>المكسب المتوقع تقريبًا</span><b style="font-size:19px">'+m(net,net>=0?"good":"bad")+'</b></div>'+mkl+'</div>'+
     (prDays(s.last,todayStr())>180?'<div class="sub">⚠️ آخر بيعة للعربية دي '+prAgo(s.last)+'، والسوق ممكن يكون اتغير.</div>':'');
 }
+/* ---------- السوق: رينج أسعار مجمّع من كل المعارض (من غير أسماء) ----------
+   كل عربية اتباعت بتتبعت منها نسخة مجهولة في market/: اسم العربية الأساسي (من غير اللوحة والتفاصيل)
+   + سعر الشراء والبيع مقرّبين لأقرب 1,000 + شهر البيع. مفيش اسم معرض ولا عميل ولا تاريخ باليوم.
+   الرينج مبيظهرش غير لو في 3 صفقات على الأقل من معرضين مختلفين، عشان محدش يتعرف من أسعاره.
+   الأسعار الشاذة (غلطة كتابة / عربية حادثة) بتتشال قبل الحساب. */
+var MK={uid:null,mine:null,timer:0,busy:false,all:null,at:0,rerr:null},MK_MIN_N=3,MK_MIN_SRC=2;
+function mkR(v){return Math.round((+v||0)/1000)*1000}
+function mkR5(v){return Math.round((+v||0)/5000)*5000}
+async function mkId(carId){var h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(MK.uid+":"+carId));return Array.from(new Uint8Array(h)).slice(0,12).map(function(b){return b.toString(16).padStart(2,"0")}).join("")}
+function mkWant(){var W={};calc().cars.forEach(function(c){if(!c.sold)return;var b=+c.buyPrice||0,s=+c.sellPrice||0;if(b<1000||s<1000)return;
+  var n=prBase(c.name).slice(0,60),k=prNorm(n).slice(0,80);if(!k)return;W[c.id]={o:MK.uid,k:k,n:n,b:mkR(b),s:mkR(s),m:String(c.sellDate||todayStr()).slice(0,7)}});return W}
+function mkSchedule(){if(!MK.uid||S.noDb||!FS||!allLoaded())return;clearTimeout(MK.timer);MK.timer=setTimeout(mkSync,4000)}
+async function mkSync(){
+  if(MK.busy||!window.crypto||!crypto.subtle)return;MK.busy=true;
+  try{
+    if(!MK.mine){var snap=await FS.collection("market").where("o","==",MK.uid).get();MK.mine={};snap.docs.forEach(function(d){MK.mine[d.id]=d.data()})}
+    var W=mkWant(),ids=Object.keys(W),want={},ops=[];
+    for(var i=0;i<ids.length;i++)want[await mkId(ids[i])]=W[ids[i]];
+    Object.keys(want).forEach(function(id){var a=want[id],b=MK.mine[id];if(!b||a.k!==b.k||a.n!==b.n||a.b!==b.b||a.s!==b.s||a.m!==b.m)ops.push([id,a])});
+    Object.keys(MK.mine).forEach(function(id){if(!want[id])ops.push([id,null])});
+    for(var j=0;j<ops.length;j+=400){var bt=FS.batch();ops.slice(j,j+400).forEach(function(x){var r=FS.doc("market/"+x[0]);if(x[1])bt.set(r,x[1]);else bt.delete(r)});await bt.commit()}
+    ops.forEach(function(x){if(x[1])MK.mine[x[0]]=x[1];else delete MK.mine[x[0]]});
+    if(ops.length)MK.at=0;
+  }catch(e){MK.mine=null}
+  MK.busy=false;
+}
+async function mkLoad(force){
+  if(S.noDb||!FS)return;if(!force&&MK.all&&Date.now()-MK.at<300000)return;
+  try{var snap=await FS.collection("market").limit(5000).get();MK.all=snap.docs.map(function(d){return d.data()});MK.at=Date.now();MK.rerr=null}catch(e){MK.rerr=e}
+  if(!modal||modal.type!=="price")return;
+  if(modal.k){var el=$("#pmk");if(el)el.innerHTML=mkHtml(modal.k);prOffer()}else{var l=$("#plist");if(l)l.innerHTML=prListHtml()}
+}
+function mkQ(a,q){var p=(a.length-1)*q,lo=Math.floor(p),hi=Math.ceil(p);return a[lo]+(a[hi]-a[lo])*(p-lo)}
+function mkTrim(a){a=a.slice().sort(function(x,y){return x-y});if(a.length<5)return a;var q1=mkQ(a,.25),q3=mkQ(a,.75),r=(q3-q1)*1.5;return a.filter(function(v){return v>=q1-r&&v<=q3+r})}
+function mkStats(k){
+  if(!MK.all)return null;
+  var L=MK.all.filter(function(x){return x.k===k}),now=todayStr().slice(0,7).split("-");
+  function ago(mo){var b=String(mo||"").split("-");return (+now[0]-(+b[0]||0))*12+(+now[1]-(+b[1]||0))}
+  function srcN(R){var o={};R.forEach(function(x){o[x.o]=1});return Object.keys(o).length}
+  var wins=[6,12,0];
+  for(var i=0;i<wins.length;i++){var w=wins[i],R=w?L.filter(function(x){return ago(x.m)<w}):L,ns=srcN(R);
+    if(R.length>=MK_MIN_N&&ns>=MK_MIN_SRC){var B=mkTrim(R.map(function(x){return x.b})),Sl=mkTrim(R.map(function(x){return x.s}));
+      return {ok:true,n:R.length,src:ns,win:w,bLo:B[0],bHi:B[B.length-1],bMed:mkQ(B,.5),sLo:Sl[0],sHi:Sl[Sl.length-1],sMed:mkQ(Sl,.5),out:R.length*2-B.length-Sl.length}}}
+  return {ok:false,n:L.length,src:srcN(L)};
+}
+function mkRange(lo,hi){lo=mkR5(lo);hi=mkR5(hi);return lo===hi?fmt(lo):fmt(lo)+" – "+fmt(hi)}
+function mkHtml(k){
+  var h='<div class="sect">📊 أسعار السوق (كل المعارض)</div>';
+  if(!MK.all)return h+'<div class="card"><div class="sub">'+(MK.rerr?'تعذر تحميل أسعار السوق دلوقتي. لو دي أول مرة، لازم تنسخ القواعد الجديدة من صفحة الأدمن وتعملها Publish في Firebase.':'بيحمّل أسعار السوق…')+'</div></div>';
+  var s=mkStats(k);
+  if(!s.ok)return h+'<div class="card"><div class="sub">لسه مفيش بيانات كفاية من السوق للعربية دي. الرينج بيظهر لما يبقى في '+MK_MIN_N+' صفقات على الأقل من معرضين مختلفين، عشان محدش يتعرف من أسعاره.</div>'+
+    '<div class="ts" style="margin-top:6px">المسجّل لحد دلوقتي: <span class="num">'+s.n+'</span> '+(s.n===1?"صفقة":"صفقات")+' من '+(s.src===1?"معرض واحد":'<span class="num">'+s.src+'</span> معارض')+'</div></div>';
+  return h+'<div class="card"><div class="preview" style="margin-bottom:8px">'+
+    '<div class="kv"><span>🛒 بيشتروها بـ</span><b><span class="num">'+mkRange(s.bLo,s.bHi)+'</span> ج</b></div>'+
+    '<div class="kv"><span>💰 بيبيعوها بـ</span><b><span class="num">'+mkRange(s.sLo,s.sHi)+'</span> ج</b></div>'+
+    '<div class="kv"><span>متوسط الشراء / البيع</span><b><span class="num">'+fmt(mkR5(s.bMed))+'</span> / <span class="num">'+fmt(mkR5(s.sMed))+'</span></b></div></div>'+
+    '<div class="sub">من <span class="num">'+s.n+'</span> صفقة · <span class="num">'+s.src+'</span> معارض · '+(s.win===6?"آخر 6 شهور":s.win===12?"آخر سنة":"كل الفترة")+(s.out?' · اتشال '+s.out+' سعر شاذ':'')+'</div>'+
+    '<div class="ts" style="margin-top:4px">من غير أسماء: محدش يعرف مين اشترى أو باع بالسعر ده.</div></div>';
+}
+function mkOnlyGroups(q){
+  if(!MK.all)return [];var mine={};prGroups().forEach(function(g){mine[g.k]=1});
+  var t=prNorm(q).split(" ").filter(Boolean),G={};
+  MK.all.forEach(function(x){if(mine[x.k]||!x.k)return;if(!t.every(function(w){return x.k.indexOf(w)>=0}))return;var g=G[x.k]||(G[x.k]={k:x.k,name:x.n,last:""});if((x.m||"")>=g.last){g.last=x.m||"";g.name=x.n}});
+  return Object.keys(G).map(function(k){var g=G[k];g.s=mkStats(k);return g}).filter(function(g){return g.s&&g.s.ok}).sort(function(a,b){return b.s.n-a.s.n});
+}
+function mkGroup(k){var L=(MK.all||[]).filter(function(x){return x.k===k});if(!L.length)return null;L.sort(function(a,b){return (b.m||"").localeCompare(a.m||"")});return {k:k,name:L[0].n,sold:[],stock:[],last:"",mkOnly:true}}
 function prBuy(){
   var g=modal&&modal.g,off=modal&&modal.offer;closeSheet();openForm("buy",{});
   setTimeout(function(){var n=$('#sheet input[name="name"]'),p=$('#sheet input[name="price"]');if(n&&g){n.value=g.name+" - ";n.focus()}if(p&&off){p.value=fmtIn(off);p.dispatchEvent(new Event("input",{bubbles:true}))}},60);
@@ -3551,7 +3629,7 @@ async function boot(){
   try{FS.enablePersistence({synchronizeTabs:true}).catch(function(){})}catch(e){}
   var user=await new Promise(function(res){var off=firebase.auth().onAuthStateChanged(function(u){off();res(u)})});
   if(!user){S.auth="out";render();firebase.auth().onAuthStateChanged(function(u){if(u)location.reload()});return}
-  S.auth="in";
+  S.auth="in";MK.uid=user.uid;
   var base="users/"+user.uid+"/";
   db={collection:function(c){return FS.collection(base+c)},doc:function(p){return FS.doc(base+p)}};
   render();
