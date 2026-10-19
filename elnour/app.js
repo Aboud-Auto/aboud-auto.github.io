@@ -240,6 +240,26 @@ function saveTransfer() {
     closeM(); toast('تم التحويل');
   });
 }
+/* ---------- حد سحب اللي عنده وسلّمه: تحويل للخزنة ---------- */
+function openToSafe(w, h) {
+  const a = holders(w).find(x => x.n === h)?.a || 0;
+  sheet(`<h3>تحويل للخزنة</h3>
+    <div class="note">${esc(h)} سحب من ${esc(w)} وسلّمك الفلوس. هتتخصم من ${esc(w)} (من اللي عند ${esc(h)}) وتتزوّد على ${PAY[0]}.</div>
+    <div class="note">اللي عند ${esc(h)} في ${esc(w)}: <b class="num">${fmt(a)}</b> ج</div>
+    <label class="field"><span>المبلغ اللي سلّمه</span><input id="sa" inputmode="numeric" value="${fmt(a)}" oninput="liveComma(this)" style="font-size:24px;font-weight:800"></label>
+    <label class="field"><span>التاريخ</span><input id="sd" type="date" value="${today()}"></label>
+    <label class="field"><span>ملاحظة (اختياري)</span><input id="sn"></label>
+    <button class="btn btn-gold" onclick="saveToSafe('${esc(w)}','${esc(h)}')">تحويل للخزنة</button>`);
+}
+function saveToSafe(w, h) {
+  once(async () => {
+    const amt = parseAmt($('#sa').value), a = holders(w).find(x => x.n === h)?.a || 0;
+    if (amt <= 0) return toast('اكتب المبلغ');
+    if (amt > a && !confirm(`المبلغ أكبر من اللي عند ${h} (${fmt(a)} ج). تسجّله برضه؟`)) return;
+    setDoc(doc(fs, 'moves', uid()), { type: 't', from: w, fh: h, to: PAY[0], amt, date: $('#sd').value || today(), note: $('#sn').value.trim() || `${h} سلّمها`, by: ME.name, ts: Date.now() + '' }).catch(fail);
+    closeM(); toast(`اتحوّل ${fmt(amt)} ج للخزنة`);
+  });
+}
 /* ---------- تحديد الفلوس عند مين (جوه نفس المحفظة) ---------- */
 let AS = null;
 const hOpt = (arr, sel) => arr.map(w => `<option ${w === sel ? 'selected' : ''}>${esc(w)}</option>`).join('');
@@ -370,7 +390,8 @@ function openWallet(w) {
     <div class="cbox" style="margin-top:0"><small style="color:var(--muted)">الموجود فيها دلوقتي</small>
       <div class="bl num" style="color:${b < 0 ? 'var(--red2)' : 'var(--green)'}">${fmt(b)} <span style="font-size:18px">ج</span></div>
       ${(() => { const hs = holders(w); if (!hs.length) return ''; const rest = b - hs.reduce((s, h) => s + h.a, 0);
-        return `<div style="margin-top:10px;text-align:right">${hs.map(h => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--line)"><span>عند ${esc(h.n)}</span><b class="num" style="color:var(--gold2)">${fmt(h.a)}</b></div>`).join('')}
+        return `<div style="margin-top:10px;text-align:right">${hs.map(h => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)"><span style="flex:1">عند ${esc(h.n)}</span><b class="num" style="color:var(--gold2)">${fmt(h.a)}</b>
+            ${canEdit() && w !== PAY[0] && h.a > 0 ? `<button class="chip on" style="font-size:12px" onclick="openToSafe('${esc(w)}','${esc(h.n)}')">⇄ للخزنة</button>` : ''}</div>`).join('')}
           ${Math.round(rest) ? `<div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--line);color:var(--muted)"><span>${NOH}</span><b class="num">${fmt(rest)}</b></div>` : ''}</div>` })()}</div>
     ${canEdit() ? `<div class="acts">
       <button class="btn btn-red" onclick="openOut('${esc(w)}')">－ سحب / توريد</button>
@@ -1703,5 +1724,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, openEditMove, saveEditMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, gvAdd, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, openAssign, asAdd, asPick, asHint, saveAssign, openRecv, rvAdd, rvHint, saveRecv, sendAll, sendAllPDF, shareReady, dlReady });
+Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, openEditMove, saveEditMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, gvAdd, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, openToSafe, saveToSafe, openAssign, asAdd, asPick, asHint, saveAssign, openRecv, rvAdd, rvHint, saveRecv, sendAll, sendAllPDF, shareReady, dlReady });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
