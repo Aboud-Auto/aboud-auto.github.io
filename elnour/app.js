@@ -44,7 +44,22 @@ function liveComma(el) { const p = parseAmt(el.value); el.value = p ? fmt(p) : '
 function balance(cid) { return DB.moves.filter(m => m.cid === cid).reduce((s, m) => s + (m.type === 'd' ? m.amt : -m.amt), 0) }
 const ord = (a, b) => (a.date + a.ts).localeCompare(b.date + b.ts);
 function lastMove(cid) { return DB.moves.filter(m => m.cid === cid).sort(ord).pop() }
-function fail(e) { console.error(e); toast(e && e.code === 'permission-denied' ? 'مش مسموحلك بالعملية دي' : 'حصلت مشكلة، جرّب تاني') }
+// لو الحفظ اترفض من السيرفر بنطلّع رسالة واضحة متتقفلش لوحدها (بدل رسالة صغيرة بتختفي) عشان نعرف السبب
+function fail(e) {
+  console.error(e); const c = (e && e.code) || 'unknown';
+  sheet(`<h3>⚠️ التعديل ماتحفظش</h3>
+    <div class="note">${c === 'permission-denied' ? 'السيرفر رفض التعديل ده (مش مسموح)، فهيرجع زي ما كان.' : 'حصلت مشكلة والتعديل ماوصلش للسيرفر، فهيرجع زي ما كان.'}<br>صوّر الرسالة دي وابعتها لصاحب البرنامج.</div>
+    <div class="note" style="direction:ltr;text-align:left;font-size:12px">${esc(c)} — ${esc((e && e.message) || '')}</div>
+    <button class="btn btn-gold" onclick="closeM()">تمام</button>`);
+}
+let PEND = {}, OFF = false, RERR = {}, LOADED = {};
+function syncLine() {
+  const el = $('#sync'); if (!el) return;
+  const err = Object.keys(RERR);
+  el.textContent = err.length ? '⚠ مشكلة في قراية: ' + err.join('، ') + ' (' + RERR[err[0]] + ')'
+    : Object.values(PEND).some(Boolean) ? (OFF || !navigator.onLine ? '● بدون نت — التعديلات محفوظة على الموبايل وهتتبعت لما النت يرجع' : '● بيحفظ على السيرفر...')
+    : OFF ? '● بدون نت — هيتزامن لما النت يرجع' : '';
+}
 
 /* ====== الدخول بحساب Gmail ====== */
 const provider = new GoogleAuthProvider();
@@ -79,11 +94,12 @@ const whoText = () => ME.name + ' — ' + ROLES[ME.role];
 function start() {
   $('#splash').classList.add('hidden'); $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   $('#who').textContent = whoText();
-  const live = (name, key, quiet) => unsubs.push(onSnapshot(collection(fs, name), snap => {
-    DB[key] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    $('#sync').textContent = snap.metadata.fromCache && !navigator.onLine ? '● بدون نت — هيتزامن لما النت يرجع' : '';
+  const live = (name, key, quiet) => unsubs.push(onSnapshot(collection(fs, name), { includeMetadataChanges: true }, snap => {
+    PEND[name] = snap.metadata.hasPendingWrites; OFF = snap.metadata.fromCache && !navigator.onLine; syncLine();
+    if (!snap.docChanges().length && DB[key].length === snap.size && LOADED[name]) return; // تغيير حالة الحفظ بس
+    LOADED[name] = 1; DB[key] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     render();
-  }, quiet ? e => console.warn(name, e) : fail));
+  }, quiet ? e => { console.warn(name, e); RERR[name] = e.code || 'error'; syncLine() } : fail));
   live('customers', 'customers'); live('moves', 'moves'); live('items', 'items', 1); live('invoices', 'invoices', 1);
   if (isOwner()) live('members', 'members');
   go('invs', undefined, true);
