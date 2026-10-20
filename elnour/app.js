@@ -14,6 +14,8 @@ const firebaseConfig = {
 if (!firebaseConfig.apiKey) { document.body.innerHTML = '<div style="min-height:100vh;display:grid;place-items:center;text-align:center;padding:24px;font-family:Cairo,sans-serif;color:#e7b53c"><div><img src="logo.jpg" style="max-width:280px;width:100%;border-radius:12px"><p style="margin-top:16px">البرنامج بيتجهّز — قريب جداً</p></div></div>'; throw new Error('no config'); }
 /* ====== أصحاب البرنامج (يدخلوا دايماً ويضيفوا مستخدمين) ====== */
 const OWNERS = ['diaakhan84@gmail.com', 'yousefabod10@gmail.com'];
+/* ====== المطور: هو بس اللي يقدر يوقف البرنامج ويشغّله ====== */
+const DEV = 'yousefabod10@gmail.com';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -21,7 +23,7 @@ const fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabMana
 
 /* ====== حالة البرنامج ====== */
 let DB = { customers: [], moves: [], members: [], items: [], invoices: [] };
-let ME = null, unsubs = [];
+let ME = null, unsubs = [], CFG = {}, CFGUN = null, LOCKED = false;
 let route = { v: 'invs' }, filter = 'all', q = '', HIST = [];
 
 const $ = s => document.querySelector(s);
@@ -80,16 +82,57 @@ function denied(msg) {
   $('#app').classList.add('hidden'); $('#splash').classList.add('hidden'); $('#login').classList.remove('hidden');
   $('#lerr').textContent = msg;
 }
+/* ====== إيقاف البرنامج مؤقتاً ====== */
+function lockScreen() {
+  LOCKED = true; unsubs.forEach(f => f()); unsubs = []; ME = null;
+  ['#app', '#splash', '#login'].forEach(x => $(x).classList.add('hidden'));
+  let el = $('#lock'); if (!el) { el = document.createElement('section'); el.id = 'lock'; document.body.appendChild(el) }
+  const wa = String(CFG.wa || '').replace(/\D/g, '');
+  el.innerHTML = `<div style="min-height:100vh;display:grid;place-items:center;padding:24px"><div class="cbox" style="max-width:380px;width:100%;text-align:center">
+    <img src="logo.jpg" style="width:100%;max-width:220px;border-radius:12px">
+    <div style="font-size:40px;margin-top:12px">🔒</div>
+    <h3 style="margin:6px 0">البرنامج متوقف مؤقتاً</h3>
+    <div style="color:var(--muted);line-height:1.8;margin-bottom:16px">بياناتك محفوظة بالكامل ومفيش حاجة اتمسحت.<br>برجاء التواصل مع المطور لإعادة التشغيل.</div>
+    ${wa ? `<a class="btn btn-gold" style="display:block;text-decoration:none" href="https://wa.me/${wa}" target="_blank">تواصل مع المطور على واتساب</a>` : ''}
+    <button class="btn btn-ghost" style="margin-top:8px" onclick="logout()">تسجيل خروج</button></div></div>`;
+}
+function watchCfg(email, go) {
+  if (CFGUN) CFGUN(); let first = true;
+  const step = () => {
+    if (CFG.off && email !== DEV) { if (!LOCKED) lockScreen(); }
+    else if (LOCKED) location.reload();
+    else if (first) go();
+    first = false; if (route.v === 'more' && ME) render();
+  };
+  CFGUN = onSnapshot(doc(fs, 'config', 'app'), s => { CFG = s.exists() ? s.data() : {}; step() },
+    e => { console.warn('config', e); CFG = {}; step() });
+}
+function openSuspend() {
+  sheet(`<h3>${CFG.off ? 'تشغيل البرنامج' : 'إيقاف البرنامج مؤقتاً'}</h3>
+    <div class="note">${CFG.off ? 'البرنامج متوقف دلوقتي. لما تشغّله كل المستخدمين هيرجعوا يدخلوا عادي.' : 'كل المستخدمين (حتى صاحب الشركة) هيشوفوا رسالة إن البرنامج متوقف. البيانات مش هتتمسح، وأنت بس اللي تقدر تشغّله تاني.'}</div>
+    ${CFG.off ? '' : `<label class="field"><span>رقم الواتساب بتاعك (يظهر للعميل عشان يكلمك)</span><input id="sw" class="num" inputmode="tel" style="direction:ltr;text-align:left" placeholder="201xxxxxxxxx" value="${esc(CFG.wa || '')}"></label>`}
+    <button class="btn btn-gold" onclick="saveSuspend(${CFG.off ? 'false' : 'true'})">${CFG.off ? 'شغّل البرنامج' : 'أوقف البرنامج'}</button>
+    <button class="btn btn-ghost" style="margin-top:8px" onclick="closeM()">رجوع</button>`);
+}
+function saveSuspend(off) {
+  const d = { off, by: ME.email, at: Date.now() };
+  if (off) { let w = String($('#sw').value || '').replace(/[٠-٩]/g, x => '٠١٢٣٤٥٦٧٨٩'.indexOf(x)).replace(/\D/g, ''); if (w.startsWith('0')) w = '2' + w; d.wa = w }
+  setDoc(doc(fs, 'config', 'app'), d, { merge: true }).catch(fail);
+  closeM(); toast(off ? 'البرنامج اتوقف عند كل المستخدمين' : 'البرنامج اشتغل تاني');
+}
 onAuthStateChanged(auth, async user => {
-  if (!user) { $('#splash').classList.add('hidden'); $('#login').classList.remove('hidden'); return }
+  if (!user) { if (CFGUN) { CFGUN(); CFGUN = null } $('#splash').classList.add('hidden'); $('#login').classList.remove('hidden'); return }
   const email = (user.email || '').toLowerCase();
+  watchCfg(email, () => enter(user, email));
+});
+function enter(user, email) {
   if (OWNERS.includes(email)) { ME = { id: user.uid, name: user.displayName || email, email, role: 'owner' }; start(); return }
   unsubs.push(onSnapshot(doc(fs, 'members', email), s => {
     if (!s.exists()) return denied('الإيميل ده (' + email + ') مش مسموحله يدخل البرنامج');
     const first = !ME; ME = { id: user.uid, email, ...s.data(), name: s.data().name || user.displayName || email };
     if (first) start(); else { $('#who').textContent = whoText(); render() }
   }, e => denied('الإيميل ده (' + email + ') مش مسموحله يدخل البرنامج')));
-});
+}
 const whoText = () => ME.name + ' — ' + ROLES[ME.role];
 function start() {
   $('#splash').classList.add('hidden'); $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
@@ -1693,6 +1736,9 @@ function viewMore() {
     <div class="f"><b>${esc(m.name || '—')}</b><small class="num" style="text-align:right">${esc(m.id)}</small></div>
     <span class="badge">${ROLES[m.role] || ''}</span>
     <button class="iconbtn" onclick="openMember('${esc(m.id)}')">تعديل</button></div>`).join('') : '<div class="empty">مفيش مستخدمين غيرك. دوس «إضافة مستخدم» وحط إيميل Gmail بتاعه.</div>'}` : ''}
+  ${ME.email === DEV ? `<div class="sec-t"><span>التحكم (ليك أنت بس)</span></div>
+  <div class="list-item"><div class="f"><b>إيقاف البرنامج</b><small style="color:${CFG.off ? 'var(--red2)' : 'var(--muted)'}">${CFG.off ? 'متوقف — المستخدمين شايفين رسالة الإيقاف' : 'شغال دلوقتي'}</small></div>
+    <button class="iconbtn" onclick="openSuspend()">${CFG.off ? 'تشغيل' : 'إيقاف'}</button></div>` : ''}
   <button class="btn btn-ghost" style="margin-top:12px" onclick="logout()">تسجيل خروج</button>`;
 }
 function openMember(id) {
@@ -1724,5 +1770,5 @@ function saveMember(id) {
 }
 function delMember(id) { if (!confirm('متأكد؟ المستخدم ده مش هيقدر يدخل تاني.')) return; deleteDoc(doc(fs, 'members', id)).catch(fail); closeM() }
 
-Object.assign(window, { setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, openEditMove, saveEditMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, gvAdd, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, openToSafe, saveToSafe, openAssign, asAdd, asPick, asHint, saveAssign, openRecv, rvAdd, rvHint, saveRecv, sendAll, sendAllPDF, shareReady, dlReady });
+Object.assign(window, { openSuspend, saveSuspend, setCat, startCount, pickCat, newCatBox, cntCat, cntIn, saveCount, openWallet, openAdjust, adjHint, saveAdjust, openOut, saveOut, tab, back, fabAct, setIQ, setIF, openItem, saveItem, delItem, quickIn, saveQuickIn, setVQ, setVF, custInvs, newInv, edCust, edPT, edSug, edAdd, edDel, edQ, edQv, edP, edDisc, edHint, edPayAll, edPayNone, saveInv, delInv, sendInv, doLogin, logout, go, setQ, setFilter, openCustomerForm, saveCustomer, delCustomer, openMove, saveMove, delMove, openEditMove, saveEditMove, sendWA, sendPDF, openStatement, callC, closeM, liveComma, payPct, gvAdd, openMember, saveMember, delMember, payTotal, openDiscount, discPct, discHint, saveDiscount, openTransfer, trHint, saveTransfer, openToSafe, saveToSafe, openAssign, asAdd, asPick, asHint, saveAssign, openRecv, rvAdd, rvHint, saveRecv, sendAll, sendAllPDF, shareReady, dlReady });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });

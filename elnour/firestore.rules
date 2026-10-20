@@ -10,6 +10,13 @@ service cloud.firestore {
     function isOwner() {
       return signedIn() && email() in ['diaakhan84@gmail.com', 'yousefabod10@gmail.com'];
     }
+    // المطور: هو بس اللي يوقف البرنامج ويشغّله، وبيفضل يدخل وهو متوقف
+    function isDev() {
+      return signedIn() && email() == 'yousefabod10@gmail.com';
+    }
+    function suspended() {
+      return exists(/databases/$(database)/documents/config/app) && get(/databases/$(database)/documents/config/app).data.off == true;
+    }
     function member() {
       return get(/databases/$(database)/documents/members/$(email())).data;
     }
@@ -17,14 +24,18 @@ service cloud.firestore {
       return signedIn() && exists(/databases/$(database)/documents/members/$(email()));
     }
     function canRead() {
-      return isOwner() || isMember();
+      return isDev() || (!suspended() && (isOwner() || isMember()));
     }
     function canWrite() {
-      return isOwner() || (isMember() && member().role == 'acc');
+      return isDev() || (!suspended() && (isOwner() || (isMember() && member().role == 'acc')));
     }
     match /members/{id} {
       allow read: if isOwner() || (signedIn() && id == email());
-      allow write: if isOwner();
+      allow write: if isDev() || (isOwner() && !suspended());
+    }
+    match /config/{id} {
+      allow read: if signedIn();
+      allow write: if isDev();
     }
     match /customers/{id} {
       allow read: if canRead();
