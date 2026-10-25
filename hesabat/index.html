@@ -1802,9 +1802,6 @@ function openForm(kind,o){
     h=sheetHead("بيع عربية")+fld("العربية",carSel("carId",stock,s2))+
       '<div class="two">'+fld("سعر البيع",minp("price"))+fld("تاريخ البيع",dinp("date"))+'</div>'+
       '<div class="two">'+fld("اتحصّل كاش",minp("cash"))+fld("اتحصّل إنستاباي",minp("insta"))+'</div>'+ispBox()+trFld("trS","🤝 اتباعت لتاجر؟ اكتب اسمه (اختياري)")+trDL()+
-      '<div class="card" style="margin:4px 0 12px"><div class="sect" style="margin-top:0">🔁 عربية داخلة في البيعة (بدل)</div><div class="sub" style="margin-bottom:8px">سيبها فاضية لو البيعة عادية.</div>'+
-      '<div class="two">'+fld("اسم العربية الداخلة",'<input name="tname" autocomplete="off" placeholder="مثال: لانسر 2015">')+fld("قيمتها",minp("tval"))+'</div>'+
-      fld("لو الفرق عليك: دفعت منه دلوقتي كام؟",minp("tpaid","","فاضي = دفعته كله"))+fld("ودفعته من",srcSel("tsrc"))+'<div class="sub">لو دفعت جزء من الفرق، الباقي بيتسجل إنه ليه عندك (باقي للعميل) لحد ما تسدده. ولو الفرق على العميل، اكتب اللي دفعه فوق في الكاش أو إنستاباي والباقي بيتسجل عليه.</div></div>'+
       '<div class="preview" id="pv"></div><button class="btn" data-act="submit">تأكيد البيع</button>';
   }else if(kind==="dep"){
     var dst=T.cars.filter(function(c){return !c.sold});
