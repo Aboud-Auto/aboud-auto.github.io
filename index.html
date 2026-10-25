@@ -692,8 +692,8 @@ function heroTap(k,T){
       (T.debts>0.5?tkv("− باقي عند العملاء",m(T.debts,"bad")):"")+
       (T.recv>0.5?tkv("− سلف ادتها لناس",m(T.recv,"bad")):"")+(T.held>0.5?tkv("− إنستاباي في محافظ المستثمرين (من فلوسهم)",m(T.held,"bad")):"")+
       ttot("= المفروض يبقى معاك",m(T.cashNow));
-    if(!T.check)h+='<div class="banner" style="margin:10px 0 0">⚠️ في فرق في الحساب، راجع آخر حركات اتسجلت</div>';
-    h+='<button class="btn sec small" style="margin-top:12px" onclick="instaAdj()">🔧 ظبط رصيد الإنستاباي</button>';
+    if(!T.check)h+='<div class="banner" style="margin:10px 0 0;cursor:pointer" onclick="healthCheck()">⚠️ في فرق في الحساب، اضغط هنا تعرف السبب ‹</div>';
+    h+='<div class="two" style="margin-top:12px"><button class="btn sec small" onclick="safeCount()">🧮 جرد الخزنة</button><button class="btn sec small" onclick="instaAdj()">🔧 ظبط الإنستاباي</button></div><button class="btn sec small" style="margin-top:8px;width:100%" onclick="healthCheck()">🩺 فحص الحسابات</button>';
     h+='<div class="two" style="margin-top:12px"><button class="btn sec small" data-act="tinfo" data-k="stock">العربيات في المعرض</button><button class="btn sec small" data-act="tinfo" data-k="debts">مديونيات العملاء</button></div>';
   }else if(k==="hbase"){
     t="🏦 أصل رأس المال";
@@ -1167,6 +1167,8 @@ function renderAcc(){
     big("report","settle","🧾","تقفيل","عربيات متباعة / أسبوع / شهر · نصيب كل شريك"+(NOFUND?"":" واللي يرجع للعهدة"))+
     big("jard","","📋","جرد الشركاء والمستثمرين","كل شخص والعربيات اللي داخل فيها وتقريره")+
     big("report","day","📄","تقرير وكشف حساب","يومي أو شهري · صورة أو PDF تبعتها واتساب")+
+    (function(){var L=scLast();return '<div class="card row" onclick="safeCount()" style="cursor:pointer;align-items:center;gap:12px"><span style="font-size:30px">🧮</span><div style="flex:1"><div style="font-weight:800;font-size:17px">جرد الخزنة</div><div class="sub">'+(L?'آخر جرد '+fdate(L.date)+' · '+scState(L.diff):'اعدّ الكاش اللي في إيدك وقارنه بالبرنامج')+'</div></div><span class="sub">‹</span></div>'})()+
+    (function(){var H=hcSummary(),ok=H.diff===0&&!H.bad;return '<div class="card row" onclick="healthCheck()" style="cursor:pointer;align-items:center;gap:12px"><span style="font-size:30px">🩺</span><div style="flex:1"><div style="font-weight:800;font-size:17px">فحص الحسابات</div><div class="sub">'+(ok?'<span class="good">✔ متطابقة</span>'+(H.warn?' · '+H.warn+' ملاحظة':''):'<span class="bad">'+(H.diff!==0?'فرق '+fmt(Math.abs(H.diff))+(H.bad?' · ':''):'')+(H.bad?H.bad+' مشكلة':'')+'</span>')+'</div></div><span class="sub">‹</span></div>'})()+
     (function(){var L=tradersCalc(),me=0,io=0;L.forEach(function(o){me+=o.owedMe;io+=o.iOwe});return big("traders","","🤝","حسابات التجار",L.length?"ليك عندهم "+fmt(me)+" · عليك لهم "+fmt(io):"العربيات اللي بتاخدها من تجار أو تبيعهالهم")})();
 }
 function stakeBox(){var K=stakesCalc(),op=K.filter(function(k){return !k.closed}),cl=K.filter(function(k){return k.closed});
@@ -1239,7 +1241,7 @@ function renderSet(){
     '<div class="kv"><span>إجمالي أرباح اتسحبت</span><b>'+m(T.pw+T.ew)+'</b></div>'+
     '<div class="kv"><span>مستحق للشركاء</span><b>'+m(T.pOwed)+'</b></div>'+
     (NOFUND?'':'<div class="kv"><span>مصاريف لسه ما اتردّتش للعهدة</span><b>'+m(T.unre)+'</b></div>')+
-    '<div class="kv"><span>مراجعة الحسابات</span><b>'+(T.check?'<span class="ok">✔ متطابقة</span>':'<span class="bad">راجع الأرقام</span>')+'</b></div></div>'+
+    '<div class="kv" onclick="healthCheck()" style="cursor:pointer"><span>مراجعة الحسابات</span><b>'+(T.check?'<span class="ok">✔ متطابقة</span>':'<span class="bad">راجع الأرقام</span>')+' <span class="sub">‹</span></b></div></div>'+
     '<div class="card"><button class="btn sec" data-act="hist">📜 سجل الحركات (مين عمل إيه وإمتى)</button></div><div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">📊 تصدير كل البيانات (ملف Excel)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">خد نسخة من بياناتك كل فترة واحفظها في الملفات أو ابعتها لنفسك على واتساب.</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="kv"><span>الحساب</span><b class="num">'+esc((firebase.auth().currentUser||{}).email||"")+'</b></div><button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>'+
     '<div class="card sub">الربح الصافي = سعر البيع − (سعر الشراء + كل المصاريف). في الشراكة: المصاريف بتتخصم من الربح الأول، وبعدين الباقي بيتقسم على حسب مبلغ كل واحد من سعر الشراء.</div>';
 }
@@ -3198,7 +3200,7 @@ function instaAdj(){var T=calc();modal={type:"instaadj"};
     fld("الفرق ده يتسجل إزاي؟",'<select name="iaHow"><option value="safe">نقل بين الإنستاباي والخزنة</option><option value="cap">عجز / زيادة في رأس المال</option></select>')+
     '<div class="two">'+fld("التاريخ",dinp("iaDate"))+fld("ملاحظة (اختياري)",'<input name="iaNote" autocomplete="off">')+'</div>'+
     '<div class="preview" id="iaPv" style="display:block"></div>'+
-    '<button class="btn" onclick="instaAdjSave()">حفظ</button><button class="btn sec" style="margin-top:8px" onclick="closeSheet()">إلغاء</button>');
+    '<button class="btn" onclick="instaAdjSave()">حفظ</button><button class="btn sec" style="margin-top:8px" data-act="close">إلغاء</button>');
   var sh=$("#sheet");sh.addEventListener("input",instaAdjPv);sh.addEventListener("change",instaAdjPv);instaAdjPv()}
 function instaAdjPv(){var el=$("#iaPv");if(!el||!modal||modal.type!=="instaadj")return;var T=calc(),r=val("iaReal");
   if(r===""){el.innerHTML="اكتب الرصيد الحقيقي وهيبانلك الفرق";return}
@@ -3215,6 +3217,131 @@ async function instaAdjSave(){if(submitting)return;var T=calc(),r=val("iaReal");
     else ok=await create("capital",{kind:d<0?"withdraw":"addcap",src:"insta",amount:a,date:dt,note:nt,adj:true});
     if(ok){closeSheet();toast("اتظبط ✔")}}finally{submitting=false}}
 window.instaAdj=instaAdj;window.instaAdjSave=instaAdjSave;
+/* ---------- جرد الخزنة الفعلي ---------- */
+var SC_DEN=[200,100,50,20,10,5,1];
+function scList(){return ((S.scnt&&S.scnt.list)||[]).slice().sort(function(a,b){return (b.at||0)-(a.at||0)})}
+function scLast(){return scList()[0]||null}
+function scState(d){return Math.abs(d)<0.5?'<span class="good">✔ مظبوطة</span>':d<0?'<span class="bad">ناقص '+m(-d)+'</span>':'<span class="warn">زيادة '+m(d)+'</span>'}
+function scHowTxt(h){return h==="cap"?"اتظبطت في رأس المال":h==="insta"?"اتظبطت مع الإنستاباي":"اتسجل الجرد بس"}
+function scHistHtml(){var L=scList().slice(0,10);if(!L.length)return "";
+  return '<div class="sect">آخر مرات جرد</div><div class="card" style="padding:6px 16px">'+L.map(function(x){
+    return '<div class="item" style="display:block"><div class="row"><span>'+fdate(x.date)+(x.time?' <span class="sub">'+esc(x.time)+'</span>':'')+'</span><b>'+scState(x.diff)+'</b></div>'+
+      '<div class="d sub">عدّيت '+m(x.counted)+' · المتسجل كان '+m(x.sys)+(Math.abs(x.diff)>=0.5?' · '+scHowTxt(x.how):'')+(x.note?' · '+esc(x.note):'')+'</div></div>'}).join("")+'</div>'}
+function safeCount(){var T=calc(),last=scLast();modal={type:"safecount",den:false};
+  openSheet(sheetHead("🧮 جرد الخزنة")+
+    '<div class="preview" style="display:block">المفروض يبقى في الخزنة كاش: <b>'+m(T.safeBal)+'</b><br><span class="sub">ده كل الكاش اللي في الخزنة (بتاعك + الشركاء + المستثمرين + العرابين)</span>'+
+      (last?'<br><span class="sub">آخر جرد: '+fdate(last.date)+' · '+scState(last.diff)+'</span>':'')+'</div>'+
+    fld("الكاش اللي عدّيته في الخزنة دلوقتي",minp("scReal"))+
+    '<button class="btn sec small" style="margin:-4px 0 12px" onclick="scDenToggle()">💵 عد بالفئات (٢٠٠ / ١٠٠ / ٥٠ …)</button>'+
+    '<div id="scDen" style="display:none" class="card">'+SC_DEN.map(function(v){return '<div class="kv" style="align-items:center"><span>فئة <b class="num">'+v+'</b> × </span><input name="scd'+v+'" inputmode="numeric" autocomplete="off" placeholder="عدد" style="max-width:110px;text-align:center"></div>'}).join("")+'</div>'+
+    '<div id="scHowW">'+fld("لو فيه فرق، يتسجل إزاي؟",'<select name="scHow"><option value="log">سجّل الجرد بس (هراجع وأظبط بعدين)</option><option value="cap">عجز / زيادة في رأس المال</option><option value="insta">الفرق راح أو جه من الإنستاباي</option></select>')+'</div>'+
+    '<div class="two">'+fld("التاريخ",dinp("scDate"))+fld("ملاحظة (اختياري)",'<input name="scNote" autocomplete="off">')+'</div>'+
+    '<div class="preview" id="scPv" style="display:block"></div>'+
+    '<button class="btn" onclick="safeCountSave()">حفظ الجرد</button><button class="btn sec" style="margin-top:8px" data-act="close">إلغاء</button>'+
+    scHistHtml());
+  var sh=$("#sheet");sh.addEventListener("input",scPv);sh.addEventListener("change",scPv);scPv()}
+function scDenToggle(){if(!modal||modal.type!=="safecount")return;modal.den=!modal.den;var el=$("#scDen");if(el)el.style.display=modal.den?"block":"none";if(modal.den)scDenSum()}
+function scDenSum(){var t=0,any=false;SC_DEN.forEach(function(v){var x=val("scd"+v);if(x!==""){any=true;t+=v*parseNum(x)}});var el=$("#sheet [name='scReal']");if(el&&any)el.value=fmtIn(String(Math.round(t)))}
+function scPv(e){var el=$("#scPv");if(!el||!modal||modal.type!=="safecount")return;
+  if(e&&e.target&&e.target.name&&e.target.name.indexOf("scd")===0)scDenSum();
+  var T=calc(),r=val("scReal"),hw=$("#scHowW");
+  if(r===""){el.innerHTML="اعدّ الكاش اللي في الخزنة واكتبه، وهيبانلك الفرق";if(hw)hw.style.display="none";return}
+  var d=parseNum(r)-T.safeBal,how=val("scHow"),h;
+  if(Math.abs(d)<0.5){el.innerHTML='<span class="good">✔ الخزنة مظبوطة، مفيش فرق</span>';if(hw)hw.style.display="none";return}
+  if(hw)hw.style.display="block";
+  h=d<0?'الخزنة ناقصة <b class="bad">'+m(-d)+'</b>':'الخزنة زيادة <b class="warn">'+m(d)+'</b>';
+  if(how==="log")h+='<br>هيتسجل الجرد والفرق بس، ومفيش أي رقم في الحسابات هيتغير. راجع آخر الحركات من «فحص الحسابات» أو «سجل الحركات»';
+  else if(how==="cap")h+=d<0?'<br>هينزل من رأس المال كعجز (تقدر تسدده بعدين من «سداد عجز السحب»)':'<br>هيتضاف لرأس المال';
+  else h+=d<0?'<br>معناها الفلوس دي في الإنستاباي: الإنستاباي يبقى <b>'+m(T.instaBal-d)+'</b>':'<br>معناها الفلوس دي جت من الإنستاباي: الإنستاباي يبقى <b class="'+(T.instaBal-d<-0.5?"bad":"")+'">'+m(T.instaBal-d)+'</b>';
+  el.innerHTML=h+(how!=="log"?'<br>الخزنة بعد الظبط: <b>'+m(T.safeBal+d)+'</b>':'')}
+async function safeCountSave(){if(submitting)return;var T=calc(),r=val("scReal");if(r==="")return toast("اكتب الكاش اللي عدّيته");
+  var counted=parseNum(r),d=Math.round((counted-T.safeBal)*100)/100,a=Math.abs(d),how=a<0.5?"log":val("scHow"),dt=val("scDate")||todayStr(),nt=val("scNote").trim();
+  var now=new Date(),tm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+  var rec={id:"c"+Date.now(),at:Date.now(),date:dt,time:tm,counted:counted,sys:Math.round(T.safeBal*100)/100,diff:d,how:how,note:nt.slice(0,80),dev:hlDevLabel()};
+  submitting=true;try{
+    if(how==="cap"){if(!await create("capital",{kind:d<0?"withdraw":"addcap",src:"cash",amount:a,date:dt,note:nt||"فرق جرد الخزنة",adj:true}))return}
+    else if(how==="insta"){if(!await create("transfers",{dir:d<0?"toInsta":"toSafe",amount:a,date:dt,note:nt||"فرق جرد الخزنة",adj:true}))return}
+    var list=((S.scnt&&S.scnt.list)||[]).concat([rec]).sort(function(x,y){return (y.at||0)-(x.at||0)}).slice(0,200);
+    try{await db.doc("settings/safecount").set({list:list},{merge:true});S.scnt={list:list}}catch(e){return toast("تعذر حفظ الجرد، جرّب تاني")}
+    hlWrite({act:"add",coll:"safecount",id:rec.id,title:"جرد الخزنة: "+(a<0.5?"مظبوطة":(d<0?"ناقص ":"زيادة ")+fmt(a))});
+    closeSheet();toast(a<0.5?"الخزنة مظبوطة ✔":"اتسجل الجرد ✔");
+  }finally{submitting=false}}
+window.safeCount=safeCount;window.safeCountSave=safeCountSave;window.scDenToggle=scDenToggle;
+
+/* ---------- فحص سلامة الحسابات ---------- */
+function hcIssues(T){
+  var I=[],today=todayStr(),ids={},pk={},cn={};
+  function add(lvl,t,d,car){I.push({lvl:lvl,t:t,d:d||"",car:car||""})}
+  T.cars.forEach(function(c){ids[c.id]=1;cn[c.id]=c.name||"عربية";c.parts.forEach(function(p){pk[c.id+"|"+p.id]=1})});
+  if(T.safeBal<-0.5)add("bad","الخزنة بالسالب "+m(T.safeBal,"bad"),"مستحيل يبقى في الخزنة أقل من صفر. غالبًا حركة خارجة اتسجلت «كاش» وهي إنستاباي، أو فلوس دخلت الخزنة ومتسجلتش");
+  if(T.instaBal<-0.5)add("bad","الإنستاباي بالسالب "+m(T.instaBal,"bad"),"غالبًا حركة خارجة اتسجلت «إنستاباي» وهي كاش، أو تحويل دخل الإنستاباي ومتسجلش. تقدر تظبطه من «ظبط رصيد الإنستاباي»");
+  T.cars.forEach(function(c){var n=esc(c.name||"عربية");
+    if(c.sold&&c.sellDate&&c.buyDate&&c.sellDate<c.buyDate)add("bad","🚗 "+n+": تاريخ البيع قبل تاريخ الشراء","اتباعت "+fdate(c.sellDate)+" واتشرت "+fdate(c.buyDate),c.id);
+    if(c.sold&&c.remaining<-0.5)add("bad","🚗 "+n+": المحصّل أكتر من سعر البيع بـ "+m(-c.remaining,"bad"),"ممكن تحصيل اتسجل مرتين أو سعر البيع اتكتب غلط",c.id);
+    if(!c.sold&&!(+c.buyPrice>0))add("warn","🚗 "+n+": سعر الشراء صفر","العربية في المعرض من غير سعر شراء",c.id);
+    if(c.sold&&!(+c.sellPrice>0))add("warn","🚗 "+n+": اتباعت بسعر صفر","راجع سعر البيع",c.id);
+    if(c.sellerRem<-0.5)add("bad","🚗 "+n+": اتدفع للبايع أكتر من الباقي ليه بـ "+m(-c.sellerRem,"bad"),"",c.id);
+    c.parts.forEach(function(p){if(p.remaining<-0.5)add("bad","🤝 "+esc(p.name||"شريك")+" في "+n+": اتصرفله أكتر من حقه بـ "+m(-p.remaining,"bad"),"ممكن صرفية اتسجلت مرتين",c.id)});
+  });
+  T.inv.list.forEach(function(o){if(o.free<-0.5)add("bad","💼 المستثمر "+esc(o.name)+": الكاش بتاعه بالسالب "+m(o.free,"bad"),"دخل بفلوس في عربيات أو سلف أكتر من رصيده. راجع إيداعاته وسحوباته")});
+  var orph={e:0,ea:0,c:0,ca:0,p:0,pa:0};
+  S.expenses.forEach(function(e){if(!ids[e.carId]){orph.e++;orph.ea+=+e.amount||0}});
+  S.cols.forEach(function(x){if(!ids[x.carId]){orph.c++;orph.ca+=(+x.cash||0)+(+x.insta||0)}});
+  S.pay.forEach(function(x){if(!pk[x.carId+"|"+x.pid]){orph.p++;orph.pa+=+x.amount||0}});
+  if(orph.e)add("warn","فيه "+orph.e+" مصروف مربوط بعربية اتمسحت ("+m(orph.ea)+")","المصاريف دي مش داخلة في أي حساب دلوقتي");
+  if(orph.c)add("warn","فيه "+orph.c+" تحصيل مربوط بعربية اتمسحت ("+m(orph.ca)+")","التحصيلات دي مش داخلة في أي حساب دلوقتي");
+  if(orph.p)add("warn","فيه "+orph.p+" صرفية لشريك اتشال من عربيته ("+m(orph.pa)+")","الصرفيات دي مش داخلة في الخزنة دلوقتي");
+  var colls=[["expenses","مصروف",S.expenses],["capital","حركة رأس مال",S.cap],["ledger","سلفة / حركة",S.ledger],["external","عمولة خارجية",S.ext],["transfers","تحويل خزنة/إنستاباي",S.transfers],["invmoves","حركة مستثمر",S.invmov],["payouts","صرفية شريك",S.pay]];
+  var bad=0;colls.forEach(function(k){k[2].forEach(function(x){var a=+x.amount;if(x.amount!=null&&(!isFinite(a)||a<0))bad++})});
+  if(bad)add("bad","فيه "+bad+" حركة مبلغها غلط (سالب أو مش رقم)","افتح سجل الحركات وراجع آخر تعديلات");
+  var fut=0,fd="";function fchk(s){if(s&&s>today){fut++;if(!fd||s>fd)fd=s}}
+  T.cars.forEach(function(c){fchk(c.buyDate);if(c.sold)fchk(c.sellDate)});
+  colls.concat([["collections","",S.cols]]).forEach(function(k){k[2].forEach(function(x){fchk(x.date)})});
+  if(fut)add("warn","فيه "+fut+" حركة متسجلة بتاريخ لسه ماجاش (لحد "+fdate(fd)+")","غالبًا التاريخ اتكتب غلط، وده بيلخبط تقرير اليوم والشهر");
+  var dup=[];
+  function dchk(name,arr,keyf,carf){var seen={};arr.forEach(function(x){var k=keyf(x);if(k==null)return;(seen[k]=seen[k]||[]).push(x)});
+    Object.keys(seen).forEach(function(k){var g=seen[k].sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)});
+      for(var i=1;i<g.length;i++){if(g[i].createdAt&&g[i-1].createdAt&&g[i].createdAt-g[i-1].createdAt<15*60*1000){var c=carf?carf(g[i]):"";dup.push({name:name,x:g[i],car:c});break}}})}
+  dchk("مصروف",S.expenses,function(x){return x.carId+"|"+x.amount+"|"+x.date+"|"+(x.type||"")},function(x){return x.carId});
+  dchk("تحصيل",S.cols,function(x){return x.carId+"|"+(+x.cash||0)+"|"+(+x.insta||0)+"|"+x.date},function(x){return x.carId});
+  dchk("صرفية شريك",S.pay,function(x){return x.carId+"|"+x.pid+"|"+x.amount+"|"+x.date},function(x){return x.carId});
+  dchk("حركة رأس مال",S.cap,function(x){return x.kind+"|"+x.amount+"|"+x.date+"|"+(x.carId||"")});
+  dchk("سلفة / حركة",S.ledger,function(x){return x.kind+"|"+x.amount+"|"+x.date+"|"+(x.name||x.who||"")+"|"+(x.carId||"")});
+  dchk("عمولة خارجية",S.ext,function(x){return x.amount+"|"+x.date});
+  dchk("حركة مستثمر",S.invmov,function(x){return x.iid+"|"+x.kind+"|"+x.amount+"|"+x.date});
+  dchk("تحويل",S.transfers,function(x){return x.dir+"|"+x.amount+"|"+x.date});
+  dup.forEach(function(u){var a=u.name==="تحصيل"?(+u.x.cash||0)+(+u.x.insta||0):+u.x.amount||0;
+    add("warn","👀 "+u.name+" بنفس المبلغ والتاريخ اتسجل مرتين ورا بعض"+(u.car&&cn[u.car]?" في "+esc(cn[u.car]):""),m(a)+" · "+fdate(u.x.date)+" · لو اتسجل مرتين بالغلط امسح واحد منهم",u.car&&cn[u.car]?u.car:"")});
+  var L=scLast();if(L&&Math.abs(L.diff)>=0.5&&L.how==="log")add("warn","آخر جرد للخزنة ("+fdate(L.date)+") كان فيه "+(L.diff<0?"عجز ":"زيادة ")+m(Math.abs(L.diff))+" ولسه ما اتظبطش","");
+  else if(!L)add("info","لسه ماعملتش جرد للخزنة","اعدّ الكاش وقارنه بالبرنامج من «جرد الخزنة»");
+  else{var dd=Math.round((new Date(today)-new Date(L.date))/86400000);if(dd>=7)add("info","آخر جرد للخزنة كان من "+dd+" يوم","يستحسن تعمل جرد كل أسبوع على الأقل")}
+  return I;
+}
+function healthCheck(){var T=calc(),IS=T.inv;modal={type:"health"};
+  var own=T.cashNow+T.stockCost+T.debts+T.recv+T.held+T.stakeOut,notMine=T.owe+T.deposits+T.pOwed+IS.bal,net=own-notMine,diff=Math.round(net-T.value);
+  var I=hcIssues(T),nb=I.filter(function(x){return x.lvl==="bad"}).length,nw=I.filter(function(x){return x.lvl==="warn"}).length;
+  var h=sheetHead("🩺 فحص الحسابات");
+  h+='<div class="preview" style="display:block;font-size:16px">'+(diff===0&&!nb&&!nw?'<span class="good">✔ الحسابات متطابقة ومفيش أي ملاحظات</span>':
+    (diff!==0?'<span class="bad">⚠️ في فرق في الحساب '+m(Math.abs(diff),"bad")+'</span>':'<span class="good">✔ المعادلة متطابقة</span>')+(nb||nw?'<br><span class="sub">'+(nb?nb+" مشكلة لازم تتراجع":"")+(nb&&nw?" · ":"")+(nw?nw+" ملاحظة":"")+'</span>':''))+'</div>';
+  h+='<div class="sect">المعادلة</div><div class="card">'+
+    tkv("💵 الكاش (خزنة + إنستاباي)",m(T.cashNow))+(T.stockCost>0.5?tkv("+ عربيات في المعرض (بالتكلفة)",m(T.stockCost)):"")+(T.debts>0.5?tkv("+ باقي عند العملاء",m(T.debts)):"")+
+    (T.recv>0.5?tkv("+ سلف ليك عند الناس",m(T.recv)):"")+(T.held>0.5?tkv("+ إنستاباي في محافظ المستثمرين",m(T.held)):"")+(T.stakeOut>0.5?tkv("+ فلوسك في عربيات مع ناس",m(T.stakeOut)):"")+
+    (T.owe>0.5?tkv("− عليك للناس",m(T.owe,"bad")):"")+(T.deposits>0.5?tkv("− عرابين",m(T.deposits,"bad")):"")+(Math.abs(T.pOwed)>=0.5?tkv("− مستحق للشركاء",m(T.pOwed,"bad")):"")+(Math.abs(IS.bal)>=0.5?tkv("− فلوس المستثمرين",m(IS.bal,"bad")):"")+
+    ttot("= صافي اللي بتاعك",m(net))+tkv("رأس المال + الأرباح",m(T.value))+
+    '<div class="kv"><span><b>الفرق</b></span><b>'+(diff===0?'<span class="good">صفر ✔</span>':m(diff,"bad"))+'</b></div></div>';
+  if(diff!==0)h+='<div class="banner" style="margin:0 0 12px">الفرق ده معناه إن فيه حركة اتسجلت ناقصة أو اتعدلت غلط. ابدأ بالمشاكل اللي تحت، ولو مالقتش السبب افتح سجل الحركات وشوف آخر حاجة اتغيرت قبل ما الفرق يظهر.</div>';
+  if(I.length){var ic={bad:"🔴",warn:"🟡",info:"ℹ️"};
+    h+='<div class="sect">'+(nb||nw?"لقيت الحاجات دي":"ملاحظات")+'</div><div class="card" style="padding:6px 16px">'+
+      I.sort(function(a,b){var o={bad:0,warn:1,info:2};return o[a.lvl]-o[b.lvl]}).map(function(x){
+        return '<div class="item"'+(x.car?' data-act="car" data-id="'+esc(x.car)+'" style="cursor:pointer;display:flex"':' style="display:block"')+'><div style="flex:1"><div class="t">'+ic[x.lvl]+' '+x.t+'</div>'+(x.d?'<div class="d">'+x.d+'</div>':'')+'</div>'+(x.car?'<span class="sub">‹</span>':'')+'</div>'}).join("")+'</div>';
+  }
+  h+='<div class="two"><button class="btn sec small" onclick="safeCount()">🧮 جرد الخزنة</button><button class="btn sec small" data-act="hist">📜 سجل الحركات</button></div>'+
+    '<button class="btn sec" style="margin-top:8px" data-act="close">إغلاق</button>';
+  openSheet(h);
+}
+function hcSummary(){var T=calc(),I=hcIssues(T),own=T.cashNow+T.stockCost+T.debts+T.recv+T.held+T.stakeOut-(T.owe+T.deposits+T.pOwed+T.inv.bal),diff=Math.round(own-T.value);
+  return {diff:diff,bad:I.filter(function(x){return x.lvl==="bad"}).length,warn:I.filter(function(x){return x.lvl==="warn"}).length}}
+window.healthCheck=healthCheck;
 function buildReport(){return modal.kind==="trader"?rbTrader():modal.kind==="person"?rbPerson():modal.kind==="jardall"?rbJardAll():modal.kind==="inv"?rbInvestor():modal.kind==="invall"?rbInvAll():modal.kind==="settle"?rbSettle():modal.kind==="partner"?rbPartner():modal.kind==="carp"?rbCarPartners():rbPeriod()}
 
 function reportNames(){var o={},a=[];S.cars.forEach(function(c){(c.partners||[]).forEach(function(p){if(p.name&&!o[p.name]){o[p.name]=1;a.push(p.name)}})});return a}
@@ -3316,7 +3443,7 @@ function dlShim(){return {save:async function(o){
 
 var COLLS={cars:"cars",expenses:"expenses",cols:"collections",cap:"capital",pay:"payouts",transfers:"transfers",ledger:"ledger",ext:"external",inv:"investors",invmov:"invmoves"};
 async function exportBackup(){
-  var out={app:"aboud-auto",version:1,at:new Date().toISOString(),settings:S.settings||null,data:{}};
+  var out={app:"aboud-auto",version:1,at:new Date().toISOString(),settings:S.settings||null,safecount:S.scnt||null,data:{}};
   Object.keys(COLLS).forEach(function(k){out.data[COLLS[k]]=S[k]});
   try{await dlShim().save({filename:"نسخة_احتياطية_ABOUD_AUTO_"+todayStr()+".json",data:JSON.stringify(out)});}catch(e){toast("تعذر حفظ النسخة")}
 }
@@ -3331,6 +3458,7 @@ function importBackup(){
       var ops=[];
       Object.keys(j.data).forEach(function(c){(j.data[c]||[]).forEach(function(d){var o=Object.assign({},d),id=o.id;delete o.id;if(id)ops.push([c+"/"+id,o])})});
       if(j.settings)ops.push(["settings/main",j.settings]);
+      if(j.safecount)ops.push(["settings/safecount",j.safecount]);
       for(var i=0;i<ops.length;i+=400){var b=FS.batch();ops.slice(i,i+400).forEach(function(x){b.set(db.doc(x[0]),x[1])});await b.commit()}
       hlWrite({act:"edit",coll:"restore",id:"",title:"استرجاع نسخة احتياطية"});toast("اترجعت البيانات ✔");
     }catch(e){toast("تعذر الاسترجاع، جرّب تاني")}
@@ -3650,6 +3778,7 @@ async function boot(){
     S.settings=snap.exists?snap.data():null;S.loaded.settings=true;refresh();
   },function(err){S.err=err;refresh()});
   db.doc("settings/kash").onSnapshot(function(snap){S.kashp=snap.exists?snap.data():null;refresh()},function(){});
+  db.doc("settings/safecount").onSnapshot(function(snap){S.scnt=snap.exists?snap.data():null;refresh()},function(){});
 }
 boot();
 })();
