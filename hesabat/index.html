@@ -101,6 +101,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--text
 .fld input,.fld select,.prow input{width:100%;border:1px solid var(--line);border-radius:14px;padding:13px 14px;background:var(--card)}
 .fld input:focus,.fld select:focus,.search:focus,.prow input:focus{outline:2px solid var(--primary);outline-offset:0}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sxrow{display:grid;grid-template-columns:1.5fr 1fr 1fr auto;gap:5px;margin-bottom:8px;align-items:center}.sxrow select,.sxrow input{width:100%;min-width:0;border:1px solid var(--line);border-radius:14px;padding:12px 6px;font-size:14px!important;background:var(--card);color:inherit;font:inherit}
 .prow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:12px;align-items:center}
 .prow .pp{grid-column:1/2;border-style:dashed}
 .irow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:12px;align-items:center;border:1px dashed var(--line);border-radius:14px;padding:8px}.irow input,.irow select{width:100%;border:1px solid var(--line);border-radius:14px;padding:12px 10px;background:var(--card);color:inherit;font:inherit}.irow input:disabled{opacity:.45}.irow .iv{grid-column:1/3}.irow .im{grid-column:1/-1}.irow .ip{grid-column:2/-1;border-style:dashed}
@@ -1802,7 +1803,7 @@ function openForm(kind,o){
     var s2=o.carId||stock[0].id;
     h=sheetHead("بيع عربية")+fld("العربية",carSel("carId",stock,s2))+
       '<div class="two">'+fld("سعر البيع",minp("price"))+fld("تاريخ البيع",dinp("date"))+'</div>'+
-      '<div class="two">'+fld("اتحصّل كاش",minp("cash"))+fld("اتحصّل إنستاباي",minp("insta"))+'</div>'+ispBox()+ctFlds("b","المشتري")+trFld("trS","🤝 اتباعت لتاجر؟ اكتب اسمه (اختياري)")+trDL()+
+      '<div class="two">'+fld("اتحصّل كاش",minp("cash"))+fld("اتحصّل إنستاباي",minp("insta"))+'</div>'+ispBox()+ctFlds("b","المشتري")+trFld("trS","🤝 اتباعت لتاجر؟ اكتب اسمه (اختياري)")+trDL()+sxBox()+
       '<div class="preview" id="pv"></div><button class="btn" data-act="submit">تأكيد البيع</button>';
   }else if(kind==="dep"){
     var dst=T.cars.filter(function(c){return !c.sold});
@@ -2148,8 +2149,8 @@ function updatePreview(){
   var c=carById(val("carId"));if(!c)return;
   var cash=parseNum(val("cash")),ins=parseNum(val("insta"));
   if(k==="sell"){
-    var pre=c.sold?0:c.cashIn+c.instaIn,p=parseNum(val("price")),tv=parseNum(val("tval")),tr=tv>0?Math.min(p,tv):0,rest=p-tr-cash-ins-pre,profit=p-c.cost;
-    var t='تكلفة العربية: '+m(c.cost)+'<br>صافي الربح: <b class="'+(profit>=0?"good":"bad")+'">'+m(profit)+'</b>';
+    var pre=c.sold?0:c.cashIn+c.instaIn,p=parseNum(val("price")),tv=parseNum(val("tval")),tr=tv>0?Math.min(p,tv):0,rest=p-tr-cash-ins-pre,sxp=sxRead(),sxt=sxp.error?0:sxp.total,profit=p-c.cost-sxt;
+    var t='تكلفة العربية: '+m(c.cost)+(sxt>0?'<br>💸 مصاريف قفل البيعة (من الخزنة): <b>'+m(sxt)+'</b>':'')+'<br>صافي الربح: <b class="'+(profit>=0?"good":"bad")+'">'+m(profit)+'</b>';
     c.parts.forEach(function(q){t+='<br>🤝 '+esc(q.name)+' ('+pct(q.share)+'): <b class="'+(profit>=0?"good":"bad")+'">'+m(profit*q.share)+'</b>'});c.invs.forEach(function(v){t+='<br>💼 '+esc(v.name)+' ('+pct(v.share)+'): <b class="'+(profit>=0?"good":"bad")+'">'+m(profit*v.share)+'</b>'});
     if(c.parts.length||c.invs.length)t+='<br>ربحك (نسبة '+pct(c.ownerShare)+'): <b class="'+(profit>=0?"good":"bad")+'">'+m(profit*c.ownerShare)+'</b>';
     if(pre>0.5)t+='<br>🔖 عربون مدفوع قبل كده: <b>'+m(pre)+'</b> (بيتخصم من السعر)';
@@ -2205,9 +2206,11 @@ async function submitForm(){QF=null;
       var tr=tv>0?Math.min(sp2,tv):0;
       if(cash+ins+pre>sp2-tr+0.5)return toast(tv>=sp2?"إنت اللي هتدفع الفرق، سيب التحصيل فاضي":"المحصّل أكبر من الفرق ("+fmt(Math.max(0,sp2-tr-pre))+")");
       var isp=ispRead(ins);if(isp.error)return toast(isp.error);
+      var sxr=sxRead();if(sxr.error)return toast(sxr.error);
       var trS2=trName(val("trS")),ok=await patch("cars/"+cid,{sellPrice:sp2,sellDate:dt,soldAt:Date.now(),trS:trS2,bName:ctv("bName"),bPhone:ctv("bPhone")}),scol=null;
       if(ok&&(cash>0||ins>0)){scol=await create("collections",{carId:cid,date:dt,cash:cash,insta:ins,note:"عند البيع"});ok=!!scol}
       if(ok&&scol&&isp.list.length)ok=await ispSave(isp.list,scol,cid,dt);
+      for(var sxi=0;ok&&sxi<sxr.list.length;sxi++){var sxe=sxr.list[sxi];ok=!!(await create("expenses",{carId:cid,amount:sxe.amount,date:dt,type:sxe.type,src:sxe.src,sv:2,note:"عند البيع"}))}
       var tpS=val("tpaid").trim(),tdf=tv-tr,tbp=null;if(tv>0&&tdf>0.5&&tpS!==""){var tpn=parseNum(tpS);if(tpn<0||tpn>tdf+0.5){submitting=false;return toast("المدفوع من الفرق لازم يكون من ٠ لحد "+fmt(tdf))}if(tpn<tdf-0.5)tbp=tr+tpn}
       if(ok&&tv>0){var tid=await create("cars",{name:tn,buyPrice:tv,buyPaid:tbp,buyDate:dt,buySrc:val("tsrc")==="insta"?"insta":"cash",tradeIn:tr,tradeFrom:cid,reimbursed:false,partners:[],trB:trS2});ok=!!tid;
         if(ok)ok=!!(await create("collections",{carId:cid,date:dt,cash:0,insta:0,trade:tr,tradeCar:tid,tradeName:tn,note:"عربية داخلة: "+tn}))}
@@ -3465,6 +3468,11 @@ function ctWa(ph){var d=String(ph||"").replace(/[٠-٩]/g,function(x){return "٠
 function ctKv(who,nm,ph){nm=String(nm||"").trim();ph=String(ph||"").trim();if(!nm&&!ph)return "";
   var w=ctWa(ph),p=ph?'<a href="tel:'+esc(w?"+"+w:ph)+'" dir="ltr" style="color:inherit">📞 '+esc(ph)+'</a>'+(w?' · <a href="https://wa.me/'+w+'" target="_blank" rel="noopener" style="color:inherit">واتساب</a>':''):'';
   return '<div class="kv"><span>'+who+'</span><b>'+[esc(nm),p].filter(Boolean).join(" · ")+'</b></div>'}
+
+/* ---------- مصاريف قفل البيعة: بتتسجل وقت البيع من الخزنة (كاش/إنستاباي) على طول، مش من العهدة ---------- */
+function sxRow(){return '<div class="sxrow"><select class="sxt">'+EXP_TYPES.map(function(t){return '<option'+(t==="عمولة مسوق"?" selected":"")+'>'+t+'</option>'}).join("")+'</select><input class="sxa" data-money="1" inputmode="numeric" autocomplete="off" placeholder="المبلغ"><select class="sxs"><option value="cash">كاش</option><option value="insta">إنستاباي</option></select><button class="del" data-act="rmsx" aria-label="حذف">✕</button></div>'}
+function sxBox(){return '<div class="card" style="margin:4px 0 12px"><div class="sect" style="margin-top:0">💸 مصاريف قفل البيعة (اختياري)</div><div class="sub" style="margin-bottom:8px">زي عمولة المسوق أو التوكيل وقت البيع. بتتدفع من الخزنة على طول مش من العهدة، وبتتخصم من ربح العربية.</div><div id="sxlist"></div><button class="btn sec small" data-act="addsx">+ إضافة مصروف</button></div>'}
+function sxRead(){var L=[],err="";document.querySelectorAll("#sheet .sxrow").forEach(function(r){var a=parseNum(r.querySelector(".sxa").value);if(r.querySelector(".sxa").value.trim()==="")return;if(a<=0){err="راجع مبلغ مصروف قفل البيعة";return}L.push({type:r.querySelector(".sxt").value,amount:a,src:r.querySelector(".sxs").value==="insta"?"insta":"cash"})});return err?{error:err}:{list:L,total:L.reduce(function(x,y){return x+y.amount},0)}}
 var TRF="all";
 function trName(x){return String(x||"").trim()}
 function trNames(){var o={},a=[];S.cars.forEach(function(c){[c.trB,c.trS].forEach(function(n){n=trName(n);if(n&&!o[n]){o[n]=1;a.push(n)}})});return a.sort(function(x,y){return x.localeCompare(y,"ar")})}
@@ -3856,6 +3864,8 @@ document.addEventListener("click",async function(e){
   else if(a==="submit")submitForm();
   else if(a==="addp"){$("#plist").insertAdjacentHTML("beforeend",partnerRow(null));var ins=document.querySelectorAll("#plist .pn");ins[ins.length-1].focus()}
   else if(a==="rmp"){t.closest(".prow").remove();updatePreview()}
+  else if(a==="addsx"){var sxl=$("#sxlist");if(sxl){sxl.insertAdjacentHTML("beforeend",sxRow());var sxa=sxl.querySelectorAll(".sxa");sxa[sxa.length-1].focus()}}
+  else if(a==="rmsx"){t.closest(".sxrow").remove();updatePreview()}
   else if(a==="eqp"){
     var er=Array.prototype.filter.call(document.querySelectorAll("#plist .prow"),function(r){return r.querySelector(".pn").value.trim()||parseNum(r.querySelector(".pa").value)>0});
     if(!er.length)return toast("ضيف الشركاء الأول");
