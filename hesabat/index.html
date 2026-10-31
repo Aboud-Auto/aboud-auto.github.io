@@ -620,10 +620,36 @@ async function rcShow(first){
   openSheet(sheetHead("🔑 كود الاسترجاع")+'<div class="sub" style="margin-bottom:12px">'+(first?"بياناتك اتأمنت ✔ ومن هنا ورايح بتتحفظ متشفرة. ":"")+'احتفظ بالكود ده في مكان آمن (صوّره أو اكتبه في ورقة). لو نسيت الباسورد وغيّرته من «نسيت الباسورد»، هتحتاج الكود ده عشان تفتح بياناتك.</div>'+
     '<div class="card" style="text-align:center"><div dir="ltr" id="rcTxt" style="font-size:22px;font-weight:800;letter-spacing:2px;color:var(--primary);word-break:break-all">'+esc(rc)+'</div></div>'+
     '<div class="banner" style="margin:10px 0">⚠️ لو الباسورد والكود الاتنين ضاعوا، البيانات مش هترجع خالص، ولا حتى صاحب البرنامج يقدر يرجّعها.</div>'+
-    '<button class="btn sec" data-act="rcCopy" style="margin-bottom:10px">📋 انسخ الكود</button><button class="btn" data-act="rcDone">'+(first?"احتفظت بيه ✔":"تمام")+'</button>');
+    '<button class="btn sec" data-act="rcCopy" style="margin-bottom:10px">📋 انسخ الكود</button>'+
+    '<a class="btn sec" style="margin-bottom:10px;display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text='+encodeURIComponent("🔑 كود استرجاع برنامج حسابات المعارض ("+brandName()+"):\n"+rc+"\n\nاحتفظ بالرسالة دي ومتمسحهاش. لو نسيت الباسورد هتحتاج الكود ده عشان تفتح بياناتك.")+'">💬 ابعته لنفسك على واتساب</a>'+
+    '<button class="btn" data-act="rcDone">'+(rcSaved()?"تمام":"احتفظت بيه ✔")+'</button>');
 }
 function encCard(){if(DEMO)return "";return '<div class="card"><div class="sect" style="margin-top:0">🔒 تشفير البيانات</div><div class="sub" style="margin-bottom:10px">'+(ENC.on?"شغال ✔ بياناتك متشفرة على السيرفر، ومحدش يقدر يقراها غير اللي معاهم الباسورد.":"مش شغال لسه.")+'</div>'+(ENC.on?'<button class="btn sec" data-act="rcShow">🔑 عرض كود الاسترجاع</button>':'')+'</div>'}
 function rcBoot(){if(rcBoot.t||DEMO||!ENC.on||!allLoaded()||modal||!lsGet("hb_rcshow_"+ENC.uid))return;rcBoot.t=1;rcShow(true)}
+/* تأكيد إن العميل حافظ كود الاسترجاع فعلًا: بيكتب آخر 4 حروف منه. التأكيد بيتحفظ في settings/account
+   (حالة بس، من غير أي بيانات) عشان يظهر في صفحة الأدمن مين لسه ماحفظش الكود */
+function rcSaved(){return !!(S.account&&S.account.rcOk)}
+function accSet(o){S.account=Object.assign({},S.account||{},o);return db.doc("settings/account").set(o,{merge:true}).catch(function(){})}
+function rcVerify(){
+  modal={type:"rcv"};
+  openSheet(sheetHead("🔑 اتأكد إنك حافظ الكود")+'<div class="sub" style="margin-bottom:12px">اكتب آخر 4 حروف من كود الاسترجاع من المكان اللي حفظته فيه (الصورة أو الورقة أو رسالة الواتساب).</div>'+
+    '<label class="fld"><span>آخر 4 حروف</span><input id="rcLast" dir="ltr" maxlength="4" autocapitalize="characters" autocorrect="off" spellcheck="false" style="letter-spacing:3px;font-weight:800;text-align:center"></label>'+
+    '<div class="err" id="rcvErr" style="color:var(--bad);font-size:14px;min-height:20px;margin:0 0 8px"></div>'+
+    '<button class="btn" data-act="rcCheck" style="margin-bottom:10px">تأكيد</button><button class="btn sec" data-act="rcShow">رجوع للكود</button>');
+}
+async function rcCheck(){
+  var rc=await rcGet(),v=normRC($("#rcLast")&&$("#rcLast").value);
+  if(!rc)return toast("مقدرناش نجيب الكود، اتأكد من النت");
+  if(v.length!==4||v!==normRC(rc).slice(-4)){$("#rcvErr").textContent="مش مطابق، ارجع للكود واحفظه كويس";return}
+  lsSet("hb_rcshow_"+ENC.uid);accSet({rcOk:Date.now()});closeSheet();toast("تمام، كود الاسترجاع محفوظ ✔");refresh();
+}
+function safetyCards(){
+  if(DEMO||!ENC.on||!S.accLoaded)return "";var h="";
+  if(!rcSaved())h+='<div class="card" style="border:2px solid var(--bad)"><div class="sect" style="margin-top:0;color:var(--bad)">🔑 احفظ كود الاسترجاع</div><div class="sub" style="margin-bottom:12px">لو نسيت الباسورد من غير الكود ده، بياناتك هتضيع ومحدش هيقدر يرجّعها. احفظه دلوقتي، مش هياخد دقيقة.</div><button class="btn" data-act="rcShow">عرض الكود وحفظه</button></div>';
+  var be=lsGet("hb_bk_err_"+S.user.uid);
+  if(be)h+='<div class="card" style="border:2px solid var(--bad)"><div class="sect" style="margin-top:0;color:var(--bad)">⚠️ النسخ الاحتياطية واقفة</div><div class="sub" style="margin-bottom:12px">'+esc(be)+'</div><button class="btn" data-act="cloudList">افتح النسخ الاحتياطية</button></div>';
+  return h;
+}
 
 /* ---------- db writes ---------- */
 /* ---------- سجل الحركات ----------
@@ -976,7 +1002,7 @@ function heroHtml(T){
   return h+'</div>';
 }
 function renderHome(){
-  var T=calc(),D=dayCalc(todayStr()),h=subCard();
+  var T=calc(),D=dayCalc(todayStr()),h=subCard()+safetyCards();
   if(!DEMO&&S.user&&!isLinked())h+=linkCard();
   if(!S.settings)h+='<div class="card"><div class="sect" style="margin-top:0">ابدأ من هنا 👋</div><div class="sub" style="margin-bottom:12px">حدّد رأس المال والعهدة الأول عشان الحسابات تظبط.</div><button class="btn" data-act="form" data-kind="settings">تحديد رأس المال والعهدة</button></div>';
   h+=heroHtml(T);
@@ -3942,7 +3968,8 @@ document.addEventListener("click",async function(e){
   else if(a==="logout")logout();
   else if(a==="rcShow")rcShow(false);
   else if(a==="rcCopy"){var rct=$("#rcTxt")&&$("#rcTxt").textContent;try{await navigator.clipboard.writeText(rct);toast("اتنسخ ✔")}catch(err){toast("انسخه يدوي")}}
-  else if(a==="rcDone"){lsSet("hb_rcshow_"+ENC.uid);closeSheet()}
+  else if(a==="rcDone"){if(rcSaved()){lsSet("hb_rcshow_"+ENC.uid);closeSheet()}else rcVerify()}
+  else if(a==="rcCheck")rcCheck();
   else if(a==="demoSignup")exitDemo(true);
   else if(a==="linkMail")openLinkMail();
   else if(a==="linkSave")linkSave(t);
@@ -4030,7 +4057,7 @@ async function linkSave(btn){
     await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email,pw));
     var mp=await unameGet(un);if(mp&&mp.uid&&mp.uid!==u.uid){btn.disabled=false;er.textContent="اسم المستخدم ده تبع حساب تاني";return}
     await u.verifyBeforeUpdateEmail(em);
-    await unameSet(un,em,u.uid);try{await db.doc("settings/account").set({username:un,email:em})}catch(e){}
+    await unameSet(un,em,u.uid);try{await db.doc("settings/account").set({username:un,email:em},{merge:true})}catch(e){}
     $("#sheet").innerHTML=sheetHead("خلاص، فاضل خطوة")+'<div class="card"><div style="font-weight:700;margin-bottom:6px">بعتنالك رسالة على:</div><div dir="ltr" style="text-align:right;color:var(--primary);font-weight:800">'+esc(em)+'</div><div class="sub" style="margin-top:10px">افتح الرسالة واضغط على اللينك اللي فيها (لو مش لاقيها بص في الـ Spam). بعد كده ادخل البرنامج بالجيميل ده ونفس الباسورد، وهتلاقي بياناتك زي ما هي.</div></div><button class="btn" data-act="close">تمام</button>';
   }catch(e){
     var c=e&&e.code||"";btn.disabled=false;
@@ -4039,7 +4066,9 @@ async function linkSave(btn){
 }
 
 /* ---------- cloud backups ---------- */
-var BK_KEEP=30,bkBusy=false,bkLastJson=null,bkBooted=false;
+var BK_KEEP=30,bkBusy=false,bkLastJson=null,bkBooted=false,bkWarned=false;
+function bkFail(msg,show){var was=lsGet("hb_bk_err_"+S.user.uid);lsSet("hb_bk_err_"+S.user.uid,msg);if(was!==msg)accSet({bkErr:msg});if(show||!bkWarned){bkWarned=true;toast("⚠️ "+msg)}refresh()}
+function bkStatus(){var e=lsGet("hb_bk_err_"+S.user.uid),l=+lsGet("hb_bk_"+S.user.uid)||0;if(e)return '<span style="color:var(--bad);font-weight:700">⚠️ آخر نسخة تلقائية فشلت: '+esc(e)+'</span>';return l?"آخر نسخة تلقائية من الجهاز ده: "+bkWhen(l):"النسخ التلقائية شغالة."}
 function bkPayload(){var d={};Object.keys(COLLS).forEach(function(k){d[COLLS[k]]=S[k]});return {app:"hesabat",version:1,at:new Date().toISOString(),settings:S.settings||null,brand:S.brand||null,data:d}}
 async function cloudBackup(reason,force){
   if(DEMO||!S.user||!allLoaded()||bkBusy||S.expired)return false;
@@ -4049,16 +4078,17 @@ async function cloudBackup(reason,force){
     if(reason==="open"&&now-last<6*3600e3)return false;
     if(reason==="close"&&(core===bkLastJson||now-last<20*60e3))return false;
   }
-  var str=JSON.stringify(j);if(!ENC.on&&str.length>900000){if(force)toast("البيانات كبيرة على النسخة السحابية، خد نسخة على الموبايل");return false}
+  var str=JSON.stringify(j);if(!ENC.on&&str.length>900000){bkFail("البيانات كبرت عن حجم النسخة السحابية، خد نسخة على الموبايل وكلّم صاحب البرنامج",force);return false}
   bkBusy=true;
   try{
-    var bd={at:now,reason:reason,cars:S.cars.length,size:str.length};if(ENC.on){var be=await encText(str);if(be._e.length>1000000){if(force)toast("البيانات كبيرة على النسخة السحابية، خد نسخة على الموبايل");return false}bd._e=be._e;bd._z=be._z}else bd.json=str;
+    var bd={at:now,reason:reason,cars:S.cars.length,size:str.length};if(ENC.on){var be=await encText(str);if(be._e.length>1000000){bkFail("البيانات كبرت عن حجم النسخة السحابية، خد نسخة على الموبايل وكلّم صاحب البرنامج",force);return false}bd._e=be._e;bd._z=be._z}else bd.json=str;
     await db.collection("backups").doc().set(bd);
-    lsSet(lk,String(now));bkLastJson=core;
+    lsSet(lk,String(now));bkLastJson=core;var hadErr=lsGet("hb_bk_err_"+S.user.uid);lsSet("hb_bk_err_"+S.user.uid);
+    if(hadErr||!S.account||!S.account.bkAt||now-S.account.bkAt>6*3600e3)accSet({bkAt:now,bkErr:null});if(hadErr)refresh();
     var snap=await db.collection("backups").orderBy("at","desc").get();
     snap.docs.slice(BK_KEEP).forEach(function(d){d.ref.delete().catch(function(){})});
     return true;
-  }catch(e){if(force)toast("تعذر عمل النسخة، اتأكد من النت");return false}
+  }catch(e){if(force)toast("تعذر عمل النسخة، اتأكد من النت");else if(navigator.onLine!==false)bkFail("تعذر حفظ النسخة على السيرفر",false);return false}
   finally{bkBusy=false}
 }
 function bkBoot(){if(bkBooted||DEMO||!allLoaded())return;bkBooted=true;bkLastJson=null;setTimeout(function(){cloudBackup("open")},8000)}
@@ -4074,7 +4104,7 @@ async function openCloud(){
     var snap=await db.collection("backups").orderBy("at","desc").limit(BK_KEEP).get();
     if(!modal||modal.type!=="cloud")return;
     var rows=snap.docs.map(function(d){var x=d.data();return '<div class="card bkrow"><div><div style="font-weight:700">'+bkWhen(x.at)+'</div><div class="sub">'+(BK_LBL[x.reason]||"")+' · '+(x.cars||0)+' عربية</div></div><button class="btn sec small" data-act="cloudRestore" data-id="'+d.id+'">استرجاع</button></div>'}).join("");
-    $("#sheet").innerHTML=sheetHead("☁️ النسخ الاحتياطية")+'<div class="sub" style="margin-bottom:12px">النسخ دي محفوظة على السيرفر مش على موبايلك. بتتعمل لوحدها لما تفتح البرنامج وتقفله، وبنحتفظ بآخر '+BK_KEEP+' نسخة. لو موبايلك ضاع، ادخل بحسابك من أي موبايل وهتلاقي بياناتك.</div>'+
+    $("#sheet").innerHTML=sheetHead("☁️ النسخ الاحتياطية")+'<div class="sub" style="margin-bottom:12px">النسخ دي محفوظة على السيرفر مش على موبايلك. بتتعمل لوحدها لما تفتح البرنامج وتقفله، وبنحتفظ بآخر '+BK_KEEP+' نسخة. لو موبايلك ضاع، ادخل بحسابك من أي موبايل وهتلاقي بياناتك.</div><div class="sub" style="margin-bottom:12px">'+bkStatus()+'</div>'+
       '<button class="btn" data-act="cloudNow" style="margin-bottom:14px">عمل نسخة دلوقتي</button>'+(rows||'<div class="empty">لسه مفيش نسخ</div>');
   }catch(e){$("#sheet").innerHTML=sheetHead("☁️ النسخ الاحتياطية")+'<div class="banner">تعذر تحميل النسخ، اتأكد من النت.</div>'}
 }
@@ -4234,7 +4264,7 @@ async function boot(){
     S.brand=snap.exists?snap.data():null;lsSet("hb_name",S.brand&&S.brand.name);
     if(mem&&S.brand&&S.brand.name&&mem.shop!==S.brand.name){mem.shop=S.brand.name;memRef.update({shop:S.brand.name}).catch(function(){})}lsSet("hb_logo",S.brand&&S.brand.logo);applyBrand();refresh();
   },function(){});
-  db.doc("settings/account").get().then(function(d){S.account=d.exists?d.data():null;refresh()}).catch(function(){});
+  db.doc("settings/account").get().then(function(d){S.account=d.exists?d.data():null;S.accLoaded=true;refresh()}).catch(function(){});
   var mseq=0,mcache={};
   db.doc("settings/main").onSnapshot(async function(snap){
     var my=++mseq,o=null;

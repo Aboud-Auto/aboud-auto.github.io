@@ -225,6 +225,14 @@ function rulesText(uid){return [
 "}"].join("\n")}
 
 /* ---------- data ---------- */
+/* أمان كل عميل: حفظ كود الاسترجاع وآخر نسخة احتياطية (حالة بس من settings/account، من غير أي بيانات) */
+S.safe={};var safeAsked={};
+function loadSafety(){S.members.forEach(function(m){if(safeAsked[m.id]||m.id===ME.uid)return;safeAsked[m.id]=1;
+  FS.doc("users/"+m.id+"/settings/account").get().then(function(d){S.safe[m.id]=d.exists?d.data():{};render()}).catch(function(){S.safe[m.id]=null})})}
+function safetyKv(m){var a=S.safe[m.id];if(a===undefined)return kv("الأمان","…");if(a===null)return "";
+  var rc=a.rcOk?'<span style="color:var(--good)">✔ محفوظ</span>':'<span style="color:var(--bad);font-weight:700">⚠️ لسه ماحفظهوش</span>';
+  var bk=a.bkErr?'<span style="color:var(--bad);font-weight:700">⚠️ واقفة: '+esc(a.bkErr)+'</span>':a.bkAt?ago(a.bkAt):'—';
+  return kv("كود الاسترجاع",rc)+kv("آخر نسخة احتياطية",bk)}
 function invByUid(){var m={};S.invites.forEach(function(i){if(i.usedBy)m[i.usedBy]=i});return m}
 function memberName(m,im){var iv=im[m.id]||{};return iv.name||m.username||m.shop||"عميل"}
 async function loadPending(){
@@ -273,7 +281,7 @@ function renderMembers(){
       kv("الاشتراك",planName(m.plan))+kv("ينتهي",untilTxt(m))+
       kv("اسم المستخدم",esc(m.username||"—"))+kv("الجيميل",'<span dir="ltr">'+esc(mail)+'</span>')+(iv.phone?kv("التليفون",'<span dir="ltr">'+esc(iv.phone)+'</span>'):"")+
       kv("سجّل يوم",fdate(m.joinedAt))+kv("آخر مرة فتح",ago(m.lastSeen))+kv("فتح البرنامج",(m.opens||0)+" مرة")+
-      kv("نزّله على الشاشة",m.standalone?"✔ أيوه":"لأ (بيفتحه من المتصفح)")+(m.device?kv("الجهاز",esc(m.device)):"")+kv("دخل بكود",m.invite==="admin"?"اتفعّل يدوي":'<span class="code" style="letter-spacing:1px">'+esc(m.invite||"—")+'</span>')+
+      safetyKv(m)+kv("نزّله على الشاشة",m.standalone?"✔ أيوه":"لأ (بيفتحه من المتصفح)")+(m.device?kv("الجهاز",esc(m.device)):"")+kv("دخل بكود",m.invite==="admin"?"اتفعّل يدوي":'<span class="code" style="letter-spacing:1px">'+esc(m.invite||"—")+'</span>')+
       '<div class="row"><button class="btn small" data-act="renew" data-id="'+m.id+'">🔄 تجديد / الاشتراك</button>'+(iv.phone?'<a class="btn small sec" target="_blank" rel="noopener" href="'+esc(waHref(iv.phone,remind))+'">💬 '+(st==="soon"||st==="exp"?"فكّره يجدد":"واتساب")+'</a>':'')+'</div>'+
       '<div class="row" style="margin-top:8px">'+(m.active?'<button class="btn small danger" data-act="stop" data-id="'+m.id+'">⛔ إيقاف الحساب</button>':'<button class="btn small good" data-act="start" data-id="'+m.id+'">✔ تفعيل تاني</button>')+'</div></div>';
   });
@@ -456,7 +464,7 @@ FBA.auth().onAuthStateChanged(function(u){
   if(!u){ME=null;render();return}
   if(ME)return;ME=u;render();
   function onErr(e){S.err=e;render()}
-  FS.collection("members").onSnapshot(function(s){S.err=null;S.members=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});S.loaded.members=true;fixSerials();
+  FS.collection("members").onSnapshot(function(s){S.err=null;S.members=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});S.loaded.members=true;fixSerials();loadSafety();
     if(S.pending)S.pending=S.pending.filter(function(p){return !S.members.some(function(m){return m.id===p.uid})});render()},onErr);
   FS.collection("invites").onSnapshot(function(s){S.invites=s.docs.map(function(d){return Object.assign({code:d.id},d.data())});render()},onErr);
   FS.doc("config/public").get().then(function(d){S.cfg=d.exists?d.data():{};var w=S.cfg.whatsapp,f=waNum(w);if(w&&f&&f!==w){S.cfg.whatsapp=f;FS.doc("config/public").set({whatsapp:f},{merge:true}).catch(function(){})}render()}).catch(function(){});
