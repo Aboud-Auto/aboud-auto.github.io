@@ -39,6 +39,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:var(--text
 .top h1{font-size:20px;margin:0;font-weight:800}
 .sub{color:var(--muted);font-size:13px}
 .card{background:var(--card);border-radius:18px;padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+.bkrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;margin-bottom:8px}
 .hero{background:linear-gradient(135deg,#e6c15a 0%,#c39a2c 55%,#a67f1f 100%);color:#17110a;border-radius:22px;padding:20px;margin-bottom:12px;box-shadow:var(--shadow)}
 .hero .l{opacity:.8;font-size:14px}
 .hero .v{font-size:34px;font-weight:800;margin:2px 0}
@@ -1242,7 +1243,7 @@ function renderSet(){
     '<div class="kv"><span>مستحق للشركاء</span><b>'+m(T.pOwed)+'</b></div>'+
     (NOFUND?'':'<div class="kv"><span>مصاريف لسه ما اتردّتش للعهدة</span><b>'+m(T.unre)+'</b></div>')+
     '<div class="kv" onclick="healthCheck()" style="cursor:pointer"><span>مراجعة الحسابات</span><b>'+(T.check?'<span class="ok">✔ متطابقة</span>':'<span class="bad">راجع الأرقام</span>')+' <span class="sub">‹</span></b></div></div>'+
-    '<div class="card"><button class="btn sec" data-act="hist">📜 سجل الحركات (مين عمل إيه وإمتى)</button></div><div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">📊 تصدير كل البيانات (ملف Excel)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">خد نسخة من بياناتك كل فترة واحفظها في الملفات أو ابعتها لنفسك على واتساب.</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="kv"><span>الحساب</span><b class="num">'+esc((firebase.auth().currentUser||{}).email||"")+'</b></div><button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>'+
+    '<div class="card"><button class="btn sec" data-act="hist">📜 سجل الحركات (مين عمل إيه وإمتى)</button></div><div class="card"><button class="btn" data-act="report" data-kind="day" style="margin-bottom:10px">📄 تقرير وكشف حساب (صورة / PDF)</button><button class="btn sec" data-act="export">📊 تصدير كل البيانات (ملف Excel)</button></div><div class="card"><div class="sect" style="margin-top:0">النسخ الاحتياطي</div><div class="sub" style="margin-bottom:10px">خد نسخة من بياناتك كل فترة واحفظها في الملفات أو ابعتها لنفسك على واتساب.</div><button class="btn" data-act="cloudList" style="margin-bottom:10px">☁️ النسخ التلقائية على السيرفر</button><div class="sub" style="margin-bottom:10px">'+bkStatus()+'</div><button class="btn sec" data-act="backup" style="margin-bottom:10px">💾 حفظ نسخة احتياطية</button><button class="btn sec" data-act="restore">♻️ استرجاع من نسخة</button></div><div class="card"><div class="kv"><span>الحساب</span><b class="num">'+esc((firebase.auth().currentUser||{}).email||"")+'</b></div><button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>'+
     '<div class="card sub">الربح الصافي = سعر البيع − (سعر الشراء + كل المصاريف). في الشراكة: المصاريف بتتخصم من الربح الأول، وبعدين الباقي بيتقسم على حسب مبلغ كل واحد من سعر الشراء.</div>';
 }
 
@@ -1283,7 +1284,7 @@ function render(){
   renderNav();
 }
 function refresh(){
-  mkSchedule();
+  mkSchedule();bkBoot();
   var act=document.activeElement;
   if(act&&(act.id==="q")){renderListOnly();return}
   render();
@@ -3473,6 +3474,79 @@ function importBackup(){
   };
   inp.click();
 }
+
+/* ---------- النسخ التلقائية على السيرفر ----------
+   نسخة كاملة من البيانات بتتعمل لوحدها لما تفتح البرنامج (مرة كل 6 ساعات) ولما تقفله (لو فيه تغيير)،
+   مضغوطة عشان تفضل جوه حجم المستند، وبنحتفظ بآخر 30 نسخة. الاسترجاع بيرجّع البيانات زي ما كانت بالظبط
+   (اللي اتسجل بعد النسخة بيتشال)، وقبل أي استرجاع بنعمل نسخة من الوضع الحالي عشان لو غيّرت رأيك. */
+var BK_KEEP=30,BK_MAX=1000000,bkBusy=false,bkLastJson=null,bkBooted=false,bkWarned=false;
+var BK_LBL={open:"عند الفتح",close:"عند القفل",manual:"يدوي",prerestore:"قبل الاسترجاع"};
+function bkB64(u8){var s="",i;for(i=0;i<u8.length;i+=32768)s+=String.fromCharCode.apply(null,u8.subarray(i,i+32768));return btoa(s)}
+function bkUnB64(str){var b=atob(str),u=new Uint8Array(b.length),i;for(i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+async function bkGz(u8,dir){var C=dir?window.CompressionStream:window.DecompressionStream;var st=new Blob([u8]).stream().pipeThrough(new C("gzip"));return new Uint8Array(await new Response(st).arrayBuffer())}
+function bkPayload(){var d={};Object.keys(COLLS).forEach(function(k){d[COLLS[k]]=S[k]});return {app:"aboud-auto",version:1,at:new Date().toISOString(),settings:S.settings||null,safecount:S.scnt||null,kash:S.kashp||null,data:d}}
+function bkWhen(t){var d=new Date(t);return '<bdi>'+String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear()+" — "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+'</bdi>'}
+function bkStatus(){
+  var e=hlLs("ab_bk_err_"+MK.uid),l=+hlLs("ab_bk_"+MK.uid)||0;
+  if(e)return '<span style="color:var(--bad);font-weight:700">⚠️ آخر نسخة تلقائية فشلت: '+esc(e)+'</span>';
+  return l?"آخر نسخة تلقائية من الجهاز ده: "+bkWhen(l):"النسخ التلقائية شغالة، وأول نسخة هتتعمل خلال ثواني.";
+}
+function bkFail(msg,show){hlLs("ab_bk_err_"+MK.uid,msg);if(show||!bkWarned){bkWarned=true;toast("⚠️ "+msg)}}
+async function cloudBackup(reason,force){
+  if(!MK.uid||!db||!db.collection||!allLoaded()||bkBusy)return false;
+  var j=bkPayload(),core=JSON.stringify({s:j.settings,c:j.safecount,k:j.kash,d:j.data});
+  var lk="ab_bk_"+MK.uid,last=+hlLs(lk)||0,now=Date.now();
+  if(!force){
+    if(reason==="open"&&now-last<6*3600e3)return false;
+    if(reason==="close"&&(core===bkLastJson||now-last<20*60e3))return false;
+  }
+  bkBusy=true;
+  try{
+    var str=JSON.stringify(j),bd={at:now,reason:reason,cars:(S.cars||[]).length,size:str.length};
+    if(window.CompressionStream){bd.z=bkB64(await bkGz(new TextEncoder().encode(str),true))}else bd.json=str;
+    if((bd.z||bd.json).length>BK_MAX){bkFail("البيانات كبرت عن حجم النسخة السحابية، خد نسخة على الموبايل وكلّمنا",true);return false}
+    await db.collection("backups").doc().set(bd);
+    hlLs(lk,String(now));hlLs("ab_bk_err_"+MK.uid,null);bkLastJson=core;
+    var snap=await db.collection("backups").orderBy("at","desc").get();
+    snap.docs.slice(BK_KEEP).forEach(function(d){d.ref.delete().catch(function(){})});
+    return true;
+  }catch(e){if(force)toast("تعذر عمل النسخة، اتأكد من النت");else if(navigator.onLine!==false)bkFail("تعذر حفظ النسخة على السيرفر");return false}
+  finally{bkBusy=false}
+}
+function bkBoot(){if(bkBooted||!MK.uid||!db||!db.collection||!allLoaded())return;bkBooted=true;setTimeout(function(){cloudBackup("open")},8000)}
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")cloudBackup("close")});
+window.addEventListener("pagehide",function(){cloudBackup("close")});
+async function openCloud(){
+  modal={type:"cloud"};
+  openSheet(sheetHead("☁️ النسخ التلقائية")+'<div class="empty">جاري التحميل…</div>');
+  try{
+    var snap=await db.collection("backups").orderBy("at","desc").limit(BK_KEEP).get();
+    if(!modal||modal.type!=="cloud")return;
+    var rows=snap.docs.map(function(d){var x=d.data();return '<div class="card bkrow"><div><div style="font-weight:700">'+bkWhen(x.at)+'</div><div class="sub">'+(BK_LBL[x.reason]||"")+' · '+(x.cars||0)+' عربية</div></div><button class="btn sec small" data-act="cloudRestore" data-id="'+d.id+'">استرجاع</button></div>'}).join("");
+    $("#sheet").innerHTML=sheetHead("☁️ النسخ التلقائية")+'<div class="sub" style="margin-bottom:12px">النسخ دي محفوظة على السيرفر. بتتعمل لوحدها لما تفتح البرنامج وتقفله، وبنحتفظ بآخر '+BK_KEEP+' نسخة. لو حصل مسح بالغلط أو الأرقام اتلخبطت، ترجع لأي نسخة منهم بضغطة.</div><div class="sub" style="margin-bottom:12px">'+bkStatus()+'</div>'+
+      '<button class="btn" data-act="cloudNow" style="margin-bottom:14px">عمل نسخة دلوقتي</button>'+(rows||'<div class="empty">لسه مفيش نسخ</div>');
+  }catch(e){$("#sheet").innerHTML=sheetHead("☁️ النسخ التلقائية")+'<div class="banner">تعذر تحميل النسخ، اتأكد من النت.</div>'}
+}
+async function cloudRestore(id){
+  var d,bx,j;
+  try{d=await db.doc("backups/"+id).get();bx=d.data();j=JSON.parse(bx.z?new TextDecoder().decode(await bkGz(bkUnB64(bx.z),false)):bx.json)}catch(e){return toast("تعذر قراءة النسخة")}
+  if(!j||j.app!=="aboud-auto"||!j.data)return toast("تعذر قراءة النسخة");
+  confirmBox("هترجّع بياناتك لـ "+bkWhen(bx.at)+". أي حاجة اتسجلت بعدها هتتشال (وهنعمل نسخة من الوضع الحالي قبل الاسترجاع عشان لو غيّرت رأيك). متأكد؟",async function(){
+    if(!(await cloudBackup("prerestore",true)))return toast("لازم نعمل نسخة من الوضع الحالي الأول، اتأكد من النت وجرّب تاني");
+    try{
+      var ops=[];
+      Object.keys(COLLS).forEach(function(k){
+        var c=COLLS[k],keep={};(j.data[c]||[]).forEach(function(x){keep[x.id]=1;var o=Object.assign({},x);delete o.id;ops.push(["set",c+"/"+x.id,o])});
+        (S[k]||[]).forEach(function(x){if(!keep[x.id])ops.push(["del",c+"/"+x.id])});
+      });
+      ops.push(j.settings?["set","settings/main",j.settings]:["del","settings/main"]);
+      ops.push(j.safecount?["set","settings/safecount",j.safecount]:["del","settings/safecount"]);
+      ops.push(j.kash?["set","settings/kash",j.kash]:["del","settings/kash"]);
+      for(var i=0;i<ops.length;i+=400){var b=FS.batch();ops.slice(i,i+400).forEach(function(x){if(x[0]==="set")b.set(db.doc(x[1]),x[2]);else b.delete(db.doc(x[1]))});await b.commit()}
+      closeSheet();hlWrite({act:"edit",coll:"restore",id:"",title:"استرجاع نسخة تلقائية"});toast("اترجعت البيانات ✔");
+    }catch(e){toast("تعذر الاسترجاع، جرّب تاني")}
+  });
+}
 function logout(){if(confirm("تسجيل خروج من التطبيق؟"))firebase.auth().signOut().then(function(){location.reload()})}
 /* ---------- تصدير Excel ----------
    بيعمل ملف Excel كامل (كل البيانات في شيتات منفصلة) من غير أي مكتبة خارجية،
@@ -3693,6 +3767,9 @@ document.addEventListener("click",async function(e){
   else if(a==="rsave")saveReport(t.dataset.f);
   else if(a==="export")exportExcel("ABOUD_AUTO");
   else if(a==="backup")exportBackup();
+  else if(a==="cloudList")openCloud();
+  else if(a==="cloudNow"){t.disabled=true;if(await cloudBackup("manual",true)){toast("اتعملت نسخة ✔");openCloud()}else t.disabled=false}
+  else if(a==="cloudRestore")cloudRestore(t.dataset.id);
   else if(a==="restore")importBackup();
   else if(a==="logout")logout();
   else if(a==="cno")closeConfirm();
