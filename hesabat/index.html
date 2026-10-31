@@ -1965,7 +1965,7 @@ function qfill(kind){
   QF=null;
 }
 function openQuick(dir){
-  var T=calc(),inn=dir==="in",L=[],L2=[],lc=loansCalc(),fo=featOn("fund"),io=featOn("investors")&&T.inv.list.length;
+  var T=calc(),inn=dir==="in",L=[],lc=loansCalc(),fo=featOn("fund"),io=featOn("investors")&&T.inv.list.length;
   var anyStock=T.cars.some(function(c){return !c.sold}),anySold=T.cars.some(function(c){return c.sold});
   if(inn){
     if(anyStock)L.push(["✅","بيع عربية","sell"]);
@@ -1994,15 +1994,10 @@ function openQuick(dir){
     if(fo)L.push(["🧾","تزويد العهدة","fundmove","toFund"]);
     if(fo&&T.cars.some(function(c){return rbLeft(c)>0.5}))L.push(["💼","رد مصاريف للعهدة","qpick","reimb"]);
   }
-  if(!noInsta())L2.push(["🔁","تحويل بين إنستاباي والخزنة","transfer"]);
-  if(T.wDef>0.5)L2.push(["🏦","سداد عجز السحب من الأرباح","capital","repay"]);
-  if(lossCars().length)L2.push(["📉","سداد خسارة عربية","capital","lossrepay"]);
-  if(io&&T.inv.list.some(function(o){return o.repayable>0.5}))L2.push(["📉","سداد خسارة مستثمر","qpick","invloss"]);
   QF=null;modal={type:"quick",dir:dir};
   var h=sheetHead(inn?"⬇️ فلوس داخلة":"⬆️ فلوس خارجة")+
     '<div class="sect">'+(inn?"الفلوس دي جت من إيه؟":"الفلوس دي راحت في إيه؟")+'</div>'+
     '<div class="actions qcats">'+L.map(qBtn).join("")+'</div>'+
-    (L2.length?'<div class="sect">تسويات وتحويلات</div><div class="actions qcats">'+L2.map(qBtn).join("")+'</div>':'')+
     (inn?'':'<div class="sub" style="margin:10px 2px 0">💸 مصاريف العربيات بتتسجل زي ما هي من «تسجيل مصروف».</div>');
   openSheet(h);
 }
