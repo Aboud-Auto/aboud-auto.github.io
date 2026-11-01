@@ -2548,6 +2548,7 @@ function rlayout(ctx,spec,imgs,draw){
             if(cell==null||cell==="")return;
             var v=(typeof cell==="object")?cell.v:cell,cc=(typeof cell==="object")?cell.c:null,col=b.cols[i];
             if(col.k==="n")rtxt(ctx,rnum(v,col.s),xs[i].r-16,y+41,rf(28,800),tot?RK.gold2:(cc||RK.text),"right","ltr");
+            else if(col.k==="p")rtxt(ctx,String(v),xs[i].r-16,y+41,rf(26,800),cc||(tot?RK.gold2:RK.text),"right","ltr");
             else rtxt(ctx,rfit(ctx,v,rf(27,tot?800:600),xs[i].w-30),xs[i].r-16,y+41,rf(27,tot?800:600),tot?RK.gold2:(cc||RK.text),"right","rtl");
           });
           if(!tot){ctx.fillStyle=RK.line;ctx.fillRect(RP,y+rh-1,tw2,1)}
@@ -2704,6 +2705,10 @@ function rbPeriod(){
     {l:"إجمالي المبيعات",v:rnum(salesT)+" ج"},{l:"إجمالي المشتريات",v:rnum(buyT)+" ج"},
     {l:"المصاريف",v:rnum(expT)+" ج"},{l:"أرباحك من المبيعات",v:rnum(profT,true)+" ج",c:rcol(profT)},
     {l:"تحصيل كاش",v:rnum(cashT)+" ج"},{l:"تحصيل إنستاباي",v:rnum(instaT)+" ج"}];
+  function pctS(x){return (x>0?"+":"")+(Math.round(x*1000)/10)+"%"}
+  if(sales.length){var npT=0;sales.forEach(function(c){npT+=c.profit||0});if(costT>0)items.splice(5,0,{l:"نسبة الربح (من التكلفة)",v:pctS(npT/costT),c:rcol(npT)})}
+  if(k==="month"){var cb=+T.capital||0;S.cap.forEach(function(x){if(x.kind==="addcap"&&x.date&&x.date<=t)cb+=+x.amount||0});
+    if(cb>0)items.splice(sales.length&&costT>0?6:5,0,{l:"نسبة ربحك من رأس المال",v:pctS(profT/cb),c:rcol(profT)})}
   if(wdT)items.push({l:"سحوبات",v:rnum(wdT)+" ج"});
   if(pInT)items.push({l:"مساهمة شركاء",v:rnum(pInT)+" ج"});
   if(pOutT)items.push({l:"تسليم شركاء",v:rnum(pOutT)+" ج"});
@@ -2716,8 +2721,8 @@ function rbPeriod(){
   if(xT>0.5){items.push({l:"أرباح خارجية (عمولات)",v:rnum(xT)+" ج",c:RK.good})}
   var B=[{t:"tiles",items:items}],any=false;
   if(sales.length){any=true;B.push({t:"sec",title:"عربيات اتباعت ("+sales.length+")"});
-    B.push({t:"table",cols:[{h:"العربية",w:.37},{h:"سعر البيع",w:.21,k:"n"},{h:"التكلفة",w:.21,k:"n"},{h:"ربحك",w:.21,k:"n",s:1}],
-      rows:sales.map(function(c){return [c.name+(c.tradeGot>0?" (بدل)":""),c.sellPrice,c.cost,{v:c.myProfit,c:rcol(c.myProfit)}]}).concat([{cells:["الإجمالي",salesT,costT,{v:profT,c:rcol(profT)}]}])})}
+    B.push({t:"table",cols:[{h:"العربية",w:.3},{h:"سعر البيع",w:.2,k:"n"},{h:"التكلفة",w:.2,k:"n"},{h:"ربحك",w:.18,k:"n",s:1},{h:"النسبة",w:.12,k:"p"}],
+      rows:sales.map(function(c){var cp=c.cost>0?c.profit/c.cost:0;return [c.name+(c.tradeGot>0?" (بدل)":""),c.sellPrice,c.cost,{v:c.myProfit,c:rcol(c.myProfit)},{v:pctS(cp),c:rcol(c.profit)}]}).concat([{cells:["الإجمالي",salesT,costT,{v:profT,c:rcol(profT)},{v:costT>0?pctS(npT/costT):"",c:rcol(npT)}]}])})}
   if(trs.length){any=true;tradeBlocks(trs,B)}
   if(buys.length){any=true;B.push({t:"sec",title:"عربيات اتشترت ("+buys.length+")"});
     B.push({t:"table",cols:[{h:"العربية",w:.5},{h:"التاريخ",w:.22},{h:"سعر الشراء",w:.28,k:"n"}],
