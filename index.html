@@ -549,7 +549,7 @@ function tileTap(k){
     cs=T.cars.filter(function(c){return c.forfAmt>0.5});
     if(cs.length)h+=tsec("🔖 عرابين اتصادرت (ربح)")+cs.map(function(c){return tkv(esc(c.name),m(c.forfAmt,"good"),c.id)}).join("");
     cs=stakesCalc().filter(function(x){return x.closed});
-    if(cs.length)h+=tsec("🚗 عربيات دخلت فيها مع حد")+cs.map(function(x){return '<div data-act="stake" data-id="'+x.id+'" style="cursor:pointer">'+tkv(esc(x.car)+" · مع "+esc(x.person),m(x.result,x.result>=0?"good":"bad"),null,"دخلت بـ "+m(x.amount)+" · رجعلك "+m(x.ret))+'</div>'}).join("");
+    if(cs.length)h+=tsec("🚗 عربيات دخلت فيها مع حد")+cs.map(function(x){return '<div data-act="stake" data-id="'+x.id+'" style="cursor:pointer">'+tkv(esc(x.car)+" · مع "+esc(x.person),m(x.result,x.result>=0?"good":"bad")+' · '+pctB(stakePct(x)),null,"دخلت بـ "+m(x.amount)+(x.exp>0.5?" + مصاريف "+m(x.exp):"")+" · رجعلك "+m(x.ret))+'</div>'}).join("");
     h+=ttot("نصيبك الإجمالي",m(T.profit,T.profit>=0?"good":"bad"));
     if(capBase(T)>0)h+=tkv("<b>نسبة ربحك من رأس المال</b>",pctB(capPct(T)),null,"نصيبك "+fmt(T.profit)+" ÷ رأس المال "+fmt(capBase(T))+(T.addcap>0.5?" (الأصلي "+fmt(T.capital)+" + الزيادات "+fmt(T.addcap)+")":""));
   }else if(k==="debts"){
@@ -920,9 +920,11 @@ function stakesCalc(){
     k.rets.sort(function(a,b){return (b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0)})});
   return list.sort(function(a,b){return (a.closed-b.closed)||(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0)});
 }
+/* نسبة الربح في عربية داخل فيها مع حد = ربحك ÷ كل اللي طلع منك (المبلغ + المصاريف اللي دفعتها) */
+function stakePct(k){return k.paidIn>0?(k.closed?k.result:k.prof)/k.paidIn:0}
 function stakeRow(k){
-  return '<div class="item car" data-act="stake" data-id="'+k.id+'" style="cursor:pointer"><div style="flex:1"><div class="t">🚗 '+esc(k.car||"عربية")+' · مع '+esc(k.person||"؟")+'</div><div class="d">دخلت بـ '+fmt(k.amount)+(k.exp>0.5?' · مصاريف دفعتها '+fmt(k.exp):'')+(k.prof>0.5?' · الربح المتفق '+fmt(k.prof):'')+' · '+fdate(k.date)+(!k.closed&&k.ret>0.5?' · رجعلك '+fmt(k.ret):'')+'</div></div>'+
-    (k.closed?'<span class="num '+(k.result>=0?"good":"bad")+'" style="font-weight:700">'+(k.result>=0?"+":"")+fmt(k.result)+'</span>':'<span class="num warn" style="font-weight:700">'+fmt(Math.max(0,k.left))+'</span>')+'</div>';
+  return '<div class="item car" data-act="stake" data-id="'+k.id+'" style="cursor:pointer"><div style="flex:1"><div class="t">🚗 '+esc(k.car||"عربية")+' · مع '+esc(k.person||"؟")+'</div><div class="d">دخلت بـ '+fmt(k.amount)+(k.exp>0.5?' · مصاريف دفعتها '+fmt(k.exp):'')+(k.prof>0.5?' · الربح المتفق '+fmt(k.prof)+(k.closed?'':' ('+pctB(stakePct(k))+')'):'')+' · '+fdate(k.date)+(!k.closed&&k.ret>0.5?' · رجعلك '+fmt(k.ret):'')+'</div></div>'+
+    (k.closed?'<span class="num '+(k.result>=0?"good":"bad")+'" style="font-weight:700">'+(k.result>=0?"+":"")+fmt(k.result)+'</span> '+pctB(stakePct(k)):'<span class="num warn" style="font-weight:700">'+fmt(Math.max(0,k.left))+'</span>')+'</div>';
 }
 function openStake(id){modal={type:"stake",id:id};renderStake();$("#sheet").scrollTop=0}
 function renderStake(){
@@ -932,10 +934,10 @@ function renderStake(){
     '<div class="kv"><span>دخلت بـ</span><b>'+m(k.amount)+'</b></div>'+
     '<div class="kv"><span>خرجت من</span><b>'+(k.src==="insta"?"إنستاباي":"الخزنة")+' · '+fdate(k.date)+'</b></div>'+
     (k.exp>0.5?'<div class="kv"><span>مصاريف دفعتها انت</span><b>'+m(k.exp)+'</b></div><div class="kv"><span>إجمالي اللي طلع منك</span><b>'+m(k.paidIn)+'</b></div>':'')+
-    '<div class="kv"><span>الربح المتفق عليه</span><b>'+m(k.prof)+'</b></div>'+
+    '<div class="kv"><span>الربح المتفق عليه</span><b>'+m(k.prof)+(k.paidIn>0?' <span class="sub">('+pctB(k.prof/k.paidIn)+')</span>':'')+'</b></div>'+
     '<div class="kv"><span>المفروض يرجعلك</span><b>'+m(k.expect)+'</b></div>'+
     '<div class="kv"><span>رجعلك</span><b class="good">'+m(k.ret)+'</b></div>'+
-    (k.closed?'<div class="kv"><span>'+(k.result>=0?"ربحك":"خسارتك")+'</span><b class="'+(k.result>=0?"good":"bad")+'">'+m(Math.abs(k.result))+'</b></div><div class="kv"><span>الحالة</span><b class="good">اتقفلت ✔ '+fdate(k.closeDate)+'</b></div>'
+    (k.closed?'<div class="kv"><span>'+(k.result>=0?"ربحك":"خسارتك")+'</span><b class="'+(k.result>=0?"good":"bad")+'">'+m(Math.abs(k.result))+'</b></div><div class="kv"><span>نسبة '+(k.result>=0?"الربح":"الخسارة")+' <span class="sub">(من '+fmt(k.paidIn)+' طلعوا منك)</span></span>'+pctB(stakePct(k))+'</div><div class="kv"><span>الحالة</span><b class="good">اتقفلت ✔ '+fdate(k.closeDate)+'</b></div>'
       :'<div class="kv"><span>فاضل من المتفق</span><b class="warn">'+m(k.due)+'</b></div>')+
     (k.note?'<div class="kv"><span>ملاحظة</span><b>'+esc(k.note)+'</b></div>':'')+'</div>';
   h+=k.closed?'<button class="btn sec" style="margin-bottom:10px" data-act="skreopen" data-id="'+k.id+'">↩ افتح الحساب تاني</button>'
