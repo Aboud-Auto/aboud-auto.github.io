@@ -1362,20 +1362,23 @@ async function claimInvite(code,username){
 }
 function inviteErr(iv){return !iv?"كود الدعوة غلط، اتأكد منه":iv.err?(/network|unavailable/.test(iv.err.code||"")?"مفيش نت، اتأكد من الاتصال":"مقدرناش نتأكد من الكود، جرّب تاني"):iv.used?"كود الدعوة ده اتستخدم قبل كده، اطلب كود جديد":""}
 /* ---------- subscription ---------- */
-var PLAN_NAMES={monthly:"شهري",yearly:"سنوي",lifetime:"مدى الحياة"};
+var PLAN_NAMES={trial:"🎁 شهر مجاني",monthly:"شهري",yearly:"سنوي",lifetime:"مدى الحياة"};
+function isTrial(){return !!(S.mem&&S.mem.plan==="trial")}
 function serialStr(n){return n?"AA-"+String(n).padStart(4,"0"):""}
 function fdateS(ms){var d=new Date(ms);return d.getDate()+"/"+(d.getMonth()+1)+"/"+d.getFullYear()}
 function dayW(n){n=Math.abs(n);return n===1?"يوم واحد":n===2?"يومين":n<=10?n+" أيام":n+" يوم"}
 function subLeft(){var x=S.mem&&S.mem.expiresAt;return x?Math.ceil((x-Date.now())/864e5):null}
 function subExpired(){var x=S.mem&&S.mem.expiresAt;return !DEMO&&!!x&&x<=Date.now()}
-function subWa(txt){var c=pubCfg.v,n=c&&String(c.whatsapp||"").replace(/\D/g,"");return n?'<a class="btn sec" style="display:block;text-decoration:none;text-align:center;margin-top:10px" target="_blank" rel="noopener" href="https://wa.me/'+n+'?text='+encodeURIComponent(txt)+'">💬 كلّمنا نجدد'+(c.name?" ("+esc(c.name)+")":"")+'</a>':""}
-function subMsg(){var sr=serialStr(S.mem&&S.mem.serial),un=lsGet("hb_user")||"";return "السلام عليكم، عايز أجدد اشتراك برنامج الحسابات"+(sr?" (السيريال: "+sr+")":un?" (اسم المستخدم: "+un+")":"")}
+function subWa(txt){var c=pubCfg.v,n=c&&String(c.whatsapp||"").replace(/\D/g,"");return n?'<a class="btn sec" style="display:block;text-decoration:none;text-align:center;margin-top:10px" target="_blank" rel="noopener" href="https://wa.me/'+n+'?text='+encodeURIComponent(txt)+'">💬 '+(isTrial()?"كلّمنا نشترك":"كلّمنا نجدد")+(c.name?" ("+esc(c.name)+")":"")+'</a>':""}
+function subMsg(){var sr=serialStr(S.mem&&S.mem.serial),un=lsGet("hb_user")||"";return (isTrial()?"السلام عليكم، جرّبت الشهر المجاني وعايز أشترك في برنامج الحسابات":"السلام عليكم، عايز أجدد اشتراك برنامج الحسابات")+(sr?" (السيريال: "+sr+")":un?" (اسم المستخدم: "+un+")":"")}
 /* تنبيه في الرئيسية: لما الاشتراك يخلص، أو فاضل عليه 7 أيام أو أقل */
 function subCard(){
   if(DEMO||!S.mem||!S.mem.expiresAt)return "";
   var l=subLeft();
-  if(S.expired)return '<div class="card" style="border-color:var(--bad);background:var(--bad-bg)"><div class="sect" style="margin-top:0;color:var(--bad)">⛔ اشتراكك خلص يوم '+fdateS(S.mem.expiresAt)+'</div><div class="sub">كل بياناتك محفوظة وتقدر تشوفها وتطلع تقاريرها، بس مش هتقدر تضيف أو تعدّل حاجة لحد ما تجدد. أول ما يتجدد البرنامج هيرجع لوحده.</div>'+subWa(subMsg())+'</div>';
-  if(l<=7)return '<div class="card" style="border-color:var(--warn);background:var(--warn-bg)"><div class="sect" style="margin-top:0;color:var(--warn)">⏳ اشتراكك هيخلص '+(l<=1?"بكرة":"خلال "+dayW(l))+' ('+fdateS(S.mem.expiresAt)+')</div><div class="sub">جدده قبلها عشان الشغل مايقفش.</div>'+subWa(subMsg())+'</div>';
+  var tr=isTrial();
+  if(S.expired)return '<div class="card" style="border-color:var(--bad);background:var(--bad-bg)"><div class="sect" style="margin-top:0;color:var(--bad)">⛔ '+(tr?'الشهر المجاني خلص يوم ':'اشتراكك خلص يوم ')+fdateS(S.mem.expiresAt)+'</div><div class="sub">كل بياناتك محفوظة وتقدر تشوفها وتطلع تقاريرها، بس مش هتقدر تضيف أو تعدّل حاجة لحد ما '+(tr?'تشترك':'تجدد')+'. أول ما '+(tr?'الاشتراك يتفعّل':'يتجدد')+' البرنامج هيرجع لوحده.</div>'+subWa(subMsg())+'</div>';
+  if(l<=7)return '<div class="card" style="border-color:var(--warn);background:var(--warn-bg)"><div class="sect" style="margin-top:0;color:var(--warn)">⏳ '+(tr?'الشهر المجاني هيخلص ':'اشتراكك هيخلص ')+(l<=1?"بكرة":"خلال "+dayW(l))+' ('+fdateS(S.mem.expiresAt)+')</div><div class="sub">'+(tr?'لو البرنامج عجبك اشترك قبلها عشان الشغل مايقفش، وكل بياناتك هتفضل زي ما هي.':'جدده قبلها عشان الشغل مايقفش.')+'</div>'+subWa(subMsg())+'</div>';
+  if(tr)return '<div class="card" style="border-color:var(--primary)"><div class="sect" style="margin-top:0">🎁 انت في الشهر المجاني</div><div class="sub">فاضل '+dayW(l)+' (لحد '+fdateS(S.mem.expiresAt)+'). جرّب كل حاجة براحتك.</div></div>';
   return "";
 }
 /* كارت الاشتراك في الإعدادات */

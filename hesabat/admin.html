@@ -101,7 +101,7 @@ function waNum(p){var d=String(p||"").replace(/\D/g,"");if(d.indexOf("00")===0)d
 function waHref(phone,text){var n=waNum(phone);return "https://wa.me/"+(n||"")+"?text="+encodeURIComponent(text)}
 function newCode(){var A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",r=new Uint8Array(8),s="";crypto.getRandomValues(r);for(var i=0;i<8;i++)s+=A[r[i]%A.length];return s}
 function inviteLink(c){return APP_URL+"?inv="+c}
-function inviteMsg(iv){return "أهلاً "+(iv.name||"")+" 👋\nده لينك برنامج حسابات المعرض، إهداء من عبود أوتو:\n"+inviteLink(iv.code)+"\n\nكود الدعوة: "+iv.code+(iv.serial?"\nرقم السيريال بتاعك: "+serialStr(iv.serial):"")+(iv.plan?"\nالاشتراك: "+planName(iv.plan):"")+"\nالكود ده ليك انت بس، وبيشتغل مرة واحدة."}
+function inviteMsg(iv){return "أهلاً "+(iv.name||"")+" 👋\nده لينك برنامج حسابات المعرض، إهداء من عبود أوتو:\n"+inviteLink(iv.code)+"\n\nكود الدعوة: "+iv.code+(iv.serial?"\nرقم السيريال بتاعك: "+serialStr(iv.serial):"")+(iv.plan==="trial"?"\n🎁 أول شهر مجاني، جرّبه براحتك ولو عجبك كمّل":iv.plan?"\nالاشتراك: "+planName(iv.plan):"")+"\nالكود ده ليك انت بس، وبيشتغل مرة واحدة."}
 async function copy(t){try{await navigator.clipboard.writeText(t);toast("اتنسخ ✔")}catch(e){prompt("انسخ من هنا:",t)}}
 function openSheet(h){$("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=0}
 function closeSheet(){$("#ov").classList.remove("show")}
@@ -109,7 +109,7 @@ function head(t){return '<div class="sh"><h2>'+t+'</h2><button class="x" data-ac
 function code(err){return err&&err.code||""}
 
 /* ---------- subscriptions ---------- */
-var PLANS={monthly:{name:"شهري",days:30,months:1},yearly:{name:"سنوي",days:365,months:12},lifetime:{name:"مدى الحياة",days:0,months:0}};
+var PLANS={trial:{name:"🎁 شهر مجاني",days:30,months:1},monthly:{name:"شهري",days:30,months:1},yearly:{name:"سنوي",days:365,months:12},lifetime:{name:"مدى الحياة",days:0,months:0}};
 function planName(p){return PLANS[p]?PLANS[p].name:"مفتوح (قبل الاشتراكات)"}
 function serialStr(n){return n?"AA-"+String(n).padStart(4,"0"):"—"}
 function addMonths(ms,n){var d=new Date(ms),day=d.getDate();d.setMonth(d.getMonth()+n);if(d.getDate()<day)d.setDate(0);return d.getTime()}
@@ -263,12 +263,13 @@ function renderMembers(){
   var cnt={on:0,soon:0,exp:0,off:0};all.forEach(function(m){cnt[subState(m)]++});
   var week=all.filter(function(m){return m.active&&(m.lastSeen||0)>wk}).length;
   var h=brandHead("العملاء","مين سجّل، واشتراك كل واحد")+rulesBanner()+
-    '<div class="tiles">'+tile("كل العملاء",all.length)+tile("شغّالين",cnt.on+cnt.soon)+tile("قرب يخلص (7 أيام)",'<span style="color:var(--warn)">'+cnt.soon+'</span>')+tile("الاشتراك خلص",'<span style="color:var(--bad)">'+cnt.exp+'</span>')+tile("فتحوا آخر 7 أيام",week)+tile("متوقفين",cnt.off)+'</div>'+
+    '<div class="tiles">'+tile("كل العملاء",all.length)+tile("شغّالين",cnt.on+cnt.soon)+tile("قرب يخلص (7 أيام)",'<span style="color:var(--warn)">'+cnt.soon+'</span>')+tile("الاشتراك خلص",'<span style="color:var(--bad)">'+cnt.exp+'</span>')+tile("فتحوا آخر 7 أيام",week)+tile("🎁 في الشهر المجاني",all.filter(function(m){return m.plan==="trial"&&m.active&&subState(m)!=="exp"}).length)+tile("متوقفين",cnt.off)+'</div>'+
     '<button class="btn" data-act="newInv">➕ دعوة عميل جديد</button>';
-  var fl=[["all","الكل",all.length],["soon","قرب يخلص",cnt.soon],["exp","خلص",cnt.exp],["off","متوقف",cnt.off]];
+  var nTr=all.filter(function(m){return m.plan==="trial"&&subState(m)!=="exp"&&m.active}).length;
+  var fl=[["all","الكل",all.length],["trial","🎁 شهر مجاني",nTr],["soon","قرب يخلص",cnt.soon],["exp","خلص",cnt.exp],["off","متوقف",cnt.off]];
   h+='<div class="chips">'+fl.map(function(x){return '<button class="chip'+(S.f===x[0]?" on":"")+'" data-act="flt" data-id="'+x[0]+'">'+x[1]+' ('+x[2]+')</button>'}).join("")+'</div>';
   h+='<input class="search" id="q" placeholder="🔎 دوّر بالسيريال أو الاسم أو التليفون" value="'+esc(S.q)+'">';
-  var ms=S.f==="all"?all:all.filter(function(m){return subState(m)===S.f});
+  var ms=S.f==="all"?all:S.f==="trial"?all.filter(function(m){return m.plan==="trial"&&subState(m)!=="exp"&&m.active}):all.filter(function(m){return subState(m)===S.f});
   var q=S.q.trim().toLowerCase();
   if(q)ms=ms.filter(function(m){var iv=im[m.id]||{};return [serialStr(m.serial),m.serial,memberName(m,im),m.username,m.shop,m.email,iv.phone].join(" ").toLowerCase().indexOf(q)>=0});
   h+='<div class="sect">العملاء ('+ms.length+')</div>';
@@ -276,13 +277,13 @@ function renderMembers(){
   else if(!ms.length)h+='<div class="empty">'+(q||S.f!=="all"?"مفيش نتايج":"لسه مفيش عملاء. ابعت أول دعوة من الزرار اللي فوق.")+'</div>';
   ms.forEach(function(m){
     var iv=im[m.id]||{},mail=m.email&&!/@hesabat\.app$/.test(m.email)?m.email:"مش مربوط بجيميل",st=subState(m),bd=STATE_BADGE[st];
-    var remind=st==="soon"||st==="exp"?"أهلاً "+(iv.name||"")+" 👋\nاشتراكك في برنامج حسابات المعرض ("+serialStr(m.serial)+") "+(st==="exp"?"خلص يوم "+fdate(m.expiresAt):"هيخلص يوم "+fdate(m.expiresAt))+".\nكلّمني عشان نجدده، وبياناتك كلها محفوظة.":"أهلاً "+(iv.name||"");
+    var tr=m.plan==="trial",remind=st==="soon"||st==="exp"?"أهلاً "+(iv.name||"")+" 👋\n"+(tr?"الشهر المجاني في برنامج حسابات المعرض ("+serialStr(m.serial)+") ":"اشتراكك في برنامج حسابات المعرض ("+serialStr(m.serial)+") ")+(st==="exp"?"خلص يوم "+fdate(m.expiresAt):"هيخلص يوم "+fdate(m.expiresAt))+".\n"+(tr?"لو البرنامج عجبك كلّمني عشان نفعّل الاشتراك، وكل بياناتك محفوظة زي ما هي.":"كلّمني عشان نجدده، وبياناتك كلها محفوظة."):"أهلاً "+(iv.name||"");
     h+='<div class="card"><div class="ch"><div><div class="nm">'+esc(memberName(m,im))+'</div><div class="code" style="font-size:14px;letter-spacing:1px">'+serialStr(m.serial)+'</div>'+(m.shop?'<div class="sub">🏪 '+esc(m.shop)+'</div>':'')+'</div><span class="badge '+bd[0]+'">'+bd[1]+'</span></div>'+
       kv("الاشتراك",planName(m.plan))+kv("ينتهي",untilTxt(m))+
       kv("اسم المستخدم",esc(m.username||"—"))+kv("الجيميل",'<span dir="ltr">'+esc(mail)+'</span>')+(iv.phone?kv("التليفون",'<span dir="ltr">'+esc(iv.phone)+'</span>'):"")+
       kv("سجّل يوم",fdate(m.joinedAt))+kv("آخر مرة فتح",ago(m.lastSeen))+kv("فتح البرنامج",(m.opens||0)+" مرة")+
       safetyKv(m)+kv("نزّله على الشاشة",m.standalone?"✔ أيوه":"لأ (بيفتحه من المتصفح)")+(m.device?kv("الجهاز",esc(m.device)):"")+kv("دخل بكود",m.invite==="admin"?"اتفعّل يدوي":'<span class="code" style="letter-spacing:1px">'+esc(m.invite||"—")+'</span>')+
-      '<div class="row"><button class="btn small" data-act="renew" data-id="'+m.id+'">🔄 تجديد / الاشتراك</button>'+(iv.phone?'<a class="btn small sec" target="_blank" rel="noopener" href="'+esc(waHref(iv.phone,remind))+'">💬 '+(st==="soon"||st==="exp"?"فكّره يجدد":"واتساب")+'</a>':'')+'</div>'+
+      '<div class="row"><button class="btn small" data-act="renew" data-id="'+m.id+'">🔄 تجديد / الاشتراك</button>'+(iv.phone?'<a class="btn small sec" target="_blank" rel="noopener" href="'+esc(waHref(iv.phone,remind))+'">💬 '+(st==="soon"||st==="exp"?(m.plan==="trial"?"فكّره يشترك":"فكّره يجدد"):"واتساب")+'</a>':'')+'</div>'+
       '<div class="row" style="margin-top:8px">'+(m.active?'<button class="btn small danger" data-act="stop" data-id="'+m.id+'">⛔ إيقاف الحساب</button>':'<button class="btn small good" data-act="start" data-id="'+m.id+'">✔ تفعيل تاني</button>')+'</div></div>';
   });
   return h;
@@ -351,12 +352,12 @@ function renderLogin(){
 }
 
 /* ---------- actions ---------- */
-function planPick(sel){return '<div class="fld"><span>الاشتراك</span><div class="chips" style="margin:0">'+["monthly","yearly","lifetime"].map(function(p){return '<button type="button" class="chip'+(sel===p?" on":"")+'" data-act="pickPlan" data-id="'+p+'">'+PLANS[p].name+'</button>'}).join("")+'</div></div>'}
+function planPick(sel){return '<div class="fld"><span>الاشتراك</span><div class="chips" style="margin:0">'+["trial","monthly","yearly","lifetime"].map(function(p){return '<button type="button" class="chip'+(sel===p?" on":"")+'" data-act="pickPlan" data-id="'+p+'">'+PLANS[p].name+'</button>'}).join("")+'</div></div>'}
 function openNewInvite(){
-  S.newPlan="monthly";
+  S.newPlan="trial";
   openSheet(head("دعوة عميل جديد")+'<label class="fld"><span>اسم العميل</span><input id="nName" placeholder="مثلاً: معرض النور - أحمد"></label>'+
     '<label class="fld"><span>رقم الواتساب بتاعه (اختياري)</span><input id="nPhone" inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx"></label>'+
-    '<div id="nPlan">'+planPick(S.newPlan)+'</div><div class="sub" style="margin:-4px 0 12px">المدة بتبدأ من يوم ما العميل يسجّل. تقدر تغيّرها بعدين من «تجديد».</div>'+
+    '<div id="nPlan">'+planPick(S.newPlan)+'</div><div class="sub" style="margin:-4px 0 12px">المدة بتبدأ من يوم ما العميل يسجّل. الشهر المجاني بيقفل لوحده لو ماجددش، والبيانات بتفضل محفوظة. تقدر تغيّرها بعدين من «تجديد».</div>'+
     '<div class="err" id="nErr"></div><button class="btn" data-act="createInv">اعمل الدعوة</button>');
   setTimeout(function(){var i=$("#nName");if(i)i.focus()},150);
 }
