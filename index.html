@@ -231,6 +231,9 @@ function pct(x){return '<span class="num">'+(Math.round((x||0)*1000)/10)+'%</spa
 /* نسبة الربح = صافي ربح العربية ÷ تكلفتها (الشراء + المصاريف) */
 function carPct(c){return c&&c.sold&&c.cost>0?c.profit/c.cost:0}
 function soldPct(T){var p=0,k=0;T.cars.forEach(function(c){if(c.sold){p+=c.profit||0;k+=c.cost||0}});return k>0?p/k:0}
+/* نسبة ربحك من رأس المال = نصيبك من أرباح العربيات ÷ رأس المال (الأصلي + الزيادات) */
+function capBase(T){return (T.capital||0)+(T.addcap||0)}
+function capPct(T){var b=capBase(T);return b>0?(T.profit||0)/b:0}
 function pctB(x){return '<b class="num '+(x>=0?"good":"bad")+'">'+(x>0?"+":"")+(Math.round((x||0)*1000)/10)+'%</b>'}
 function m(n,cls){return '<span class="num '+(cls||"")+'">'+fmt(n)+'</span> ج'}
 function todayStr(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
@@ -548,6 +551,7 @@ function tileTap(k){
     cs=stakesCalc().filter(function(x){return x.closed});
     if(cs.length)h+=tsec("🚗 عربيات دخلت فيها مع حد")+cs.map(function(x){return '<div data-act="stake" data-id="'+x.id+'" style="cursor:pointer">'+tkv(esc(x.car)+" · مع "+esc(x.person),m(x.result,x.result>=0?"good":"bad"),null,"دخلت بـ "+m(x.amount)+" · رجعلك "+m(x.ret))+'</div>'}).join("");
     h+=ttot("نصيبك الإجمالي",m(T.profit,T.profit>=0?"good":"bad"));
+    if(capBase(T)>0)h+=tkv("<b>نسبة ربحك من رأس المال</b>",pctB(capPct(T)),null,"نصيبك "+fmt(T.profit)+" ÷ رأس المال "+fmt(capBase(T))+(T.addcap>0.5?" (الأصلي "+fmt(T.capital)+" + الزيادات "+fmt(T.addcap)+")":""));
   }else if(k==="debts"){
     t="🧾 مديونيات العملاء";cs=T.cars.filter(function(c){return c.sold&&c.remaining>0.5});
     h+=cs.length?cs.map(function(c){return tkv(esc(c.name),m(c.remaining,"warn"),c.id,"اتباعت بـ "+m(c.sellPrice)+" · اتحصّل "+m(c.cashIn+c.instaIn+c.tradeGot)+" · "+fdate(c.sellDate))+(c.invs.length||c.parts.length?invDebtBox(c,"debts"):"")}).join(""):tnone("مفيش فلوس باقية عند حد 👌");
@@ -758,7 +762,7 @@ function renderHome(){
   h+='<div class="card row" data-act="tab" data-tab="day" style="cursor:pointer"><div><div class="tl">النهاردة</div><div style="font-weight:700">مصاريف '+m(D.expT)+' · تحصيل '+m(D.cashT+D.instaT)+'</div></div><span class="sub">تقفيل اليوم ‹</span></div>';
   h+='<div class="grid2">'+
     tapTile(tile("عربيات في المعرض",'<span class="num">'+T.stockN+'</span>',"تكلفتها "+m(T.stockCost)),"stock")+
-    tapTile(tile("🚗 أرباح العربيات",m(T.profit,T.profit>=0?"good":"bad"),(T.soldN?'نسبة الربح '+pctB(soldPct(T))+' · ':'')+'نصيبك من <span class="num">'+T.soldN+'</span> عربية'+(carsNet(T)!==T.profit?' · الصافي كله '+m(carsNet(T)):'')),"profit")+
+    tapTile(tile("🚗 أرباح العربيات",m(T.profit,T.profit>=0?"good":"bad"),(T.soldN?'نسبة الربح '+pctB(soldPct(T))+(capBase(T)>0?' · من رأس المال '+pctB(capPct(T)):'')+' · ':'')+'نصيبك من <span class="num">'+T.soldN+'</span> عربية'+(carsNet(T)!==T.profit?' · الصافي كله '+m(carsNet(T)):'')),"profit")+
     tapTile(tile("مديونيات العملاء",m(T.debts,T.debts>0?"warn":""),""),"debts")+
     tapTile(tile("عجز رأس المال",m(T.deficit,T.deficit>0?"bad":""),"رأس المال الحالي "+m(T.capNow)+(T.lossRem>0.5?"<br>منها خسائر عربيات "+m(T.lossRem):"")),"deficit")+
     (NOFUND?"":tapTile(tile("رصيد العهدة",m(T.fundLeft),"من "+m(T.fund)+" (جزء من رأس المال)"+(T.fundOver>0.5?"<br>اتصرف فوقها من رأس المال "+m(T.fundOver,"bad"):"")),"fund"))+
