@@ -687,6 +687,7 @@ function outsOf(T){
   function g(n,ty,car){var k=ty+"|"+n;if(!P[k]){P[k]={n:n,ty:ty,tot:0,it:[],car:car};ord.push(k)}return P[k]}
   function put(o,a,txt){o.tot+=a;tot+=a;o.it.push(txt+": "+fmt(a))}
   T.cars.forEach(function(c){if(c.sold&&c.remaining>0.5){var iv=(c.invs||[]).filter(function(v){return v.debtLeft>0.5}).concat((c.parts||[]).filter(function(p){return p.debtLeft>0.5}));put(g("مشتري "+c.name,"c",c.id),c.remaining,"باقي تمن العربية"+(c.sellDate?" (اتباعت "+fdate(c.sellDate)+")":"")+(iv.length?" · منها على "+iv.map(function(v){return (v.name||"مستثمر")+" "+fmt(v.debtLeft)}).join(" و "):""))}});
+  T.cars.forEach(function(c){c.parts.forEach(function(p){if(p.remaining<-0.5)put(g(p.name||"شريك","p"),-p.remaining,c.name+" · استلم أكتر من حقه"+(c.sold?"":" (العربية رجعت المعرض)"))})});
   loansCalc().forEach(function(l){if(l.dir==="out"&&!l.hiid&&l.remaining>0.5)put(g(l.person||"بدون اسم","l"),l.remaining,(l.isp?"إنستاباي أمانة معاه":"سلفة")+(l.date?" ("+fdate(l.date)+")":"")+(l.invLeft>0.5?" · منها "+(l.myLeft>0.5?"منك "+fmt(l.myLeft)+" و":"")+l.invs.filter(function(v){return v.left>0.5}).map(function(v){return "من فلوس "+(v.name||"مستثمر")+" "+fmt(v.left)}).join(" و "):""))});
   return {tot:tot,list:ord.map(function(k){return P[k]})};
 }
@@ -1575,6 +1576,7 @@ function openForm(kind,o){
       '<div class="two">'+fld("رجّعت له كاش (من الخزنة)",minp("cash",rc.cashIn||""))+fld("رجّعت له إنستاباي",minp("insta",rc.instaIn||""))+'</div>'+
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off" placeholder="سبب الرجوع">')+
       '<div class="sub" style="margin:4px 2px 12px">العربية هترجع للمعرض بنفس تكلفتها ومصاريفها، والربح بتاع البيعة دي هيتشال. ولما تتباع تاني هتتحسب من جديد.</div>'+
+      (function(){var w=rc.parts.filter(function(p){return p.paid-p.amount>0.5});return w.length?'<div class="banner" style="margin:0 0 12px">⚠️ '+w.map(function(p){return esc(p.name||"شريك")+' استلم '+fmt(p.paid)+' وفلوسه في العربية '+fmt(p.amount)+'، فبعد الرجوع هيبقى عليه '+fmt(p.paid-p.amount)}).join("<br>⚠️ ")+'.<br>الفرق بيتخصم من نصيبه لما العربية تتباع تاني. ولو رجّعلك الفرق، امسح التسليم من صفحة العربية وسجّله تاني بالمبلغ الصح.</div>':''})()+
       '<button class="btn" data-act="submit">تأكيد الرجوع</button>';
   }else if(kind==="investor"){
     var ei=o.iid?invById(o.iid):null;
@@ -2031,9 +2033,10 @@ function renderDetail(){
         h+='<div class="kv"><span>ربحه</span><b class="'+(p.profit>=0?"good":"bad")+'">'+m(p.profit)+'</b></div>'+
            '<div class="kv"><span>المستحق له</span><b>'+m(p.due)+'</b></div>'+
            '<div class="kv"><span>اتسلّم</span><b>'+m(p.paid)+'</b></div>'+
-           '<div class="kv"><span>المتبقي</span><b class="'+(p.remaining>0?"warn":"")+'">'+m(p.remaining)+'</b></div>'+
+           (p.remaining<-0.5?'<div class="kv"><span>عليه يرجّع</span><b class="bad">'+m(-p.remaining)+'</b></div>':'<div class="kv"><span>المتبقي</span><b class="'+(p.remaining>0?"warn":"")+'">'+m(p.remaining)+'</b></div>')+
            (p.debt>0.5?'<div class="kv"><span>منها عند العميل</span><b class="'+(p.debtLeft>0.5?"warn":"good")+'">'+(p.debtLeft>0.5?m(p.debtLeft):"اتحصّلت ✔")+'</b></div>'+(p.debtLeft>0.5?'<div class="kv"><span>تسلّمه دلوقتي</span><b>'+m(Math.max(0,p.payNow))+'</b></div>':''):'');
       }else{
+        if(p.paid>0.5)h+='<div class="kv"><span>اتسلّم</span><b>'+m(p.paid)+'</b></div>'+(p.remaining<-0.5?'<div class="kv"><span>عليه يرجّع</span><b class="bad">'+m(-p.remaining)+'</b></div><div class="sub">استلم أكتر من فلوسه في العربية (غالبًا ربح بيعة اترجعت). الفرق بيتخصم من نصيبه لما العربية تتباع تاني، ولو رجّعه امسح التسليم وسجّله بالمبلغ الصح.</div>':'<div class="kv"><span>باقي له من فلوسه</span><b>'+m(p.remaining)+'</b></div>');
         h+='<div class="sub" style="padding:6px 0">هيتحسب ربحه لما العربية تتباع.</div>';
       }
       h+='<div style="padding:6px 0 8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec small" data-act="form" data-kind="payout" data-car="'+c.id+'" data-pid="'+esc(p.id)+'">تسليم فلوس لـ'+esc(p.name)+'</button><button class="btn sec small" data-act="report" data-kind="partner" data-name="'+esc(p.name)+'" data-car="'+c.id+'">📄 تقرير للشريك</button></div></div>';
@@ -3103,7 +3106,7 @@ function hcIssues(T){
     if(!c.sold&&!(+c.buyPrice>0))add("warn","🚗 "+n+": سعر الشراء صفر","العربية في المعرض من غير سعر شراء",c.id);
     if(c.sold&&!(+c.sellPrice>0))add("warn","🚗 "+n+": اتباعت بسعر صفر","راجع سعر البيع",c.id);
     if(c.sellerRem<-0.5)add("bad","🚗 "+n+": اتدفع للبايع أكتر من الباقي ليه بـ "+m(-c.sellerRem,"bad"),"",c.id);
-    c.parts.forEach(function(p){if(p.remaining<-0.5)add("bad","🤝 "+esc(p.name||"شريك")+" في "+n+": اتصرفله أكتر من حقه بـ "+m(-p.remaining,"bad"),"ممكن صرفية اتسجلت مرتين",c.id)});
+    c.parts.forEach(function(p){if(p.remaining<-0.5)add(c.sold?"bad":"warn","🤝 "+esc(p.name||"شريك")+" في "+n+": اتصرفله أكتر من حقه بـ "+m(-p.remaining,"bad"),c.sold?"ممكن صرفية اتسجلت مرتين":"العربية رجعت المعرض بعد ما استلم. الفرق بيتخصم من نصيبه لما تتباع تاني",c.id)});
   });
   T.inv.list.forEach(function(o){if(o.free<-0.5)add("bad","💼 المستثمر "+esc(o.name)+": الكاش بتاعه بالسالب "+m(o.free,"bad"),"دخل بفلوس في عربيات أو سلف أكتر من رصيده. راجع إيداعاته وسحوباته")});
   var orph={e:0,ea:0,c:0,ca:0,p:0,pa:0};
