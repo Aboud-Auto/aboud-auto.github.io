@@ -829,6 +829,7 @@ function heroTap(k,T){
   if(k==="hcash"){
     t="💵 الفلوس اللي معاك";
     h+=tkv("💵 الخزنة (كاش)",m(T.safeBal,T.safeBal<0?"bad":""))+tkv("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),null,"لسه ماتحوّلش للخزنة")+ttot("الإجمالي",m(T.cashNow));
+    if(!noInsta())h+='<button class="btn sec small" style="margin:6px 0 4px" data-act="form" data-kind="transfer">🔁 تحويل بين إنستاباي والخزنة</button>';
     if(T.cars.some(function(c){return c.parts.length})||T.inv.list.length){
       var o=cashOwn(T);
       h+=tsec("الكاش ده بتاع مين")+tkv("💰 بتاعتك انت",m(o.mine,o.mine<0?"bad":""))+(o.pc>0.5?tkv("🤝 بتاعة الشركاء",m(o.pc)):"")+(o.ic>0.5?tkv("💼 بتاعة المستثمرين",m(o.ic)):"");
@@ -1043,25 +1044,25 @@ function renderHome(){
   if(!S.settings){var fo=featOn("fund");h+='<div class="card"><div class="sect" style="margin-top:0">ابدأ من هنا 👋</div><div class="sub" style="margin-bottom:12px">حدّد رأس المال'+(fo?' والعهدة':'')+' الأول عشان الحسابات تظبط.</div><button class="btn" data-act="form" data-kind="settings">تحديد رأس المال'+(fo?' والعهدة':'')+'</button></div>'}
   h+=heroHtml(T);
   h+='<div class="qio"><button class="qin" data-act="qio" data-dir="in"><span class="ic">⬇️</span>داخل</button><button class="qout" data-act="qio" data-dir="out"><span class="ic">⬆️</span>خارج</button></div>';
-  h+=cashSplit(T);
-  h+='<div class="grid2" style="margin-bottom:10px">'+
-     tile("💵 الخزنة (كاش)",m(T.safeBal,T.safeBal<0?"bad":""),"")+
-     tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"لسه ماتحوّلش للخزنة")+'</div>'+
-     '<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="transfer">🔁 تحويل بين إنستاباي والخزنة</button>';
   h+='<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف</button>';
-  if(featOn("deposit"))h+='<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="dep">🔖 تسجيل عربون على عربية</button>';
-  if(featOn("ext"))h+='<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="ext">🤝 تسجيل عمولة خارجية</button>';
   h+='<div class="card row" data-act="tab" data-tab="day" style="cursor:pointer"><div><div class="tl">النهاردة</div><div style="font-weight:700">مصاريف '+m(D.expT)+' · تحصيل '+m(D.cashT+D.instaT)+'</div></div><span class="sub">تقفيل اليوم ‹</span></div>';
   h+='<div class="grid2">'+
-    tapTile(tile("عربيات في المعرض",'<span class="num">'+T.stockN+'</span>',"تكلفتها "+m(T.stockCost)),"stock")+
-    tapTile(tile("🚗 أرباح العربيات",m(T.profit,T.profit>=0?"good":"bad"),(T.soldN?'نسبة الربح '+pctB(soldPct(T))+(capBase(T)>0?' · من رأس المال '+pctB(capPct(T)):'')+' · ':'')+'نصيبك من <span class="num">'+T.soldN+'</span> عربية'+(carsNet(T)!==T.profit?' · الصافي كله '+m(carsNet(T)):'')),"profit")+
-    tapTile(tile("مديونيات العملاء",m(T.debts,T.debts>0?"warn":""),""),"debts")+
-    tapTile(tile("عجز رأس المال",m(T.deficit,T.deficit>0?"bad":""),"رأس المال الحالي "+m(T.capNow)+(T.lossRem>0.5?"<br>منها خسائر عربيات "+m(T.lossRem):"")),"deficit")+
-    (featOn("fund")?tile("🧾 العهدة مع "+esc(T.fundEmp||"الموظف"),m(T.fundBal,T.fundBal<0?"bad":""),"من "+m(T.fund)+(T.unre>0.5?" · مستني يترد "+m(T.unre):"")+" ‹").replace('<div class="tile"','<div class="tile" data-act="fund" style="cursor:pointer"'):"")+
-    tapTile(tile("أرباح متاحة",m(T.undist),"للسحب أو لسداد العجز"),"undist")+
-    (featOn("ext")||T.extTot>0.5?tapTile(tile("🤝 أرباح خارجية",m(T.extTot,"good"),T.ew>0.5?"سحبت منها "+m(T.ew)+" · الباقي "+m(T.extAvail):"عمولات · دخلت رأس المال"),"ext").replace('style="cursor:pointer"','style="cursor:pointer;grid-column:1/-1"'):"")+
+    tapTile(tile("🚗 عربيات في المعرض",'<span class="num">'+T.stockN+'</span>',"تكلفتها "+m(T.stockCost)),"stock")+
+    tapTile(tile("📈 أرباح العربيات",m(T.profit,T.profit>=0?"good":"bad"),(T.soldN?'نسبة الربح '+pctB(soldPct(T))+' · ':'')+'من <span class="num">'+T.soldN+'</span> عربية'),"profit")+
     (function(){var O=outsOf(T);return tapTile(tile("💰 فلوسك بره",m(O.tot,O.tot>0.5?"warn":""),O.list.length?'عند <span class="num">'+O.list.length+'</span> '+(O.list.length===1?"حد":"أشخاص"):"مفيش حاجة بره"),"outs")})()+
     (function(){var O=owesOf(T);return tapTile(tile("💳 فلوس عليك",m(O.tot,O.tot>0.5?"bad":""),O.list.length?'لـ <span class="num">'+O.list.length+'</span> '+(O.list.length===1?"حد":"أشخاص"):"مفيش حاجة عليك"),"owes")})()+'</div>';
+  h+='<button class="btn sec" style="margin-bottom:12px" data-act="homeMore">'+(S.homeMore?"إخفاء باقي الأرقام ▲":"📊 باقي الأرقام ▼")+'</button>';
+  if(S.homeMore){
+    h+='<div class="grid2">'+
+      (noInsta()?'':tile("💵 الخزنة (كاش)",m(T.safeBal,T.safeBal<0?"bad":""),"")+tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"لسه ماتحوّلش للخزنة"))+
+      tapTile(tile("مديونيات العملاء",m(T.debts,T.debts>0?"warn":""),""),"debts")+
+      tapTile(tile("عجز رأس المال",m(T.deficit,T.deficit>0?"bad":""),"رأس المال الحالي "+m(T.capNow)+(T.lossRem>0.5?"<br>منها خسائر عربيات "+m(T.lossRem):"")),"deficit")+
+      tapTile(tile("أرباح متاحة",m(T.undist),"للسحب أو لسداد العجز"),"undist")+
+      (featOn("fund")?tile("🧾 العهدة مع "+esc(T.fundEmp||"الموظف"),m(T.fundBal,T.fundBal<0?"bad":""),"من "+m(T.fund)+(T.unre>0.5?" · مستني يترد "+m(T.unre):"")+" ‹").replace('<div class="tile"','<div class="tile" data-act="fund" style="cursor:pointer"'):"")+
+      (featOn("ext")||T.extTot>0.5?tapTile(tile("🤝 أرباح خارجية",m(T.extTot,"good"),T.ew>0.5?"سحبت منها "+m(T.ew)+" · الباقي "+m(T.extAvail):"عمولات · دخلت رأس المال"),"ext"):"")+'</div>';
+    if(!noInsta())h+='<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="transfer">🔁 تحويل بين إنستاباي والخزنة</button>';
+    h+=cashSplit(T);
+  }
   return h;
 }
 
@@ -3963,6 +3964,7 @@ document.addEventListener("click",async function(e){
   else if(a==="close")closeSheet();
   else if(a==="tsok"){var lc=t.dataset.id;closeSheet();setTimeout(function(){invLossPrompt(lc)},200)}
   else if(a==="qio")openQuick(t.dataset.dir);
+  else if(a==="homeMore"){S.homeMore=!S.homeMore;render()}
   else if(a==="price")openPrice();
   else if(a==="ppick"){modal.k=t.dataset.k;modal.offer="";drawPrice()}
   else if(a==="pback"){modal.k=null;drawPrice()}
