@@ -796,7 +796,7 @@ function tileTap(k){
     t="💰 فلوسك بره";var OU=outsOf(T);
     [["c","🚗 عملاء (باقي تمن عربيات)"],["l","🤝 سلف ادتها لناس"]].forEach(function(G){
       var L=OU.list.filter(function(o){return o.ty===G[0]}).sort(function(a,b){return b.tot-a.tot});if(!L.length)return;
-      h+=tsec(G[1])+L.map(function(o){return tkv(esc(o.n),m(o.tot,"warn"),o.car||null,o.it.map(itEsc).join("<br>"))}).join("");
+      h+=tsec(G[1])+L.map(function(o){return oRow(esc(o.n),m(o.tot,"warn"),o)}).join("");
     });
     if(!OU.list.length)h+=tnone("مفيش فلوس ليك بره عند حد 👌");
     h+=ttot("إجمالي فلوسك بره",m(OU.tot,OU.tot>0.5?"warn":""));
@@ -804,7 +804,7 @@ function tileTap(k){
     t="💳 فلوس عليك";var OW=owesOf(T);
     [["s","🏪 للبايعين (باقي تمن عربيات)"],["l","🙋 فلوس خدتها من ناس"],["p","🤝 للشركاء"],["i","💼 للمستثمرين"]].forEach(function(G){
       var L=OW.list.filter(function(o){return o.ty===G[0]}).sort(function(a,b){return b.tot-a.tot});if(!L.length)return;
-      h+=tsec(G[1])+L.map(function(o){return tkv("لـ "+esc(o.n),m(o.tot,"bad"),null,o.it.map(itEsc).join("<br>"))}).join("");
+      h+=tsec(G[1])+L.map(function(o){return oRow("لـ "+esc(o.n),m(o.tot,"bad"),o)}).join("");
     });
     if(!OW.list.length)h+=tnone("مفيش فلوس عليك لحد ✔");
     h+=ttot("إجمالي اللي عليك",m(OW.tot,OW.tot>0.5?"bad":""));
@@ -821,11 +821,17 @@ function tileTap(k){
 }
 
 /* ---------- tap a box on the yellow home card → details ---------- */
+function oRow(l,v,o){
+  var rs=(o.refs||[]),u=[];rs.forEach(function(r){if(r&&!u.some(function(x){return x[0]===r[0]&&x[1]===r[1]}))u.push(r)});
+  var go=function(r){return r?' data-act="'+r[0]+'" data-id="'+esc(r[1])+'" style="cursor:pointer"':''};
+  if(u.length<=1)return '<div class="kv"'+go(u[0])+'><span>'+l+'<br><span class="sub">'+o.it.map(itEsc).join("<br>")+'</span></span><b>'+v+(u[0]?' <span class="sub">✏️‹</span>':'')+'</b></div>';
+  return '<div class="kv" style="display:block"><div style="display:flex;justify-content:space-between"><span>'+l+'</span><b>'+v+'</b></div>'+o.it.map(function(x,i){return '<div class="sub" '+go(rs[i])+' style="padding:4px 0;cursor:pointer">'+itEsc(x)+(rs[i]?' <b>✏️‹</b>':'')+'</div>'}).join("")+'</div>';
+}
 function itEsc(x){return esc(x).replace(/&lt;(\/?)bdi&gt;/g,"<$1bdi>")}
 function hbtn(l,k){return '<button class="btn sec small" style="margin-top:10px" data-act="tinfo" data-k="'+k+'">'+l+'</button>'}
 function heroTap(k,T){
   var h="",t="",cs,base=T.capital+T.addcap-T.jam-T.wDef,prof=T.undist+T.extAvail-T.lossRem;
-  function grp(OL,G,sign,cls){return OL.list.filter(function(o){return o.ty===G[0]}).sort(function(a,b){return b.tot-a.tot}).map(function(o){return tkv((sign||"")+esc(o.n),m(o.tot,cls),o.car||null,o.it.map(itEsc).join("<br>"))}).join("")}
+  function grp(OL,G,sign,cls){return OL.list.filter(function(o){return o.ty===G[0]}).sort(function(a,b){return b.tot-a.tot}).map(function(o){return oRow((sign||"")+esc(o.n),m(o.tot,cls),o)}).join("")}
   if(k==="hcash"){
     t="💵 الفلوس اللي معاك";
     h+=tkv("💵 الخزنة (كاش)",m(T.safeBal,T.safeBal<0?"bad":""))+tkv("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),null,"لسه ماتحوّلش للخزنة")+ttot("الإجمالي",m(T.cashNow));
@@ -902,20 +908,20 @@ function heroTap(k,T){
 function outsOf(T){
   var P={},ord=[],tot=0;
   function g(n,ty,car){var k=ty+"|"+n;if(!P[k]){P[k]={n:n,ty:ty,tot:0,it:[],car:car};ord.push(k)}return P[k]}
-  function put(o,a,txt){o.tot+=a;tot+=a;o.it.push(txt+": "+fmt(a))}
-  T.cars.forEach(function(c){if(c.sold&&c.remaining>0.5){var iv=(c.invs||[]).filter(function(v){return v.debtLeft>0.5}).concat((c.parts||[]).filter(function(p){return p.debtLeft>0.5}));put(g("مشتري "+c.name,"c",c.id),c.remaining,"باقي تمن العربية"+(c.sellDate?" (اتباعت "+fdate(c.sellDate)+")":"")+(iv.length?" · منها على "+iv.map(function(v){return (v.name||"مستثمر")+" "+fmt(v.debtLeft)}).join(" و "):""))}});
-  T.cars.forEach(function(c){c.parts.forEach(function(p){if(p.remaining<-0.5)put(g(p.name||"شريك","p"),-p.remaining,c.name+" · استلم أكتر من حقه"+(c.sold?"":" (العربية رجعت المعرض)"))})});
-  loansCalc().forEach(function(l){if(l.dir==="out"&&l.remaining>0.5)put(g(l.person||"بدون اسم","l"),l.remaining,(l.isp?"إنستاباي أمانة معاه":"سلفة")+(l.date?" ("+fdate(l.date)+")":"")+(l.invLeft>0.5?" · منها "+(l.myLeft>0.5?"منك "+fmt(l.myLeft)+" و":"")+l.invs.filter(function(v){return v.left>0.5}).map(function(v){return "من فلوس "+(v.name||"مستثمر")+" "+fmt(v.left)}).join(" و "):""))});
+  function put(o,a,txt,ref){o.tot+=a;tot+=a;o.it.push(txt+": "+fmt(a));(o.refs||(o.refs=[])).push(ref||null)}
+  T.cars.forEach(function(c){if(c.sold&&c.remaining>0.5){var iv=(c.invs||[]).filter(function(v){return v.debtLeft>0.5}).concat((c.parts||[]).filter(function(p){return p.debtLeft>0.5}));put(g("مشتري "+c.name,"c",c.id),c.remaining,"باقي تمن العربية"+(c.sellDate?" (اتباعت "+fdate(c.sellDate)+")":"")+(iv.length?" · منها على "+iv.map(function(v){return (v.name||"مستثمر")+" "+fmt(v.debtLeft)}).join(" و "):""),["car",c.id])}});
+  T.cars.forEach(function(c){c.parts.forEach(function(p){if(p.remaining<-0.5)put(g(p.name||"شريك","p"),-p.remaining,c.name+" · استلم أكتر من حقه"+(c.sold?"":" (العربية رجعت المعرض)"),["car",c.id])})});
+  loansCalc().forEach(function(l){if(l.dir==="out"&&l.remaining>0.5)put(g(l.person||"بدون اسم","l"),l.remaining,(l.isp?"إنستاباي أمانة معاه":"سلفة")+(l.date?" ("+fdate(l.date)+")":"")+(l.invLeft>0.5?" · منها "+(l.myLeft>0.5?"منك "+fmt(l.myLeft)+" و":"")+l.invs.filter(function(v){return v.left>0.5}).map(function(v){return "من فلوس "+(v.name||"مستثمر")+" "+fmt(v.left)}).join(" و "):""),["loan",l.id])});
   return {tot:tot,list:ord.map(function(k){return P[k]})};
 }
 function owesOf(T){
   var P={},ord=[],tot=0;
   function g(n,ty){var k=ty+"|"+n;if(!P[k]){P[k]={n:n,ty:ty,tot:0,it:[]};ord.push(k)}return P[k]}
-  function put(o,a,txt){o.tot+=a;tot+=a;o.it.push(txt+": "+fmt(a))}
-  T.cars.forEach(function(c){if(c.sellerRem>0.5)put(g("بايع "+c.name,"s"),c.sellerRem,"باقي تمن العربية")});
-  loansCalc().forEach(function(l){if(l.dir!=="out"&&l.remaining>0.5)put(g(l.person||"؟","l"),l.remaining,"فلوس خدتها منه"+(l.date?" ("+fdate(l.date)+")":""))});
-  T.cars.forEach(function(c){c.parts.forEach(function(p){if(p.remaining>0.5)put(g(p.name||"شريك","p"),p.remaining,c.name+(c.sold?(p.profit>0.5?" (الأصل + ربحه)":p.profit<-0.5?" (الأصل - خسارته)":" (اتباعت)"):" (لسه في المعرض)")+(p.debtLeft>0.5?" · منها "+fmt(p.debtLeft)+" عند المشتري":""))})});
-  T.inv.list.forEach(function(o){if(o.bal>0.5){var x=g(o.name||"مستثمر","i");put(x,o.bal,"رصيده معاك"+(o.working>0.5?" · منه في عربيات "+fmt(o.working):""))}});
+  function put(o,a,txt,ref){o.tot+=a;tot+=a;o.it.push(txt+": "+fmt(a));(o.refs||(o.refs=[])).push(ref||null)}
+  T.cars.forEach(function(c){if(c.sellerRem>0.5)put(g("بايع "+c.name,"s"),c.sellerRem,"باقي تمن العربية",["car",c.id])});
+  loansCalc().forEach(function(l){if(l.dir!=="out"&&l.remaining>0.5)put(g(l.person||"؟","l"),l.remaining,"فلوس خدتها منه"+(l.date?" ("+fdate(l.date)+")":""),["loan",l.id])});
+  T.cars.forEach(function(c){c.parts.forEach(function(p){if(p.remaining>0.5)put(g(p.name||"شريك","p"),p.remaining,c.name+(c.sold?(p.profit>0.5?" (الأصل + ربحه)":p.profit<-0.5?" (الأصل - خسارته)":" (اتباعت)"):" (لسه في المعرض)")+(p.debtLeft>0.5?" · منها "+fmt(p.debtLeft)+" عند المشتري":""),["car",c.id])})});
+  T.inv.list.forEach(function(o){if(o.bal>0.5){var x=g(o.name||"مستثمر","i");put(x,o.bal,"رصيده معاك"+(o.working>0.5?" · منه في عربيات "+fmt(o.working):""),["inv",o.id])}});
   return {tot:tot,list:ord.map(function(k){return P[k]})};
 }
 function tapTile(html,k){return html.replace('<div class="tile"','<div class="tile" data-act="tinfo" data-k="'+k+'" style="cursor:pointer"').replace(/<\/div>$/,'<div class="ts" style="opacity:.6">اضغط للتفاصيل ‹</div></div>')}
@@ -1313,6 +1319,7 @@ function renderLoan(){
     var ad=x.kind==="ladd";
     return '<div class="item"><div style="flex:1"><div class="t">'+(ad?(out?"➕ سلف زيادة":"➕ استلمت زيادة"):(out?"رجّع":"سداد"))+'</div><div class="d">'+fdate(x.date)+(dline(x.src==="insta"?"إنستاباي":"الخزنة",esc(x.note||""))?" · "+dline(x.src==="insta"?"إنستاباي":"الخزنة",esc(x.note||"")):"")+'</div></div><span class="num '+(ad?"warn":"good")+'" style="font-weight:700">'+fmt(x.amount)+'</span><button class="del" data-act="delitem" data-coll="ledger" data-id="'+x.id+'" aria-label="حذف">🗑</button></div>';
   }).join("")+'</div>';
+  h+='<button class="btn sec" style="margin-top:10px" data-act="form" data-kind="loanedit" data-loan="'+l.id+'">✏️ تعديل</button>';
   h+='<button class="btn danger" style="margin-top:10px" data-act="delloan" data-id="'+l.id+'">حذف السلفة</button>';
   var prev=$("#sheet").scrollTop;
   $("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=prev;
@@ -1851,6 +1858,14 @@ function openForm(kind,o){
       '<div id="lib" style="'+(ld==="out"?"":"display:none")+'">'+loanInvBox()+'</div>'+
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+
       '<div class="preview" id="pv"></div><button class="btn" data-act="submit">حفظ</button>';
+  }else if(kind==="loanedit"){
+    var le=loansCalc().find(function(x){return x.id===o.loanId});if(!le){modal=prevModal;return}
+    h=sheetHead("✏️ تعديل "+(le.dir==="out"?"السلفة":"الأمانة"))+'<input type="hidden" name="loanId" value="'+le.id+'">'+
+      fld("اسم الشخص",'<input name="person" autocomplete="off" value="'+esc(le.person||"")+'">')+
+      '<div class="two">'+fld(le.adds>0.5?"المبلغ الأصلي (من غير الزيادات)":"المبلغ",minp("amount",le.amount0))+fld("التاريخ",dinp("date",le.date))+'</div>'+
+      fld(le.dir==="out"?"خرجت من":"دخلت في",srcSel("src",le.src))+
+      fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off" value="'+esc(le.note||"")+'">')+
+      '<button class="btn" data-act="submit">حفظ التعديل</button>';
   }else if(kind==="loanadd"){
     var la=loansCalc().find(function(x){return x.id===o.loanId});if(!la){modal=prevModal;return}
     var lao=la.dir==="out";
@@ -2288,6 +2303,15 @@ async function submitForm(){QF=null;
       var lrec={kind:"loan",person:lpn,dir:ldir,amount:lam,date:val("date")||todayStr(),src:srcVal(),note:val("note").trim()};if(linv.length)lrec.invs=linv;
       var lnid=await create("ledger",lrec);
       if(lnid){closeSheet();toast("اتسجّلت ✔")}
+    }else if(k==="loanedit"){
+      var eid=val("loanId"),el=loansCalc().find(function(x){return x.id===eid});if(!el)return toast("السلفة مش موجودة");
+      var epn=val("person").trim(),eam=parseNum(val("amount"));
+      if(!epn)return toast("اكتب اسم الشخص");
+      if(eam<=0)return toast("اكتب المبلغ");
+      if(eam+el.adds<el.paid-0.5)return toast("المبلغ أقل من اللي اتسدد ("+fmt(el.paid)+")");
+      var eiv=0;(el.invs||[]).forEach(function(v){eiv+=+v.amount||0});
+      if(eam<eiv-0.5)return toast("المبلغ أقل من نصيب المستثمرين فيها ("+fmt(eiv)+")");
+      if(await patch("ledger/"+eid,{person:epn,amount:eam,date:val("date")||el.date||todayStr(),src:srcVal(),note:val("note").trim()})){closeSheet();toast("اتعدّلت ✔")}
     }else if(k==="loanadd"){
       var aid=val("loanId"),aa=parseNum(val("amount"));
       if(!loansCalc().some(function(x){return x.id===aid}))return toast("السلفة مش موجودة");
