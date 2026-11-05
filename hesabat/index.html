@@ -253,7 +253,7 @@ function m(n,cls){return '<span class="num '+(cls||"")+'">'+fmt(n)+'</span> ج'}
 function todayStr(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function addDays(s,n){var p=s.split("-");var d=new Date(+p[0],+p[1]-1,+p[2]+n);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function fdate(s){return s?'<bdi>'+s.split("-").reverse().join("/")+'</bdi>':""}
-function toast(t){var el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(function(){el.classList.remove("show")},2600)}
+function toast(t){var el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(function(){el.classList.remove("show")},Math.max(2600,String(t).length*70))}
 
 /* ---------- state ---------- */
 var db=null,FS=null,FBA=null;
@@ -842,6 +842,25 @@ function oRow(l,v,o){
   var go=function(r){return r?' data-act="'+r[0]+'" data-id="'+esc(r[1])+'" style="cursor:pointer"':''};
   if(u.length<=1)return '<div class="kv"'+go(u[0])+'><span>'+l+'<br><span class="sub">'+o.it.map(itEsc).join("<br>")+'</span></span><b>'+v+(u[0]?' <span class="sub">✏️‹</span>':'')+'</b></div>';
   return '<div class="kv" style="display:block"><div style="display:flex;justify-content:space-between"><span>'+l+'</span><b>'+v+'</b></div>'+o.it.map(function(x,i){return '<div class="sub" '+go(rs[i])+' style="padding:4px 0;cursor:pointer">'+itEsc(x)+(rs[i]?' <b>✏️‹</b>':'')+'</div>'}).join("")+'</div>';
+}
+/* فحص قبل حفظ التعديل: لو التعديل هيطلّع رصيد بالسالب (أو يزوّد السالب) نرفضه ونقول السبب */
+function edMetrics(){
+  var T=calc(),M=[];
+  M.push(["رصيد الخزنة",T.safeBal]);
+  if(!noInsta())M.push(["رصيد الإنستاباي",T.instaBal]);
+  if(featOn("fund"))M.push(["رصيد العهدة",T.fundBal]);
+  M.push(["الأرباح اللي لسه ماتسحبتش",T.undist+T.extAvail-T.lossRem]);
+  (T.inv&&T.inv.list||[]).forEach(function(o){M.push(["رصيد المستثمر "+(o.name||""),o.bal]);if(o.free!=null)M.push(["كاش المستثمر "+(o.name||""),o.free])});
+  T.cars.forEach(function(c){if(c.sold)M.push(["باقي تمن "+c.name+" (اتحصّل أكتر من تمن البيع)",c.remaining]);(c.parts||[]).forEach(function(p){M.push(["حساب الشريك "+(p.name||"")+" في "+c.name+" (هياخد أكتر من حقه)",p.remaining])})});
+  loansCalc().forEach(function(l){M.push([(l.dir==="out"?"السلفة عند ":"الأمانة لـ ")+(l.person||"")+" (هتتسدد أكتر من قيمتها)",l.remaining])});
+  return M;
+}
+function edCheck(rec,up){
+  var before=edMetrics(),old={};Object.keys(up).forEach(function(k){old[k]=rec[k]});
+  Object.assign(rec,up);var after;try{after=edMetrics()}finally{Object.keys(old).forEach(function(k){if(old[k]===undefined)delete rec[k];else rec[k]=old[k]})}
+  var bm={};before.forEach(function(x){bm[x[0]]=x[1]});
+  for(var i=0;i<after.length;i++){var n=after[i][0],a=+after[i][1]||0,b=bm[n]==null?0:+bm[n]||0;if(a<-0.5&&a<b-0.5)return n+" هيبقى بالسالب ("+fmt(a)+")"}
+  return null;
 }
 /* ---------- تعديل أي حركة (مبلغ / تاريخ / ملاحظة / طلعت منين) ---------- */
 var ED_ARR={expenses:"expenses",collections:"cols",capital:"cap",payouts:"pay",transfers:"transfers",ledger:"ledger",external:"ext",invmoves:"invmov"};
@@ -2349,6 +2368,7 @@ async function submitForm(){QF=null;
       if(ec2==="expenses")up.type=val("type");
       if(ec2==="external"){var d2=val("desc").trim();if(!d2)return toast("اكتب الوصف");up.desc=d2;up.how=EXT_HOW[val("how")]?val("how"):"cash";up.insta=up.how==="both"?Math.min(up.amount,parseNum(val("insta"))):0}
       if(document.querySelector('#sheet select[name="src"]'))up.src=srcVal();
+      var bad2=edCheck(ex2,up);if(bad2)return toast("مينفعش: "+bad2);
       if(await patch(ec2+"/"+ei2,up)){closeSheet();toast("اتعدّلت ✔")}
     }else if(k==="loanedit"){
       var eid=val("loanId"),el=loansCalc().find(function(x){return x.id===eid});if(!el)return toast("السلفة مش موجودة");
@@ -2358,7 +2378,9 @@ async function submitForm(){QF=null;
       if(eam+el.adds<el.paid-0.5)return toast("المبلغ أقل من اللي اتسدد ("+fmt(el.paid)+")");
       var eiv=0;(el.invs||[]).forEach(function(v){eiv+=+v.amount||0});
       if(eam<eiv-0.5)return toast("المبلغ أقل من نصيب المستثمرين فيها ("+fmt(eiv)+")");
-      if(await patch("ledger/"+eid,{person:epn,amount:eam,date:val("date")||el.date||todayStr(),src:srcVal(),note:val("note").trim()})){closeSheet();toast("اتعدّلت ✔")}
+      var lrec=S.ledger.find(function(x){return x.id===eid}),lup={person:epn,amount:eam,date:val("date")||el.date||todayStr(),src:srcVal(),note:val("note").trim()};
+      var lbad=lrec&&edCheck(lrec,lup);if(lbad)return toast("مينفعش: "+lbad);
+      if(await patch("ledger/"+eid,lup)){closeSheet();toast("اتعدّلت ✔")}
     }else if(k==="loanadd"){
       var aid=val("loanId"),aa=parseNum(val("amount"));
       if(!loansCalc().some(function(x){return x.id===aid}))return toast("السلفة مش موجودة");
