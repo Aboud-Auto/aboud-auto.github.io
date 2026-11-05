@@ -780,6 +780,22 @@ function tileTap(k){
     h+=tsec("اتصرف منها ولسه ما اترديش");
     h+=cs.length?cs.map(function(c){var rp=rbPaid(c);return tkv(esc(c.name),m(rbLeft(c),"bad"),c.id,(c.sold?"اتباعت · رجّع المصاريف للعهدة":"لسه في المعرض")+(rp>0.5?" · رجّعت "+fmt(rp)+" من "+fmt(rbTot(c)):""))}).join(""):tnone("مفيش مصاريف مستنية ترجع");
     h+=ttot("الباقي في العهدة",m(T.fundBal,T.fundBal<0?"bad":""));
+  }else if(k==="profitrep"){
+    t="📈 تقرير الأرباح";var PR=T.undist+T.extAvail-T.lossRem,earned=T.profitEx+T.extTot;
+    h+=tsec("كسبت كام");
+    h+=tkv("🚗 أرباح العربيات",m(T.profitEx-T.forfT,"good"),null,'من <span class="num">'+T.soldN+'</span> عربية اتباعت'+(T.soldN?" · نسبة الربح "+pctB(soldPct(T)):"")+(T.lossDef>0.5?"<br>من غير العربيات اللي خسارتها على مراحل":""));
+    if(T.forfT>0.5)h+=tkv("🔖 عرابين اتصادرت",m(T.forfT,"good"));
+    if(featOn("ext")||T.extTot>0.5)h+=tkv("🤝 عمولات خارجية",m(T.extTot,"good"),null,'<span class="num">'+S.ext.length+'</span> عمولة');
+    h+=ttot("إجمالي اللي كسبته",m(earned,earned<0?"bad":"good"));
+    if(capBase(T)>0)h+=tkv("نسبته من رأس المال",pctB(earned/capBase(T)));
+    h+=tsec("راح فين");
+    h+=tkv("− سحبت أرباح",m(T.pw+T.ew,T.pw+T.ew>0.5?"bad":""),null,T.ew>0.5?"منها من العمولات "+m(T.ew):"");
+    if(T.repay>0.5)h+=tkv("− سددت بيها عجز رأس المال",m(T.repay,"bad"));
+    if(T.lossPaid>0.5)h+=tkv("− سددت بيها خسائر عربيات",m(T.lossPaid,"bad"));
+    if(T.lossRem>0.5)h+=tkv("− خسائر لسه بتتسدد",m(T.lossRem,"bad"));
+    h+=ttot("الباقي اللي لسه ماتسحبش",m(PR,PR<0?"bad":"good"));
+    h+=hbtn("🚗 ربح كل عربية","profit")+((featOn("ext")||S.ext.length)?hbtn("🤝 كل العمولات","ext"):"");
+    if(capRecs("pwithdraw").length)h+=tsec("💵 سحوبات الأرباح")+capRecRows("pwithdraw");
   }else if(k==="undist"){
     t="💵 أرباح متاحة";
     h+=tkv("أرباح العربيات المباعة",m(T.profitEx-T.forfT,"good"),null,T.lossDef>0.5?"من غير العربيات اللي خسارتها على مراحل":"");
@@ -882,7 +898,7 @@ function heroTap(k,T){
     cs=T.cars.filter(function(c){return c.lossActive&&c.lossRem>0.5});
     if(cs.length)h+=tsec("📉 خسائر لسه بتتسدد")+cs.map(function(c){return tkv(esc(c.name),"−"+m(c.lossRem,"bad"),c.id,"الخسارة "+m(c.lossAmt)+" · اتسدد "+m(c.lossPaid))}).join("");
     h+=ttot("الإجمالي",m(prof,prof<0?"bad":"good"));
-    h+='<div class="two" style="margin-top:12px"><button class="btn sec small" data-act="tinfo" data-k="profit">كل عربية اتباعت</button><button class="btn sec small" data-act="tinfo" data-k="ext">تفاصيل العمولات</button></div>'+hbtn("💵 الأرباح المتاحة اتحسبت إزاي","undist");
+    h+=hbtn("📈 تقرير الأرباح بالتفصيل","profitrep");
   }else if(k==="hrecv"){
     t="📥 ليك عند الناس";var OU=outsOf(T);
     h+=grp(OU,["l"],"","warn")||tnone("مفيش سلف ليك عند حد 👌");
@@ -1043,7 +1059,7 @@ function heroHtml(T){
   var h='<div class="hero"><div class="htop" data-act="tinfo" data-k="hcash"><div class="l">💵 الفلوس اللي معاك'+(noInsta()?' (الخزنة)':' (خزنة + إنستاباي)')+'<span class="hgo">‹</span></div><div class="v">'+m(T.cashNow)+'</div>'+(noInsta()?'':'<div class="s">الخزنة '+m(T.safeBal)+' · إنستاباي '+m(T.instaBal)+'</div>')+'</div>';
   h+='<div class="hg">'+
     hb("🏦","أصل رأس المال",m(base),(featOn("fund")?"منه عهدة "+m(T.fund)+"<br>والباقي للشغل "+m(base-T.fund):"")+(mv.length?(featOn("fund")?"<br>":"")+"بدأت بـ "+m(T.capital)+" · "+mv.join(" · "):""),"","hbase")+
-    hb("💰","الأرباح",m(prof),"أرباح عربيات "+m(T.undist)+"<br>عمولات خارجية "+m(T.extAvail)+(T.lossRem>0.5?"<br>خسائر لسه −"+m(T.lossRem):""),prof<-0.5?"neg":"pos","hprof")+
+    hb("💰","الأرباح",m(prof),"اللي لسه ماتسحبش",prof<-0.5?"neg":"pos","hprof")+
     (function(){var A=outsOf(T),B=owesOf(T);function half(ic,l,O,k,cls,emp){return '<div data-act="tinfo" data-k="'+k+'" style="flex:1;min-width:0;cursor:pointer"><div class="hl">'+ic+' '+l+'<span class="hgo">‹</span></div><div class="hv'+(O.tot>0.5?' '+cls:'')+'">'+m(O.tot)+'</div><div class="hs">'+(O.list.length?(k==="outs"?"عند ":"لـ ")+'<span class="num">'+O.list.length+'</span> '+(O.list.length===1?"حد":"أشخاص"):emp)+'</div></div>'}
       return '<div class="hb w hlr" style="display:flex;gap:10px">'+half("📥","ليك عند الناس",A,"outs","lpos","مفيش حاجة بره")+'<div style="width:1px;background:rgba(23,17,10,.25)"></div>'+half("📤","عليك للناس",B,"owes","lneg","مفيش حاجة عليك")+'</div>'})()+
     (T.inv.list.length?hb("💼","فلوس المستثمرين",m(T.inv.bal),"كاش في الخزنة "+m(T.inv.free)+" · في عربيات "+m(T.inv.working),"w","hinv"):"")+
@@ -1065,16 +1081,13 @@ function renderHome(){
   h+='<div class="card row" data-act="tab" data-tab="day" style="cursor:pointer"><div><div class="tl">النهاردة</div><div style="font-weight:700">مصاريف '+m(D.expT)+' · تحصيل '+m(D.cashT+D.instaT)+'</div></div><span class="sub">تقفيل اليوم ‹</span></div>';
   h+='<div class="grid2">'+
     tapTile(tile("🚗 عربيات في المعرض",'<span class="num">'+T.stockN+'</span>',"تكلفتها "+m(T.stockCost)),"stock")+
-    tapTile(tile("📈 أرباح العربيات",m(T.profit,T.profit>=0?"good":"bad"),(T.soldN?'نسبة الربح '+pctB(soldPct(T))+' · ':'')+'من <span class="num">'+T.soldN+'</span> عربية'),"profit")+'</div>';
+    tapTile(tile("🧾 مديونيات العملاء",m(T.debts,T.debts>0.5?"warn":""),"باقي تمن عربيات اتباعت"),"debts")+'</div>';
   h+='<button class="btn sec" style="margin-bottom:12px" data-act="homeMore">'+(S.homeMore?"إخفاء باقي الأرقام ▲":"📊 باقي الأرقام ▼")+'</button>';
   if(S.homeMore){
     h+='<div class="grid2">'+
       (noInsta()?'':tile("💵 الخزنة (كاش)",m(T.safeBal,T.safeBal<0?"bad":""),"")+tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"لسه ماتحوّلش للخزنة"))+
-      tapTile(tile("مديونيات العملاء",m(T.debts,T.debts>0?"warn":""),""),"debts")+
       tapTile(tile("عجز رأس المال",m(T.deficit,T.deficit>0?"bad":""),"رأس المال الحالي "+m(T.capNow)+(T.lossRem>0.5?"<br>منها خسائر عربيات "+m(T.lossRem):"")),"deficit")+
-      tapTile(tile("أرباح متاحة",m(T.undist),"للسحب أو لسداد العجز"),"undist")+
-      (featOn("fund")?tile("🧾 العهدة مع "+esc(T.fundEmp||"الموظف"),m(T.fundBal,T.fundBal<0?"bad":""),"من "+m(T.fund)+(T.unre>0.5?" · مستني يترد "+m(T.unre):"")+" ‹").replace('<div class="tile"','<div class="tile" data-act="fund" style="cursor:pointer"'):"")+
-      (featOn("ext")||T.extTot>0.5?tapTile(tile("🤝 أرباح خارجية",m(T.extTot,"good"),T.ew>0.5?"سحبت منها "+m(T.ew)+" · الباقي "+m(T.extAvail):"عمولات · دخلت رأس المال"),"ext"):"")+'</div>';
+      (featOn("fund")?tile("🧾 العهدة مع "+esc(T.fundEmp||"الموظف"),m(T.fundBal,T.fundBal<0?"bad":""),"من "+m(T.fund)+(T.unre>0.5?" · مستني يترد "+m(T.unre):"")+" ‹").replace('<div class="tile"','<div class="tile" data-act="fund" style="cursor:pointer"'):"")+'</div>';
     if(!noInsta())h+='<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="transfer">🔁 تحويل بين إنستاباي والخزنة</button>';
     h+=cashSplit(T);
   }
@@ -1274,6 +1287,7 @@ function renderAcc(){
   return '<div class="top"><h1>تقفيل حسابات</h1></div>'+
     big("report","settle","🧾","تقفيل","عربيات متباعة / أسبوع / شهر"+(featOn("partners")?" · نصيب كل شريك":"")+(featOn("fund")?" · اللي يرجع للعهدة":""))+
     (featOn("partners")||featOn("investors")?big("jard","","📋","جرد الشركاء والمستثمرين","كل شخص والعربيات اللي داخل فيها وتقريره"):"")+
+    '<div class="card row" data-act="tinfo" data-k="profitrep" style="cursor:pointer;align-items:center;gap:12px"><span style="font-size:30px">📈</span><div style="flex:1"><div style="font-weight:800;font-size:17px">تقرير الأرباح</div><div class="sub">كسبت كام · سحبت كام · الباقي · ربح كل عربية</div></div><span class="sub">‹</span></div>'+
     big("report","day","📄","تقرير وكشف حساب","يومي أو شهري · صورة أو PDF تبعتها واتساب")+
     scCard()+hcCard()+
     (!featOn("traders")?"":function(){var L=tradersCalc(),me=0,io=0;L.forEach(function(o){me+=o.owedMe;io+=o.iOwe});return big("traders","","🤝","حسابات التجار",L.length?"ليك عندهم "+fmt(me)+" · عليك لهم "+fmt(io):"العربيات اللي بتاخدها من تجار أو تبيعهالهم")}());
