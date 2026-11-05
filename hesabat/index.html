@@ -1081,9 +1081,11 @@ function heroHtml(T){
     hb("💰","الأرباح",m(prof),"اللي لسه ماتسحبش",prof<-0.5?"neg":"pos","hprof")+
     (function(){var A=outsOf(T),B=owesOf(T);function half(ic,l,O,k,cls,emp){return '<div data-act="tinfo" data-k="'+k+'" style="flex:1;min-width:0;cursor:pointer"><div class="hl">'+ic+' '+l+'<span class="hgo">‹</span></div><div class="hv'+(O.tot>0.5?' '+cls:'')+'">'+m(O.tot)+'</div><div class="hs">'+(O.list.length?(k==="outs"?"عند ":"لـ ")+'<span class="num">'+O.list.length+'</span> '+(O.list.length===1?"حد":"أشخاص"):emp)+'</div></div>'}
       return '<div class="hb w hlr" style="display:flex;gap:10px">'+half("📥","ليك عند الناس",A,"outs","lpos","مفيش حاجة بره")+'<div style="width:1px;background:rgba(23,17,10,.25)"></div>'+half("📤","عليك للناس",B,"owes","lneg","مفيش حاجة عليك")+'</div>'})()+
-    (T.inv.list.length?hb("💼","فلوس المستثمرين",m(T.inv.bal),"كاش في الخزنة "+m(T.inv.free)+" · في عربيات "+m(T.inv.working),"w","hinv"):"")+
+    T.inv.list.filter(function(o){return Math.abs(o.bal)>0.5||Math.abs(o.free)>0.5||Math.abs(o.working)>0.5}).map(function(o,i,L){
+      return '<div class="hb'+(L.length%2&&i===L.length-1?' w':'')+'" data-act="inv" data-id="'+esc(o.id)+'" style="cursor:pointer"><div class="hl">💼 '+esc(o.name||"مستثمر")+'<span class="hgo">‹</span></div><div class="hv">'+m(o.bal)+'</div><div class="hs">كاش '+m(o.free)+'<br>في عربيات '+m(o.working)+'</div></div>'}).join("")+
   '</div>';
   var ch=[["📊 الإجمالي (رأس المال + الأرباح) "+m(T.value),"htot"]];
+  if(T.inv.list.length>1)ch.push(["💼 كل المستثمرين "+m(T.inv.bal),"hinv"]);
   if(Math.abs(T.pOwed)>=0.5)ch.push(["🤝 مستحق للشركاء "+m(T.pOwed),"hpart"]);
   if(T.deposits>0.5)ch.push(["🔖 عرابين "+m(T.deposits),"hdep"]);
   if(ch.length)h+='<div class="hc">'+ch.map(function(x){return '<span data-act="tinfo" data-k="'+x[1]+'">'+x[0]+' ‹</span>'}).join("")+'</div>';
