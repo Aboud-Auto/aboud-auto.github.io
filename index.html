@@ -577,7 +577,10 @@ function tileTap(k){
   }else if(k==="profitrep"){
     t="📈 تقرير الأرباح";var PR=T.undist+T.extAvail-T.lossRem,earned=T.profitEx+T.extTot;
     h+=tsec("كسبت كام");
-    h+=tkv("🚗 أرباح العربيات",m(T.profitEx-T.forfT,"good"),null,'نصيبك من <span class="num">'+T.soldN+'</span> عربية اتباعت'+(T.soldN?" · نسبة الربح "+pctB(soldPct(T)):"")+(carsNet(T)!==T.profit?"<br>الصافي كله "+m(carsNet(T)):"")+(T.lossDef>0.5?"<br>من غير العربيات اللي خسارتها على مراحل":""));
+    var SK=stakesCalc(),skc=SK.filter(function(x){return x.closed}),sko=SK.filter(function(x){return !x.closed});
+    h+=tkv("🚗 أرباح عربيات المعرض",m(T.profitEx-T.forfT-T.stakeP,"good"),null,'نصيبك من <span class="num">'+T.soldN+'</span> عربية اتباعت'+(T.soldN?" · نسبة الربح "+pctB(soldPct(T)):"")+(carsNet(T)!==T.profit?"<br>الصافي كله "+m(carsNet(T)):"")+(T.lossDef>0.5?"<br>من غير العربيات اللي خسارتها على مراحل":""));
+    if(skc.length||sko.length){var skIn=0;skc.forEach(function(x){skIn+=x.paidIn});
+      h+=tkv("🤝 عربيات دخلت فيها مع حد",m(T.stakeP,T.stakeP<0?"bad":"good"),null,'<span class="num">'+skc.length+'</span> عربية اتقفلت'+(skIn>0?" · نسبة الربح "+pctB(T.stakeP/skIn):"")+(sko.length?'<br>لسه شغالة <span class="num">'+sko.length+'</span> · فلوسك فيها '+m(T.stakeOut):""));}
     if(T.forfT>0.5)h+=tkv("🔖 عرابين اتصادرت",m(T.forfT,"good"));
     h+=tkv("🤝 عمولات خارجية",m(T.extTot,"good"),null,'<span class="num">'+S.ext.length+'</span> عمولة');
     h+=ttot("إجمالي اللي كسبته",m(earned,earned<0?"bad":"good"));
@@ -588,6 +591,8 @@ function tileTap(k){
     if(T.lossPaid>0.5)h+=tkv("− سددت بيها خسائر عربيات",m(T.lossPaid,"bad"));
     if(T.lossRem>0.5)h+=tkv("− خسائر لسه بتتسدد",m(T.lossRem,"bad"));
     h+=ttot("الباقي اللي لسه ماتسحبش",m(PR,PR<0?"bad":"good"));
+    if(skc.length)h+=tsec("🤝 تفاصيل العربيات اللي دخلت فيها مع حد")+skc.map(function(x){return '<div data-act="stake" data-id="'+x.id+'" style="cursor:pointer">'+tkv(esc(x.car||"عربية")+" · مع "+esc(x.person||"؟"),m(x.result,x.result>=0?"good":"bad")+' · '+pctB(stakePct(x)),null,"دخلت بـ "+m(x.amount)+(x.exp>0.5?" + مصاريف "+m(x.exp):"")+" · رجعلك "+m(x.ret)+(x.closeDate?" · اتقفلت "+fdate(x.closeDate):"")+" ‹")+'</div>'}).join("")+ttot("إجمالي ربحك منها",m(T.stakeP,T.stakeP<0?"bad":"good"));
+    if(sko.length)h+=tsec("⏳ عربيات مع حد لسه شغالة (ربحها لسه ما اتحسبش)")+sko.map(function(x){return '<div data-act="stake" data-id="'+x.id+'" style="cursor:pointer">'+tkv(esc(x.car||"عربية")+" · مع "+esc(x.person||"؟"),m(x.left,"warn"),null,"الربح المتفق عليه "+m(x.prof)+" · رجعلك "+m(x.ret)+" ‹")+'</div>'}).join("");
     h+=hbtn("🚗 ربح كل عربية","profit")+hbtn("🤝 كل العمولات","ext");
     if(capRecs("pwithdraw").length)h+=tsec("💵 سحوبات الأرباح")+capRecRows("pwithdraw");
   }else if(k==="undist"){
