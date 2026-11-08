@@ -3667,18 +3667,38 @@ function scList(){return ((S.scnt&&S.scnt.list)||[]).slice().sort(function(a,b){
 function scLast(){return scList()[0]||null}
 function scState(d){return Math.abs(d)<0.5?'<span class="good">✔ مظبوطة</span>':d<0?'<span class="bad">ناقص '+m(-d)+'</span>':'<span class="warn">زيادة '+m(d)+'</span>'}
 function scHowTxt(h){return h==="cap"?"اتظبطت في رأس المال":h==="insta"?"اتظبطت مع الإنستاباي":"اتسجل الجرد بس"}
+/* كل مستثمر ليه كاش في الخزنة بيتعدّ لوحده، والباقي خزنتك */
+function scBoxes(T){var L=[],invT=0;
+  (T.inv&&T.inv.list||[]).forEach(function(o){var c=noInsta()?Math.max(0,o.free||0):invLoc(o).cash;if(c>0.5){c=Math.round(c*100)/100;invT+=c;L.push({k:"inv",iid:o.id,name:o.name||"مستثمر",sys:c})}});
+  return {mine:Math.round((T.safeBal-invT)*100)/100,inv:L}}
+function scPartsDiff(x){return (x.parts||[]).filter(function(p){return Math.abs(p.diff)>=0.5})}
 function scHistHtml(){var L=scList().slice(0,10);if(!L.length)return "";
   return '<div class="sect">آخر مرات جرد</div><div class="card" style="padding:6px 16px">'+L.map(function(x){
-    return '<div class="item" style="display:block"><div class="row"><span>'+fdate(x.date)+(x.time?' <span class="sub">'+esc(x.time)+'</span>':'')+'</span><b>'+scState(x.diff)+'</b></div>'+
-      '<div class="d sub">عدّيت '+m(x.counted)+' · المتسجل كان '+m(x.sys)+(Math.abs(x.diff)>=0.5?' · '+scHowTxt(x.how):'')+(x.note?' · '+esc(x.note):'')+'</div></div>'}).join("")+'</div>'}
-function safeCount(){var T=calc(),last=scLast();modal={type:"safecount",den:false};
-  openSheet(sheetHead("🧮 جرد الخزنة")+
-    '<div class="preview" style="display:block">المفروض يبقى في الخزنة كاش: <b>'+m(T.safeBal)+'</b><br><span class="sub">ده كل الكاش اللي في الخزنة (بتاعك + الشركاء + المستثمرين + العرابين)'+(featOn("fund")||T.fund>0.5?'، من غير العهدة اللي مع '+esc(T.fundEmp||"الموظف"):'')+'</span>'+
+    var P=x.parts||[],h='<div class="item" style="display:block"><div class="row"><span>'+fdate(x.date)+(x.time?' <span class="sub">'+esc(x.time)+'</span>':'')+'</span><b>'+(P.length>1?(scPartsDiff(x).length?'<span class="warn">فيه فرق</span>':'<span class="good">✔ مظبوطة</span>'):scState(x.diff))+'</b></div>';
+    if(P.length>1)h+=P.map(function(p){return '<div class="d sub">'+(p.k==="me"?"خزنتي":"💼 "+esc(p.name))+': عدّيت '+m(p.counted)+' · المتسجل '+m(p.sys)+' · '+scState(p.diff)+(p.k==="me"&&Math.abs(p.diff)>=0.5?' · '+scHowTxt(x.how):'')+'</div>'}).join("");
+    else h+='<div class="d sub">عدّيت '+m(x.counted)+' · المتسجل كان '+m(x.sys)+(Math.abs(x.diff)>=0.5?' · '+scHowTxt(x.how):'')+'</div>';
+    return h+(x.note?'<div class="d sub">'+esc(x.note)+'</div>':'')+'</div>'}).join("")+'</div>'}
+function safeCount(){var T=calc(),last=scLast(),B=scBoxes(T),multi=B.inv.length>0;modal={type:"safecount",den:false,multi:multi};
+  var body;
+  if(multi){
+    body='<div class="preview" style="display:block">كل خزنة بتتعدّ لوحدها، فلو فيه فرق هتعرف هو عندك ولا عند مين.<br><span class="sub">إجمالي الكاش المفروض في الخزنة: '+m(T.safeBal)+(featOn("fund")||T.fund>0.5?' (من غير العهدة)':'')+'</span>'+
+      (last?'<br><span class="sub">آخر جرد: '+fdate(last.date)+'</span>':'')+'</div>'+
+      '<div class="sect">🧮 خزنتي</div><div class="card"><div class="sub" style="margin-bottom:8px">المفروض: <b>'+m(B.mine)+'</b><br>(فلوسك + الشركاء + العرابين، من غير فلوس المستثمرين)</div>'+
+      fld("الكاش اللي عدّيته في خزنتك",minp("scReal"))+
+      '<button class="btn sec small" style="margin:-4px 0 8px" onclick="scDenToggle()">💵 عد بالفئات (٢٠٠ / ١٠٠ / ٥٠ …)</button>'+
+      '<div id="scDen" style="display:none">'+SC_DEN.map(function(v){return '<div class="kv" style="align-items:center"><span>فئة <b class="num">'+v+'</b> × </span><input name="scd'+v+'" inputmode="numeric" autocomplete="off" placeholder="عدد" style="max-width:110px;text-align:center"></div>'}).join("")+'</div>'+
+      '<div id="scHowW">'+fld("لو فيه فرق في خزنتك، يتسجل إزاي؟",'<select name="scHow"><option value="log">سجّل الجرد بس (هراجع وأظبط بعدين)</option><option value="cap">عجز / زيادة في رأس المال</option>'+(noInsta()?'':'<option value="insta">الفرق راح أو جه من الإنستاباي</option>')+'</select>')+'</div>'+
+      '<div class="sub" id="scPvMe"></div></div>'+
+      B.inv.map(function(x,i){return '<div class="sect">💼 '+esc(x.name)+'</div><div class="card"><div class="sub" style="margin-bottom:8px">المفروض كاش في الخزنة: <b>'+m(x.sys)+'</b></div>'+fld("الكاش اللي عدّيته بتاعه",minp("sci"+i))+'<div class="sub" id="scPvI'+i+'"></div></div>'}).join("");
+  }else{
+    body='<div class="preview" style="display:block">المفروض يبقى في الخزنة كاش: <b>'+m(T.safeBal)+'</b><br><span class="sub">ده كل الكاش اللي في الخزنة (بتاعك + الشركاء + العرابين)'+(featOn("fund")||T.fund>0.5?'، من غير العهدة اللي مع '+esc(T.fundEmp||"الموظف"):'')+'</span>'+
       (last?'<br><span class="sub">آخر جرد: '+fdate(last.date)+' · '+scState(last.diff)+'</span>':'')+'</div>'+
-    fld("الكاش اللي عدّيته في الخزنة دلوقتي",minp("scReal"))+
-    '<button class="btn sec small" style="margin:-4px 0 12px" onclick="scDenToggle()">💵 عد بالفئات (٢٠٠ / ١٠٠ / ٥٠ …)</button>'+
-    '<div id="scDen" style="display:none" class="card">'+SC_DEN.map(function(v){return '<div class="kv" style="align-items:center"><span>فئة <b class="num">'+v+'</b> × </span><input name="scd'+v+'" inputmode="numeric" autocomplete="off" placeholder="عدد" style="max-width:110px;text-align:center"></div>'}).join("")+'</div>'+
-    '<div id="scHowW">'+fld("لو فيه فرق، يتسجل إزاي؟",'<select name="scHow"><option value="log">سجّل الجرد بس (هراجع وأظبط بعدين)</option><option value="cap">عجز / زيادة في رأس المال</option>'+(noInsta()?'':'<option value="insta">الفرق راح أو جه من الإنستاباي</option>')+'</select>')+'</div>'+
+      fld("الكاش اللي عدّيته في الخزنة دلوقتي",minp("scReal"))+
+      '<button class="btn sec small" style="margin:-4px 0 12px" onclick="scDenToggle()">💵 عد بالفئات (٢٠٠ / ١٠٠ / ٥٠ …)</button>'+
+      '<div id="scDen" style="display:none" class="card">'+SC_DEN.map(function(v){return '<div class="kv" style="align-items:center"><span>فئة <b class="num">'+v+'</b> × </span><input name="scd'+v+'" inputmode="numeric" autocomplete="off" placeholder="عدد" style="max-width:110px;text-align:center"></div>'}).join("")+'</div>'+
+      '<div id="scHowW">'+fld("لو فيه فرق، يتسجل إزاي؟",'<select name="scHow"><option value="log">سجّل الجرد بس (هراجع وأظبط بعدين)</option><option value="cap">عجز / زيادة في رأس المال</option>'+(noInsta()?'':'<option value="insta">الفرق راح أو جه من الإنستاباي</option>')+'</select>')+'</div>';
+  }
+  openSheet(sheetHead("🧮 جرد الخزنة")+body+
     '<div class="two">'+fld("التاريخ",dinp("scDate"))+fld("ملاحظة (اختياري)",'<input name="scNote" autocomplete="off">')+'</div>'+
     '<div class="preview" id="scPv" style="display:block"></div>'+
     '<button class="btn" onclick="safeCountSave()">حفظ الجرد</button><button class="btn sec" style="margin-top:8px" data-act="close">إلغاء</button>'+
@@ -3686,29 +3706,47 @@ function safeCount(){var T=calc(),last=scLast();modal={type:"safecount",den:fals
   var sh=$("#sheet");sh.addEventListener("input",scPv);sh.addEventListener("change",scPv);scPv()}
 function scDenToggle(){if(!modal||modal.type!=="safecount")return;modal.den=!modal.den;var el=$("#scDen");if(el)el.style.display=modal.den?"block":"none";if(modal.den)scDenSum()}
 function scDenSum(){var t=0,any=false;SC_DEN.forEach(function(v){var x=val("scd"+v);if(x!==""){any=true;t+=v*parseNum(x)}});var el=$("#sheet [name='scReal']");if(el&&any)el.value=fmtIn(String(Math.round(t)))}
+function scHowLine(d,how,T){if(how==="log")return 'هيتسجل الجرد والفرق بس، ومفيش أي رقم في الحسابات هيتغير';
+  if(how==="cap")return d<0?'هينزل من رأس المال كعجز (تقدر تسدده بعدين من «سداد عجز السحب»)':'هيتضاف لرأس المال';
+  return d<0?'معناها الفلوس دي في الإنستاباي: الإنستاباي يبقى <b>'+m(T.instaBal-d)+'</b>':'معناها الفلوس دي جت من الإنستاباي: الإنستاباي يبقى <b class="'+(T.instaBal-d<-0.5?"bad":"")+'">'+m(T.instaBal-d)+'</b>'}
 function scPv(e){var el=$("#scPv");if(!el||!modal||modal.type!=="safecount")return;
   if(e&&e.target&&e.target.name&&e.target.name.indexOf("scd")===0)scDenSum();
-  var T=calc(),r=val("scReal"),hw=$("#scHowW");
-  if(r===""){el.innerHTML="اعدّ الكاش اللي في الخزنة واكتبه، وهيبانلك الفرق";if(hw)hw.style.display="none";return}
-  var d=parseNum(r)-T.safeBal,how=val("scHow"),h;
-  if(Math.abs(d)<0.5){el.innerHTML='<span class="good">✔ الخزنة مظبوطة، مفيش فرق</span>';if(hw)hw.style.display="none";return}
-  if(hw)hw.style.display="block";
-  h=d<0?'الخزنة ناقصة <b class="bad">'+m(-d)+'</b>':'الخزنة زيادة <b class="warn">'+m(d)+'</b>';
-  if(how==="log")h+='<br>هيتسجل الجرد والفرق بس، ومفيش أي رقم في الحسابات هيتغير. راجع آخر الحركات من «فحص الحسابات» أو «سجل الحركات»';
-  else if(how==="cap")h+=d<0?'<br>هينزل من رأس المال كعجز (تقدر تسدده بعدين من «سداد عجز السحب»)':'<br>هيتضاف لرأس المال';
-  else h+=d<0?'<br>معناها الفلوس دي في الإنستاباي: الإنستاباي يبقى <b>'+m(T.instaBal-d)+'</b>':'<br>معناها الفلوس دي جت من الإنستاباي: الإنستاباي يبقى <b class="'+(T.instaBal-d<-0.5?"bad":"")+'">'+m(T.instaBal-d)+'</b>';
-  el.innerHTML=h+(how!=="log"?'<br>الخزنة بعد الظبط: <b>'+m(T.safeBal+d)+'</b>':'')}
-async function safeCountSave(){if(submitting)return;var T=calc(),r=val("scReal");if(r==="")return toast("اكتب الكاش اللي عدّيته");
-  var counted=parseNum(r),d=Math.round((counted-T.safeBal)*100)/100,a=Math.abs(d),how=a<0.5?"log":val("scHow"),dt=val("scDate")||todayStr(),nt=val("scNote").trim();
+  var T=calc(),r=val("scReal"),hw=$("#scHowW"),how=val("scHow"),d,h;
+  if(!modal.multi){
+    if(r===""){el.innerHTML="اعدّ الكاش اللي في الخزنة واكتبه، وهيبانلك الفرق";if(hw)hw.style.display="none";return}
+    d=parseNum(r)-T.safeBal;
+    if(Math.abs(d)<0.5){el.innerHTML='<span class="good">✔ الخزنة مظبوطة، مفيش فرق</span>';if(hw)hw.style.display="none";return}
+    if(hw)hw.style.display="block";
+    h=(d<0?'الخزنة ناقصة <b class="bad">'+m(-d)+'</b>':'الخزنة زيادة <b class="warn">'+m(d)+'</b>')+'<br>'+scHowLine(d,how,T);
+    el.innerHTML=h+(how!=="log"?'<br>الخزنة بعد الظبط: <b>'+m(T.safeBal+d)+'</b>':'');return}
+  var B=scBoxes(T),pe=$("#scPvMe"),done=0,tot=0;
+  if(r===""){if(pe)pe.innerHTML="";if(hw)hw.style.display="none"}
+  else{done++;d=parseNum(r)-B.mine;tot+=d;
+    if(Math.abs(d)<0.5){pe.innerHTML='<span class="good">✔ خزنتك مظبوطة</span>';if(hw)hw.style.display="none"}
+    else{if(hw)hw.style.display="block";pe.innerHTML=(d<0?'خزنتك ناقصة <b class="bad">'+m(-d)+'</b>':'خزنتك زيادة <b class="warn">'+m(d)+'</b>')+'<br>'+scHowLine(d,how,T)}}
+  B.inv.forEach(function(x,i){var v=val("sci"+i),pi=$("#scPvI"+i);if(!pi)return;if(v===""){pi.innerHTML="";return}done++;var di=parseNum(v)-x.sys;tot+=di;
+    pi.innerHTML=Math.abs(di)<0.5?'<span class="good">✔ مظبوط</span>':(di<0?'ناقص <b class="bad">'+m(-di)+'</b>':'زيادة <b class="warn">'+m(di)+'</b>')+(Math.abs(di)>=0.5?'<br>هيتسجل في الجرد بس، ورصيد '+esc(x.name)+' مش هيتغير':'')});
+  var n=B.inv.length+1;
+  el.innerHTML=done<n?'اعدّ كل خزنة لوحدها واكتب الرقم ('+done+' من '+n+')':(Math.abs(tot)<0.5?'<span class="good">✔ كله مظبوط</span>':'إجمالي الفرق: '+(tot<0?'<b class="bad">ناقص '+m(-tot)+'</b>':'<b class="warn">زيادة '+m(tot)+'</b>'))}
+async function safeCountSave(){if(submitting)return;var T=calc(),r=val("scReal");if(r==="")return toast(modal&&modal.multi?"اكتب الكاش اللي عدّيته في خزنتك":"اكتب الكاش اللي عدّيته");
+  var multi=modal&&modal.multi,B=scBoxes(T),parts=[],counted,sys,d;
+  if(multi){var c0=parseNum(r);parts.push({k:"me",name:"خزنتي",sys:B.mine,counted:c0,diff:Math.round((c0-B.mine)*100)/100});
+    for(var i=0;i<B.inv.length;i++){var v=val("sci"+i);if(v==="")return toast("اكتب الكاش اللي عدّيته بتاع "+B.inv[i].name);var ci=parseNum(v);parts.push({k:"inv",iid:B.inv[i].iid,name:B.inv[i].name,sys:B.inv[i].sys,counted:ci,diff:Math.round((ci-B.inv[i].sys)*100)/100})}
+    counted=0;parts.forEach(function(p){counted+=p.counted});sys=Math.round(T.safeBal*100)/100;d=parts[0].diff}
+  else{counted=parseNum(r);sys=Math.round(T.safeBal*100)/100;d=Math.round((counted-T.safeBal)*100)/100}
+  var a=Math.abs(d),how=a<0.5?"log":val("scHow"),dt=val("scDate")||todayStr(),nt=val("scNote").trim();
   var now=new Date(),tm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
-  var rec={id:"c"+Date.now(),at:Date.now(),date:dt,time:tm,counted:counted,sys:Math.round(T.safeBal*100)/100,diff:d,how:how,note:nt.slice(0,80),dev:hlDevLabel()};
+  var rec={id:"c"+Date.now(),at:Date.now(),date:dt,time:tm,counted:counted,sys:sys,diff:d,how:how,note:nt.slice(0,80),dev:hlDevLabel()};
+  if(multi)rec.parts=parts;
+  var bad=multi?scPartsDiff(rec):[];
   submitting=true;try{
     if(how==="cap"){if(!await create("capital",{kind:d<0?"withdraw":"addcap",src:"cash",amount:a,date:dt,note:nt||"فرق جرد الخزنة",adj:true}))return}
     else if(how==="insta"){if(!await create("transfers",{dir:d<0?"toInsta":"toSafe",amount:a,date:dt,note:nt||"فرق جرد الخزنة",adj:true}))return}
     var list=((S.scnt&&S.scnt.list)||[]).concat([rec]).sort(function(x,y){return (y.at||0)-(x.at||0)}).slice(0,200);
     try{await db.doc("settings/safecount").set(await toStore("settings/safecount",{list:list}));S.scnt={list:list}}catch(e){return toast("تعذر حفظ الجرد، جرّب تاني")}
-    hlWrite({act:"add",coll:"safecount",id:rec.id,title:"جرد الخزنة: "+(a<0.5?"مظبوطة":(d<0?"ناقص ":"زيادة ")+fmt(a))});
-    closeSheet();toast(a<0.5?"الخزنة مظبوطة ✔":"اتسجل الجرد ✔");
+    var ttl=multi?(bad.length?"فرق في: "+bad.map(function(p){return p.name+" "+(p.diff<0?"ناقص ":"زيادة ")+fmt(Math.abs(p.diff))}).join("، "):"مظبوطة"):(a<0.5?"مظبوطة":(d<0?"ناقص ":"زيادة ")+fmt(a));
+    hlWrite({act:"add",coll:"safecount",id:rec.id,title:"جرد الخزنة: "+ttl});
+    closeSheet();toast((multi?!bad.length:a<0.5)?"الخزنة مظبوطة ✔":"اتسجل الجرد ✔");
   }finally{submitting=false}}
 window.safeCount=safeCount;window.safeCountSave=safeCountSave;window.scDenToggle=scDenToggle;
 
@@ -3757,7 +3795,7 @@ function hcIssues(T){
   dchk("تحويل",S.transfers,function(x){return x.dir+"|"+x.amount+"|"+x.date});
   dup.forEach(function(u){var a=u.name==="تحصيل"?(+u.x.cash||0)+(+u.x.insta||0):+u.x.amount||0;
     add("warn","👀 "+u.name+" بنفس المبلغ والتاريخ اتسجل مرتين ورا بعض"+(u.car&&cn[u.car]?" في "+esc(cn[u.car]):""),m(a)+" · "+fdate(u.x.date)+" · لو اتسجل مرتين بالغلط امسح واحد منهم",u.car&&cn[u.car]?u.car:"")});
-  var L=scLast();if(L&&Math.abs(L.diff)>=0.5&&L.how==="log")add("warn","آخر جرد للخزنة ("+fdate(L.date)+") كان فيه "+(L.diff<0?"عجز ":"زيادة ")+m(Math.abs(L.diff))+" ولسه ما اتظبطش","");
+  var L=scLast();if(L)scPartsDiff(L).forEach(function(p){if(p.k==="inv")add("warn","آخر جرد ("+fdate(L.date)+") كان فيه "+(p.diff<0?"عجز ":"زيادة ")+m(Math.abs(p.diff))+" في كاش المستثمر "+esc(p.name),"راجع حركاته من صفحة المستثمر")});if(L&&Math.abs(L.diff)>=0.5&&L.how==="log")add("warn","آخر جرد للخزنة ("+fdate(L.date)+") كان فيه "+(L.diff<0?"عجز ":"زيادة ")+m(Math.abs(L.diff))+" ولسه ما اتظبطش","");
   else if(!L)add("info","لسه ماعملتش جرد للخزنة","اعدّ الكاش وقارنه بالبرنامج من «جرد الخزنة»");
   else{var dd=Math.round((new Date(today)-new Date(L.date))/86400000);if(dd>=7)add("info","آخر جرد للخزنة كان من "+dd+" يوم","يستحسن تعمل جرد كل أسبوع على الأقل")}
   return I;
