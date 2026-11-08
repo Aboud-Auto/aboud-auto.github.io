@@ -269,23 +269,25 @@ function rbTot(c){return typeof c.fexp==="number"?c.fexp:(+c.exp||0)}
 function rbList(c,tot){if(tot==null)tot=rbTot(c);if(Array.isArray(c.reimbs))return c.reimbs.map(function(r){return{amt:+r.amt||0,date:r.date||""}});return c.reimbursed&&tot>0?[{amt:tot,date:reimbDay(c)||""}]:[]}
 function rbPaid(c){return rbList(c).reduce(function(a,r){return a+r.amt},0)}
 function rbLeft(c){return Math.max(0,rbTot(c)-rbPaid(c))}
-function flowsOf(cars,d){
-  var cash=0,insta=0,fund=0,ids={},pk={},fx={};
-  cars.forEach(function(c){ids[c.id]=1;c.parts.forEach(function(p){pk[c.id+"|"+p.id]=1})});
+function flowsOf(cars,d,em){
+  var cash=0,insta=0,fund=0,ids={},pk={},fx={},cn={};
+  cars.forEach(function(c){ids[c.id]=1;cn[c.id]=c.name||"عربية";c.parts.forEach(function(p){pk[c.id+"|"+p.id]=1})});
   function ok(x){return d==null||x===d}
-  function add(src,n){if(src==="fund")fund+=n;else if(src==="insta")insta+=n;else cash+=n}
-  cars.forEach(function(c){if(ok(c.buyDate))add(c.buySrc,-paidNow(c)+(+c.tradeIn||0)+c.pCash)});
-  S.expenses.forEach(function(e){if(!ids[e.carId])return;var s=expSrc(e);if(s==="fund")fx[e.carId]=(fx[e.carId]||0)+(+e.amount||0);if(ok(e.date))add(s,-(+e.amount||0))});
-  cars.forEach(function(c){rbList(c,fx[c.id]||0).forEach(function(r){if(r.amt&&ok(r.date)){cash-=r.amt;fund+=r.amt}})});
-  S.cols.forEach(function(x){if(ids[x.carId]&&ok(x.date)){cash+=+x.cash||0;insta+=+x.insta||0}});
-  S.pay.forEach(function(x){if(!x.roll&&pk[x.carId+"|"+x.pid]&&ok(x.date))add(x.src,-(+x.amount||0))});
-  S.cap.forEach(function(x){if((x.kind==="withdraw"||x.kind==="pwithdraw"||x.kind==="jam")&&ok(x.date))add(x.src,-(+x.amount||0));else if(x.kind==="addcap"&&ok(x.date))add(x.src,+x.amount||0)});
-  S.ext.forEach(function(x){if(!ok(x.date))return;var a=+x.amount||0,xi=x.how==="insta"?a:x.how==="both"?Math.min(a,Math.max(0,+x.insta||0)):0;cash+=a-xi;insta+=xi});
-  S.transfers.forEach(function(x){if(!ok(x.date))return;var a=+x.amount||0;if(x.dir==="toFund"){add(x.src,-a);fund+=a}else if(x.dir==="fromFund"){fund-=a;add(x.src,a)}else if(x.dir==="toInv"){add(x.src==="cash"?"cash":"insta",-a)}else if(x.dir==="fromInv"){add(x.src==="cash"?"cash":"insta",a)}else if(x.dir==="toInsta"){cash-=a;insta+=a}else{cash+=a;insta-=a}});
-  S.ledger.forEach(function(x){if(x.kind==="spay"&&ids[x.carId]&&ok(x.date))add(x.src,-(+x.amount||0))});
-  S.invmov.forEach(function(x){if(!ok(x.date)||x.src==="held")return;if(x.kind==="dep")add(x.src==="insta"?"insta":"cash",+x.amount||0);else if(x.kind==="wd"||x.kind==="pwd")add(x.src==="insta"?"insta":"cash",-(+x.amount||0))});
+  function put(k,n,lb,dt,ex){if(k==="fund")fund+=n;else if(k==="insta")insta+=n;else cash+=n;if(em&&n)em({k:k,n:n,lb:lb,date:dt||"",ex:ex||null})}
+  function add(src,n,lb,dt,ex){put(src==="fund"?"fund":src==="insta"?"insta":"cash",n,lb,dt,ex)}
+  cars.forEach(function(c){if(ok(c.buyDate))add(c.buySrc,-paidNow(c)+(+c.tradeIn||0)+c.pCash,"شراء "+cn[c.id],c.buyDate,{car:c.id})});
+  S.expenses.forEach(function(e){if(!ids[e.carId])return;var s=expSrc(e);if(s==="fund")fx[e.carId]=(fx[e.carId]||0)+(+e.amount||0);if(ok(e.date))add(s,-(+e.amount||0),"مصروف "+(e.type||"")+" · "+cn[e.carId],e.date,{car:e.carId})});
+  cars.forEach(function(c){rbList(c,fx[c.id]||0).forEach(function(r){if(r.amt&&ok(r.date)){put("cash",-r.amt,"ترجيع مصاريف للعهدة · "+cn[c.id],r.date,{car:c.id});put("fund",r.amt)}})});
+  S.cols.forEach(function(x){if(ids[x.carId]&&ok(x.date)){put("cash",+x.cash||0,"بيع / تحصيل · "+cn[x.carId],x.date,{car:x.carId});put("insta",+x.insta||0,"بيع / تحصيل · "+cn[x.carId],x.date,{car:x.carId})}});
+  S.pay.forEach(function(x){if(!x.roll&&pk[x.carId+"|"+x.pid]&&ok(x.date))add(x.src,-(+x.amount||0),"دفع لشريك · "+cn[x.carId],x.date,{car:x.carId})});
+  var CPL={withdraw:"سحب من رأس المال",pwithdraw:"سحب أرباح",jam:"قسط جمعية",addcap:"زيادة رأس المال"};
+  S.cap.forEach(function(x){if((x.kind==="withdraw"||x.kind==="pwithdraw"||x.kind==="jam")&&ok(x.date))add(x.src,-(+x.amount||0),CPL[x.kind]+(x.note?" · "+x.note:""),x.date);else if(x.kind==="addcap"&&ok(x.date))add(x.src,+x.amount||0,CPL.addcap+(x.note?" · "+x.note:""),x.date)});
+  S.ext.forEach(function(x){if(!ok(x.date))return;var a=+x.amount||0,xi=x.how==="insta"?a:x.how==="both"?Math.min(a,Math.max(0,+x.insta||0)):0;put("cash",a-xi,"عمولة خارجية"+(x.note?" · "+x.note:""),x.date);put("insta",xi,"عمولة خارجية",x.date)});
+  S.transfers.forEach(function(x){if(!ok(x.date))return;var a=+x.amount||0,ex=x.iid?{iid:x.iid}:null;if(x.dir==="toFund"){add(x.src,-a,"تحويل للعهدة",x.date);put("fund",a)}else if(x.dir==="fromFund"){put("fund",-a);add(x.src,a,"رجوع من العهدة",x.date)}else if(x.dir==="toInv"){add(x.src==="cash"?"cash":"insta",-a,"تحويل لمستثمر",x.date,ex)}else if(x.dir==="fromInv"){add(x.src==="cash"?"cash":"insta",a,"فلوس من مستثمر",x.date,ex)}else if(x.dir==="toInsta"){put("cash",-a,"نقل من الخزنة للإنستاباي",x.date,ex);put("insta",a,"نقل من الخزنة للإنستاباي",x.date,ex)}else{put("cash",a,"نقل من الإنستاباي للخزنة",x.date,ex);put("insta",-a,"نقل من الإنستاباي للخزنة",x.date,ex)}});
+  S.ledger.forEach(function(x){if(x.kind==="spay"&&ids[x.carId]&&ok(x.date))add(x.src,-(+x.amount||0),"سداد باقي للبائع · "+cn[x.carId],x.date,{car:x.carId})});
+  S.invmov.forEach(function(x){if(!ok(x.date)||x.src==="held")return;var iv=invById(x.iid),nm=iv?iv.name:"مستثمر";if(x.kind==="dep")add(x.src==="insta"?"insta":"cash",+x.amount||0,"إيداع المستثمر "+nm,x.date,{iid:x.iid});else if(x.kind==="wd"||x.kind==="pwd")add(x.src==="insta"?"insta":"cash",-(+x.amount||0),(x.kind==="pwd"?"سحب أرباح المستثمر ":"سحب المستثمر ")+nm,x.date,{iid:x.iid})});
   var lm=lmapOf();
-  S.ledger.forEach(function(x){if(ok(x.date))add(x.src,lsigned(x,lm))});
+  S.ledger.forEach(function(x){if(ok(x.date)){var l=x.kind==="loan"?x:lm[x.loanId],who=l&&l.person?" · "+l.person:"";add(x.src,lsigned(x,lm),(x.kind==="loan"?(l.dir==="out"?"سلفة طلعت":"سلفة دخلت"):x.kind==="pay"?"سداد سلفة":"زيادة على سلفة")+who,x.date)}});
   return {cash:cash,insta:insta,fund:fund};
 }
 function calc(){
@@ -3672,11 +3674,41 @@ function scBoxes(T){var L=[],invT=0;
   (T.inv&&T.inv.list||[]).forEach(function(o){var c=noInsta()?Math.max(0,o.free||0):invLoc(o).cash;if(c>0.5){c=Math.round(c*100)/100;invT+=c;L.push({k:"inv",iid:o.id,name:o.name||"مستثمر",sys:c})}});
   return {mine:Math.round((T.safeBal-invT)*100)/100,inv:L}}
 function scPartsDiff(x){return (x.parts||[]).filter(function(p){return Math.abs(p.diff)>=0.5})}
+/* ---------- تتبع فرق الجرد ---------- */
+function scBoxOk(x,box){if(!x)return false;var P=x.parts;
+  if(!P||!P.length)return box==="me"&&(Math.abs(x.diff)<0.5||x.how!=="log");
+  var p=P.find(function(q){return box==="me"?q.k==="me":q.iid===box});if(!p)return box!=="me";
+  return Math.abs(p.diff)<0.5||(box==="me"&&x.how!=="log")}
+function scSince(box,beforeAt){var L=scList();for(var i=0;i<L.length;i++){var x=L[i];if(beforeAt!=null&&(x.at||0)>=beforeAt)continue;if(scBoxOk(x,box))return x.date}return null}
+function scMoves(box,since,until){var T=calc(),M=[];
+  function inR(dt){return (!since||dt>=since)&&(!until||dt<=until)}
+  if(box==="me"){flowsOf(T.cars,null,function(e){if(e.k==="fund"||!inR(e.date))return;if(e.k==="insta"&&!noInsta()){M.push({date:e.date,lb:e.lb,n:e.n,insta:true});return}M.push({date:e.date,lb:e.lb,n:e.n})})}
+  else{flowsOf(T.cars,null,function(e){if(e.ex&&e.ex.iid===box&&e.k==="cash"&&inR(e.date))M.push({date:e.date,lb:e.lb,n:e.n})});
+    T.cars.forEach(function(c){(c.invs||[]).forEach(function(v){if(v.iid!==box)return;
+      if(inR(c.buyDate||""))M.push({date:c.buyDate||"",lb:"دخل بفلوس في "+(c.name||"عربية"),n:-v.amount});
+      if(c.sold&&inR(c.sellDate||""))M.push({date:c.sellDate||"",lb:"رجعله من بيع "+(c.name||"عربية"),n:v.amount+(v.profit||0)-(v.debtLeft||0)})})})}
+  return M.sort(function(a,b){return (b.date||"").localeCompare(a.date||"")})}
+function scTraceHtml(diff,box,beforeAt,until){var a=Math.abs(diff);if(a<0.5)return "";
+  var since=scSince(box,beforeAt),M=scMoves(box,since,until),H=[],seen={},near=function(x,y){return Math.abs(x-y)<0.5};
+  function hit(mv,why){mv.hl=1;H.push('<div class="item" style="display:block"><b>'+esc(mv.lb)+'</b> · '+m(Math.abs(mv.n))+' · <span class="sub">'+fdate(mv.date)+'</span><div class="d sub">'+why+'</div></div>')}
+  var dk={};M.forEach(function(mv){var k=mv.date+"|"+Math.round(mv.n)+"|"+mv.lb;dk[k]=(dk[k]||0)+1});
+  M.forEach(function(mv){var n=Math.abs(mv.n),inc=mv.n>0,k=mv.date+"|"+Math.round(mv.n)+"|"+mv.lb;if(n<0.5)return;
+    if(mv.insta){if(near(n,a)&&((diff>0&&inc)||(diff<0&&!inc)))hit(mv,diff>0?'اتسجلت إنستاباي، يمكن جت كاش في الخزنة':'اتسجلت إنها طلعت إنستاباي، يمكن طلعت كاش من الخزنة');return}
+    if(near(n,a)&&dk[k]>1&&!seen[k]){seen[k]=1;hit(mv,'نفس الحركة متسجلة مرتين بنفس اليوم والمبلغ، يمكن اتكررت بالغلط')}
+    else if(near(n,a)){if(diff<0&&inc)hit(mv,'متسجل إنها دخلت الخزنة، اتأكد إنها دخلت فعلاً كاش (يمكن جت إنستاباي أو ماوصلتش)');
+      else if(diff>0&&!inc)hit(mv,'متسجل إنها طلعت من الخزنة، اتأكد إنها طلعت فعلاً');
+      else hit(mv,'نفس مبلغ الفرق بالظبط، راجعها')}
+    else if(near(n*2,a))hit(mv,'الفرق ضعف المبلغ ده: يمكن اتسجلت '+(inc?'داخل وهي خارج':'خارج وهي داخل'));
+    else if(near(n*9,a)||near(n*0.9,a))hit(mv,'يمكن الرقم فيه صفر زيادة أو ناقص (مثلاً '+fmt(n>=a?n/10:n*10)+' بدل '+fmt(n)+')')});
+  var h='<details style="margin-top:6px"><summary style="cursor:pointer;font-weight:700">🔍 تتبع الفرق</summary><div class="sub" style="margin:6px 0">'+(since?'آخر مرة الخزنة دي كانت مظبوطة: '+fdate(since)+'، فالفرق حصل من يومها':'مفيش جرد مظبوط قبل كده، فدي كل الحركات')+'</div>';
+  h+=H.length?'<div class="sect">حركات ممكن تكون السبب</div><div class="card" style="padding:4px 14px">'+H.join("")+'</div>':'<div class="preview" style="display:block">مفيش حركة بتطابق الفرق. الأقرب إن فيه مصروف أو حركة اتعملت ومتسجلتش، أو أكتر من حركة مع بعض.</div>';
+  if(M.length)h+='<div class="sect">كل الحركات على الخزنة دي ('+M.length+')</div><div class="card" style="padding:4px 14px;max-height:300px;overflow:auto">'+M.slice(0,80).map(function(mv){return '<div class="kv"><span>'+esc(mv.lb)+(mv.insta?' <span class="sub">(إنستاباي)</span>':'')+'<br><span class="sub">'+fdate(mv.date)+'</span></span><b class="'+(mv.n<0?"bad":"good")+'">'+(mv.n<0?"−":"+")+m(Math.abs(mv.n))+'</b></div>'}).join("")+'</div>';
+  return h+'</details>'}
 function scHistHtml(){var L=scList().slice(0,10);if(!L.length)return "";
   return '<div class="sect">آخر مرات جرد</div><div class="card" style="padding:6px 16px">'+L.map(function(x){
     var P=x.parts||[],h='<div class="item" style="display:block"><div class="row"><span>'+fdate(x.date)+(x.time?' <span class="sub">'+esc(x.time)+'</span>':'')+'</span><b>'+(P.length>1?(scPartsDiff(x).length?'<span class="warn">فيه فرق</span>':'<span class="good">✔ مظبوطة</span>'):scState(x.diff))+'</b></div>';
-    if(P.length>1)h+=P.map(function(p){return '<div class="d sub">'+(p.k==="me"?"خزنتي":"💼 "+esc(p.name))+': عدّيت '+m(p.counted)+' · المتسجل '+m(p.sys)+' · '+scState(p.diff)+(p.k==="me"&&Math.abs(p.diff)>=0.5?' · '+scHowTxt(x.how):'')+'</div>'}).join("");
-    else h+='<div class="d sub">عدّيت '+m(x.counted)+' · المتسجل كان '+m(x.sys)+(Math.abs(x.diff)>=0.5?' · '+scHowTxt(x.how):'')+'</div>';
+    if(P.length>1)h+=P.map(function(p){return '<div class="d sub">'+(p.k==="me"?"خزنتي":"💼 "+esc(p.name))+': عدّيت '+m(p.counted)+' · المتسجل '+m(p.sys)+' · '+scState(p.diff)+(p.k==="me"&&Math.abs(p.diff)>=0.5?' · '+scHowTxt(x.how):'')+'</div>'+(Math.abs(p.diff)>=0.5?scTraceHtml(p.diff,p.k==="me"?"me":p.iid,x.at,x.date):'')}).join("");
+    else h+='<div class="d sub">عدّيت '+m(x.counted)+' · المتسجل كان '+m(x.sys)+(Math.abs(x.diff)>=0.5?' · '+scHowTxt(x.how):'')+'</div>'+(Math.abs(x.diff)>=0.5?scTraceHtml(x.diff,"me",x.at,x.date):'');
     return h+(x.note?'<div class="d sub">'+esc(x.note)+'</div>':'')+'</div>'}).join("")+'</div>'}
 function safeCount(){var T=calc(),last=scLast(),B=scBoxes(T),multi=B.inv.length>0;modal={type:"safecount",den:false,multi:multi};
   var body;
@@ -3717,15 +3749,15 @@ function scPv(e){var el=$("#scPv");if(!el||!modal||modal.type!=="safecount")retu
     d=parseNum(r)-T.safeBal;
     if(Math.abs(d)<0.5){el.innerHTML='<span class="good">✔ الخزنة مظبوطة، مفيش فرق</span>';if(hw)hw.style.display="none";return}
     if(hw)hw.style.display="block";
-    h=(d<0?'الخزنة ناقصة <b class="bad">'+m(-d)+'</b>':'الخزنة زيادة <b class="warn">'+m(d)+'</b>')+'<br>'+scHowLine(d,how,T);
+    h=(d<0?'الخزنة ناقصة <b class="bad">'+m(-d)+'</b>':'الخزنة زيادة <b class="warn">'+m(d)+'</b>')+'<br>'+scHowLine(d,how,T)+scTraceHtml(d,"me",null,null);
     el.innerHTML=h+(how!=="log"?'<br>الخزنة بعد الظبط: <b>'+m(T.safeBal+d)+'</b>':'');return}
   var B=scBoxes(T),pe=$("#scPvMe"),done=0,tot=0;
   if(r===""){if(pe)pe.innerHTML="";if(hw)hw.style.display="none"}
   else{done++;d=parseNum(r)-B.mine;tot+=d;
     if(Math.abs(d)<0.5){pe.innerHTML='<span class="good">✔ خزنتك مظبوطة</span>';if(hw)hw.style.display="none"}
-    else{if(hw)hw.style.display="block";pe.innerHTML=(d<0?'خزنتك ناقصة <b class="bad">'+m(-d)+'</b>':'خزنتك زيادة <b class="warn">'+m(d)+'</b>')+'<br>'+scHowLine(d,how,T)}}
+    else{if(hw)hw.style.display="block";pe.innerHTML=(d<0?'خزنتك ناقصة <b class="bad">'+m(-d)+'</b>':'خزنتك زيادة <b class="warn">'+m(d)+'</b>')+'<br>'+scHowLine(d,how,T)+scTraceHtml(d,"me",null,null)}}
   B.inv.forEach(function(x,i){var v=val("sci"+i),pi=$("#scPvI"+i);if(!pi)return;if(v===""){pi.innerHTML="";return}done++;var di=parseNum(v)-x.sys;tot+=di;
-    pi.innerHTML=Math.abs(di)<0.5?'<span class="good">✔ مظبوط</span>':(di<0?'ناقص <b class="bad">'+m(-di)+'</b>':'زيادة <b class="warn">'+m(di)+'</b>')+(Math.abs(di)>=0.5?'<br>هيتسجل في الجرد بس، ورصيد '+esc(x.name)+' مش هيتغير':'')});
+    pi.innerHTML=Math.abs(di)<0.5?'<span class="good">✔ مظبوط</span>':(di<0?'ناقص <b class="bad">'+m(-di)+'</b>':'زيادة <b class="warn">'+m(di)+'</b>')+(Math.abs(di)>=0.5?'<br>هيتسجل في الجرد بس، ورصيد '+esc(x.name)+' مش هيتغير'+scTraceHtml(di,x.iid,null,null):'')});
   var n=B.inv.length+1;
   el.innerHTML=done<n?'اعدّ كل خزنة لوحدها واكتب الرقم ('+done+' من '+n+')':(Math.abs(tot)<0.5?'<span class="good">✔ كله مظبوط</span>':'إجمالي الفرق: '+(tot<0?'<b class="bad">ناقص '+m(-tot)+'</b>':'<b class="warn">زيادة '+m(tot)+'</b>'))}
 async function safeCountSave(){if(submitting)return;var T=calc(),r=val("scReal");if(r==="")return toast(modal&&modal.multi?"اكتب الكاش اللي عدّيته في خزنتك":"اكتب الكاش اللي عدّيته");
