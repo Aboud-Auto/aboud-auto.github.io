@@ -350,7 +350,7 @@ function calc(){
   return {ew:ew,extAvail:extTot-ew,deposits:deposits,forfT:forfT,jam:jam,addcap:addcap,extTot:extTot,cars:cars,capital:capital,fund:fund,withdraw:withdraw,repay:repay,pw:pw,wDef:wDef,deficit:deficit,capNow:capNow,undist:undist,value:value,
     profit:profit,profitEx:profitEx,recv:recv,owe:owe,sOwe:sOwe,lossDef:lossDef,lossPaid:lossPaid,lossRem:lossRem,
     soldN:soldN,stockN:stockN,stockCost:stockCost,debts:debts,cashNow:cashNow,safeBal:safeBal,instaBal:instaBal,
-    cashTot:cashTot,instaTot:instaTot,fundBal:fundBal,fundEmp:(S.settings&&S.settings.fundEmp)||"",unre:unre,pOwed:pOwed,inv:IS,check:check};
+    cashTot:cashTot,instaTot:instaTot,fundBal:fundBal,fundEmp:(S.settings&&S.settings.fundEmp)||"",unre:APP_MODE==="nofund"?0:unre,pOwed:pOwed,inv:IS,check:check};
 }
 function carById(id){return calc().cars.find(function(c){return c.id===id})}
 
@@ -1003,7 +1003,7 @@ var FEATS=[
   {id:"pricing",name:"التسعير",desc:"أسعار العربية في صفقاتك القديمة"},
   {id:"split",name:"تقسيم الإنستاباي",desc:"البيعة اتحوّلت على أكتر من حساب"}
 ];
-function featOn(id){if(id==="fund"&&APP_MODE==="nofund")return false;var f=S.brand&&S.brand.feat;return !f||!!f[id]}
+function featOn(id){var f=S.brand&&S.brand.feat;return !f||!!f[id]}
 function featData(id){
   var T=calc();
   if(id==="fund")return T.fund>0.5||S.expenses.some(function(x){return x.src==="fund"})?"عهدة "+fmt(T.fund):"";
@@ -1194,7 +1194,7 @@ function renderFund(){
   var T=calc(),mv=fundMoves(),emp=esc(T.fundEmp||"الموظف");
   var h=sheetHead("🧾 العهدة")+
     '<div class="hero"><div class="l">المفروض مع '+emp+' دلوقتي</div><div class="v">'+m(T.fundBal,T.fundBal<0?"bad":"")+'</div><div class="s">العهدة المتسلّمة '+m(T.fund)+(T.unre>0.5?' · اتصرف ومستني يترد '+m(T.unre):'')+'</div></div>'+
-    '<div class="sub" style="margin:0 2px 12px">العهدة مسؤولية '+emp+' ومش جوه الخزنة، فلما تجرد الخزنة الرقم بيكون من غيرها. المصروف اللي بيتسجّل «من العهدة» بيقلل العهدة بس. ولما تبيع عربية وتعلّم إن مصاريفها اتردّت، المبلغ بيطلع من الخزنة ويرجع للعهدة.</div>'+
+    '<div class="sub" style="margin:0 2px 12px">العهدة مسؤولية '+emp+' ومش جوه الخزنة، فلما تجرد الخزنة الرقم بيكون من غيرها. كل مصاريف العربيات بيسجّلها الموظف من برنامج العهدة وبتظهر على كل عربية هنا. ولما العهدة تقرّب تخلص، زوّدها من الخزنة.</div>'+
     '<div class="actions">'+
       '<button class="abtn" data-act="form" data-kind="fundmove" data-sub="toFund"><span class="ic">💵</span>تزويد العهدة</button>'+
       '<button class="abtn" data-act="form" data-kind="fundmove" data-sub="fromFund"><span class="ic">↩️</span>رجّع فلوس للخزنة</button>'+
@@ -1585,7 +1585,7 @@ function render(){
   else if(S.tab==="more")h=renderMore();
   else if(S.tab==="feat")h=renderFeat();
   else h=renderSet();
-  app.innerHTML=(DEMO?demoBar():"")+(APP_MODE==="nofund"?'<div class="banner">🧪 نسخة تجربة: العهدة اتشالت من هنا. مصاريف العربيات بتتسجل من <a href="../ohda/" style="color:inherit;text-decoration:underline">برنامج العهدة</a>، ومصاريف وقت البيع بتطلع من الخزنة.</div>':"")+h;
+  app.innerHTML=(DEMO?demoBar():"")+(APP_MODE==="nofund"?'<div class="banner">🧪 نسخة تجربة: مصاريف العربيات بتتسجل من <a href="../ohda/" style="color:inherit;text-decoration:underline">برنامج العهدة</a>، ومصاريف وقت البيع بتطلع من الخزنة.</div>':"")+h;
   renderNav();
 }
 function refresh(){
@@ -1801,7 +1801,7 @@ function openForm(kind,o){
     h=sheetHead("تسجيل مصروف")+fld("العربية",carSel("carId",stockFirst(T),sel))+
       '<div class="two">'+fld("المبلغ",minp("amount"))+fld("التاريخ",dinp("date"))+'</div>'+
       fld("النوع",'<select name="type">'+EXP_TYPES.map(function(t){return '<option>'+t+'</option>'}).join("")+'</select>')+
-      fld("اتدفع من",srcSel("src",featOn("fund")?"fund":"cash",true))+
+      fld("اتدفع من",srcSel("src",APP_MODE==="nofund"?"cash":featOn("fund")?"fund":"cash",APP_MODE!=="nofund"))+
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+'<button class="btn" data-act="submit">حفظ المصروف</button>';
   }else if(kind==="sell"){
     var stock=T.cars.filter(function(c){return !c.sold});
