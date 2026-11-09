@@ -395,7 +395,7 @@ function capLabel(x){
 }
 function srcNote(x){return x&&x.src==="held"?"من اللي معاه على حسابه":x&&x.src==="insta"?"من إنستاباي":x&&x.src==="fund"?"من العهدة":""}
 function dline(){var a=[],i;for(i=0;i<arguments.length;i++)if(arguments[i])a.push(arguments[i]);return a.join(" · ")}
-function srcSel(n,sel,wf){
+function srcSel(n,sel,wf){if(APP_MODE==="ohda")return '<select name="'+n+'"><option value="fund" selected>العهدة</option></select>';
   var T=calc();wf=wf&&(featOn("fund")||sel==="fund");
   return '<select name="'+n+'">'+(wf?'<option value="fund"'+(sel==="fund"?" selected":"")+'>العهدة - مع '+esc(T.fundEmp||"الموظف")+' (رصيدها '+fmt(T.fundBal)+')</option>':'')+'<option value="cash"'+(sel==="insta"||(wf&&sel!=="cash")?"":" selected")+'>الخزنة - كاش (رصيدها '+fmt(T.safeBal)+')</option><option value="insta"'+(sel==="insta"?" selected":"")+'>إنستاباي (رصيده '+fmt(T.instaBal)+')</option></select>';
 }
@@ -1193,18 +1193,16 @@ function renderOhda(){
   var T=calc(),emp=esc(T.fundEmp||"الموظف"),stock=T.cars.filter(function(c){return !c.sold}),sold=T.cars.filter(function(c){return c.sold});
   function fx(c){return S.expenses.filter(function(e){return e.carId===c.id&&expSrc(e)==="fund"}).sort(function(x,y){return (y.date||"").localeCompare(x.date||"")})}
   function tot(l){return l.reduce(function(t,e){return t+(+e.amount||0)},0)}
-  var mv=fundMoves(),rec=+T.fund||0,ret=0;
+  var mv=fundMoves().map(function(x){var t=String(x.t).replace(/ \((من الخزنة|من إنستاباي)\)/,"").replace("💵 تزويد العهدة","💵 استلام عهدة").replace("↩️ رجوع فلوس للخزنة","↩️ رجّع فلوس لصاحب المعرض").replace(/^🧾 رد مصاريف (.*) من الخزنة$/,"💵 استلام عهدة (مصاريف $1)");return Object.assign({},x,{t:t})}),rec=+T.fund||0,ret=0;
   S.transfers.forEach(function(x){if(x.dir==="toFund")rec+=+x.amount||0;else if(x.dir==="fromFund")ret+=+x.amount||0});
   T.cars.forEach(function(c){rbList(c).forEach(function(r){rec+=+r.amt||0})});
   var spent=rec-ret-T.fundBal;
   var h='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div><h1>🧾 العهدة</h1><div class="sub">'+esc(brandName())+' · '+fdate(todayStr())+'</div></div></div>'+
     '<div class="banner">🧪 نسخة تجربة لبرنامج العهدة. مربوط بنفس حسابات <a href="../hesabat-test/" style="color:inherit;text-decoration:underline">المعرض</a>.</div>'+
     '<div class="hero"><div class="l">الموجود في العهدة مع '+emp+'</div><div class="v">'+m(T.fundBal,T.fundBal<0?"bad":"")+'</div><div class="s">أصل العهدة '+m(T.fund)+'</div></div>'+
-    '<div class="card"><div class="kv"><span>💵 إجمالي اللي اتسلّم للعهدة</span><b>'+m(rec)+'</b></div><div class="kv"><span>💸 إجمالي اللي اتصرف</span><b>'+m(spent)+'</b></div>'+(ret>0.5?'<div class="kv"><span>↩️ رجع للخزنة</span><b>'+m(ret)+'</b></div>':'')+'<div class="kv"><span><b>= الموجود دلوقتي</b></span><b>'+m(T.fundBal,T.fundBal<0?"bad":"")+'</b></div></div>'+
+    '<div class="card"><div class="kv"><span>💵 إجمالي اللي اتسلّم للعهدة</span><b>'+m(rec)+'</b></div><div class="kv"><span>💸 إجمالي اللي اتصرف</span><b>'+m(spent)+'</b></div>'+(ret>0.5?'<div class="kv"><span>↩️ رجع لصاحب المعرض</span><b>'+m(ret)+'</b></div>':'')+'<div class="kv"><span><b>= الموجود دلوقتي</b></span><b>'+m(T.fundBal,T.fundBal<0?"bad":"")+'</b></div></div>'+
     '<div class="actions">'+
       '<button class="abtn" data-act="form" data-kind="expense"><span class="ic">💸</span>تسجيل مصروف</button>'+
-      '<button class="abtn" data-act="form" data-kind="fundmove" data-sub="toFund"><span class="ic">💵</span>زوّد العهدة من الخزنة</button>'+
-      '<button class="abtn" data-act="form" data-kind="fundmove" data-sub="fromFund"><span class="ic">↩️</span>رجّع فلوس للخزنة</button>'+
       '<button class="abtn" data-act="form" data-kind="fundcount"><span class="ic">🧮</span>جرد العهدة</button></div>';
   h+='<div class="sect">العربيات اللي في المعرض ('+stock.length+')</div>';
   h+=stock.length?stock.map(function(c){var l=fx(c);
