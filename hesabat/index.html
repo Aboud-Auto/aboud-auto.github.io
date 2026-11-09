@@ -342,6 +342,7 @@ function calc(){
   var sOwe=0;cars.forEach(function(c){sOwe+=c.sellerRem});owe+=sOwe;
   var extTot=0;S.ext.forEach(function(x){extTot+=+x.amount||0});
   var F=flowsOf(cars),fundBal=fund+F.fund,safeBal=capital-fund+F.cash,instaBal=F.insta;if(noInsta()){safeBal+=instaBal;instaBal=0}var cashNow=safeBal+instaBal;
+  var fundTot=fund;S.transfers.forEach(function(x){if(x.dir==="toFund")fundTot+=+x.amount||0;else if(x.dir==="fromFund")fundTot-=+x.amount||0});cars.forEach(function(c){rbList(c).forEach(function(r){fundTot+=+r.amt||0})});
   var lossRem=lossDef-lossPaid,wDef=withdraw-repay,deficit=wDef+lossRem,capNow=capital+addcap+extTot-ew-jam-deficit;
   var undist=profitEx-repay-lossPaid-pw,value=capNow+undist;
   var IS=invStats(cars);
@@ -349,7 +350,7 @@ function calc(){
   return {ew:ew,extAvail:extTot-ew,deposits:deposits,forfT:forfT,jam:jam,addcap:addcap,extTot:extTot,cars:cars,capital:capital,fund:fund,withdraw:withdraw,repay:repay,pw:pw,wDef:wDef,deficit:deficit,capNow:capNow,undist:undist,value:value,
     profit:profit,profitEx:profitEx,recv:recv,owe:owe,sOwe:sOwe,lossDef:lossDef,lossPaid:lossPaid,lossRem:lossRem,
     soldN:soldN,stockN:stockN,stockCost:stockCost,debts:debts,cashNow:cashNow,safeBal:safeBal,instaBal:instaBal,
-    cashTot:cashTot,instaTot:instaTot,fundBal:fundBal,fundEmp:(S.settings&&S.settings.fundEmp)||"",unre:NF()?0:unre,pOwed:pOwed,inv:IS,check:check};
+    cashTot:cashTot,instaTot:instaTot,fundBal:fundBal,fundTot:fundTot,fundEmp:(S.settings&&S.settings.fundEmp)||"",unre:NF()?0:unre,pOwed:pOwed,inv:IS,check:check};
 }
 function carById(id){return calc().cars.find(function(c){return c.id===id})}
 
@@ -778,10 +779,10 @@ function tileTap(k){
     if(capRecs("repay").length)h+=tsec("✅ السداد")+capRecRows("repay");
   }else if(k==="fund"){
     t="💼 رصيد العهدة";cs=T.cars.filter(function(c){return rbLeft(c)>0.5});
-    h+=tkv("العهدة",m(T.fund));
-    h+=tsec("اتصرف منها ولسه ما اترديش");
+    h+=tkv("العهدة",m(T.fundTot));
+    if(!NF()){h+=tsec("اتصرف منها ولسه ما اترديش");
     h+=cs.length?cs.map(function(c){var rp=rbPaid(c);return tkv(esc(c.name),m(rbLeft(c),"bad"),c.id,(c.sold?"اتباعت · رجّع المصاريف للعهدة":"لسه في المعرض")+(rp>0.5?" · رجّعت "+fmt(rp)+" من "+fmt(rbTot(c)):""))}).join(""):tnone("مفيش مصاريف مستنية ترجع");
-    h+=ttot("الباقي في العهدة",m(T.fundBal,T.fundBal<0?"bad":""));
+    h+=ttot("الباقي في العهدة",m(T.fundBal,T.fundBal<0?"bad":""));}
   }else if(k==="profitrep"){
     t="📈 تقرير الأرباح";var PR=T.undist+T.extAvail-T.lossRem,earned=T.profitEx+T.extTot;
     h+=tsec("كسبت كام");
@@ -907,7 +908,7 @@ function heroTap(k,T){
     t="🏦 أصل رأس المال";
     h+=tkv("رأس المال اللي بدأت بيه",m(T.capital))+(T.addcap>0.5?tkv("+ زيادات رأس المال",m(T.addcap,"good")):"")+(T.jam>0.5?tkv("− أقساط جمعية",m(T.jam,"bad")):"")+(T.wDef>0.5?tkv("− سحب لسه مارجعش",m(T.wDef,"bad"),null,"سحبت "+m(T.withdraw)+" · رجّعت "+m(T.repay)):"");
     h+=ttot("أصل رأس المال",m(base));
-    h+=tsec("متقسم إزاي")+tkv("💼 العهدة",m(T.fund))+tkv("🚗 الباقي للشغل",m(base-T.fund));
+    h+=tsec("متقسم إزاي")+tkv("💼 العهدة",m(T.fundTot))+tkv("🚗 الباقي للشغل",m(base-T.fundTot));
     if(capRecs("addcap").length)h+=tsec("➕ زيادات رأس المال")+capRecRows("addcap");
     if(capRecs("jam").length)h+=tsec("🔄 أقساط الجمعية")+capRecRows("jam");
     if(capRecs("withdraw").length)h+=tsec("👤 السحوبات")+capRecRows("withdraw");
@@ -1006,7 +1007,7 @@ function NF(){return featOn("fund")}
 function featOn(id){var f=S.brand&&S.brand.feat;return !f||!!f[id]}
 function featData(id){
   var T=calc();
-  if(id==="fund")return T.fund>0.5||S.expenses.some(function(x){return x.src==="fund"})?"عهدة "+fmt(T.fund):"";
+  if(id==="fund")return T.fund>0.5||S.expenses.some(function(x){return x.src==="fund"})?"عهدة "+fmt(T.fundTot):"";
   if(id==="partners"){var n=T.cars.filter(function(c){return c.parts.length}).length;return n?n+" عربية بشركاء":""}
   if(id==="investors")return T.inv.list.length?T.inv.list.length+" مستثمر وفلوسهم":"";
   if(id==="traders"){var t=tradersCalc().length;return t?"حسابات "+t+" تاجر":""}
@@ -1080,7 +1081,7 @@ function heroHtml(T){
   if(T.addcap>0.5)mv.push("زيادات +"+m(T.addcap));if(T.jam>0.5)mv.push("جمعية −"+m(T.jam));if(T.wDef>0.5)mv.push("سحب −"+m(T.wDef));
   var h='<div class="hero"><div class="htop" data-act="tinfo" data-k="hcash"><div class="l">💵 الفلوس اللي معاك'+(noInsta()?' (الخزنة)':' (خزنة + إنستاباي)')+'<span class="hgo">‹</span></div><div class="v">'+m(T.cashNow)+'</div>'+(noInsta()?'':'<div class="s">الخزنة '+m(T.safeBal)+' · إنستاباي '+m(T.instaBal)+'</div>')+'</div>';
   h+='<div class="hg">'+
-    hb("🏦","أصل رأس المال",m(base),(featOn("fund")?"منه عهدة "+m(T.fund)+"<br>والباقي للشغل "+m(base-T.fund):"")+(mv.length?(featOn("fund")?"<br>":"")+"بدأت بـ "+m(T.capital)+" · "+mv.join(" · "):""),"","hbase")+
+    hb("🏦","أصل رأس المال",m(base),(featOn("fund")?"منه عهدة "+m(T.fundTot)+"<br>والباقي للشغل "+m(base-T.fundTot):"")+(mv.length?(featOn("fund")?"<br>":"")+"بدأت بـ "+m(T.capital)+" · "+mv.join(" · "):""),"","hbase")+
     hb("💰","الأرباح",m(prof),"اللي لسه ماتسحبش",prof<-0.5?"neg":"pos","hprof")+
     (function(){var A=outsOf(T),B=owesOf(T);function half(ic,l,O,k,cls,emp){return '<div data-act="tinfo" data-k="'+k+'" style="flex:1;min-width:0;cursor:pointer"><div class="hl">'+ic+' '+l+'<span class="hgo">‹</span></div><div class="hv'+(O.tot>0.5?' '+cls:'')+'">'+m(O.tot)+'</div><div class="hs">'+(O.list.length?(k==="outs"?"عند ":"لـ ")+'<span class="num">'+O.list.length+'</span> '+(O.list.length===1?"حد":"أشخاص"):emp)+'</div></div>'}
       return '<div class="hb w hlr" style="display:flex;gap:10px">'+half("📥","ليك عند الناس",A,"outs","lpos","مفيش حاجة بره")+'<div style="width:1px;background:rgba(23,17,10,.25)"></div>'+half("📤","عليك للناس",B,"owes","lneg","مفيش حاجة عليك")+'</div>'})()+
@@ -1111,7 +1112,7 @@ function renderHome(){
     h+='<div class="grid2">'+
       (noInsta()?'':tile("💵 الخزنة (كاش)",m(T.safeBal,T.safeBal<0?"bad":""),"")+tile("📲 إنستاباي",m(T.instaBal,T.instaBal<0?"bad":""),"لسه ماتحوّلش للخزنة"))+
       tapTile(tile("عجز رأس المال",m(T.deficit,T.deficit>0?"bad":""),"رأس المال الحالي "+m(T.capNow)+(T.lossRem>0.5?"<br>منها خسائر عربيات "+m(T.lossRem):"")),"deficit")+
-      (featOn("fund")?tile("🧾 العهدة مع "+esc(T.fundEmp||"الموظف"),m(T.fundBal,T.fundBal<0?"bad":""),"من "+m(T.fund)+(T.unre>0.5?" · مستني يترد "+m(T.unre):"")+" ‹").replace('<div class="tile"','<div class="tile" data-act="fund" style="cursor:pointer"'):"")+'</div>';
+      (featOn("fund")?tile("🧾 العهدة مع "+esc(T.fundEmp||"الموظف"),m(T.fundTot),"‹").replace('<div class="tile"','<div class="tile" data-act="fund" style="cursor:pointer"'):"")+'</div>';
     if(!noInsta())h+='<button class="btn sec" style="margin-bottom:12px" data-act="form" data-kind="transfer">🔁 تحويل بين إنستاباي والخزنة</button>';
     h+=cashSplit(T);
   }
@@ -1193,7 +1194,7 @@ function openFund(){modal={type:"fund"};renderFund();$("#sheet").scrollTop=0}
 function renderFund(){
   var T=calc(),mv=fundMoves(),emp=esc(T.fundEmp||"الموظف");
   var h=sheetHead("🧾 العهدة")+
-    '<div class="hero"><div class="l">المفروض مع '+emp+' دلوقتي</div><div class="v">'+m(T.fundBal,T.fundBal<0?"bad":"")+'</div><div class="s">العهدة المتسلّمة '+m(T.fund)+(T.unre>0.5?' · اتصرف ومستني يترد '+m(T.unre):'')+'</div></div>'+
+    '<div class="hero"><div class="l">العهدة مع '+emp+'</div><div class="v">'+m(T.fundTot)+'</div></div>'+
     '<div class="sub" style="margin:0 2px 12px">العهدة مسؤولية '+emp+' ومش جوه الخزنة، فلما تجرد الخزنة الرقم بيكون من غيرها. كل مصاريف العربيات بيسجّلها الموظف من برنامج العهدة وبتظهر على كل عربية هنا. ولما العهدة تقرّب تخلص، زوّدها من الخزنة.</div>'+
     '<div class="actions">'+
       '<button class="abtn" data-act="form" data-kind="fundmove" data-sub="toFund"><span class="ic">💵</span>تزويد العهدة</button>'+
@@ -1206,14 +1207,12 @@ function renderFund(){
   var prev=$("#sheet").scrollTop;$("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=prev;
 }
 function capSplit(T){
-  var cap=T.capNow,fund=Math.min(Math.max(T.fund,0),Math.max(cap,0)),rest=cap-fund,pf=cap>0?Math.round(fund/cap*100):0;
+  var cap=T.capNow,fund=Math.min(Math.max(T.fundTot,0),Math.max(cap,0)),rest=cap-fund,pf=cap>0?Math.round(fund/cap*100):0;
   return '<div class="card"><div class="sect" style="margin-top:0">توزيع رأس المال</div>'+
     '<div class="kv"><span>رأس المال الحالي</span><b>'+m(cap)+'</b></div>'+
     '<div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin:8px 0 10px;background:var(--line)"><div style="width:'+(100-pf)+'%;background:var(--primary)"></div><div style="width:'+pf+'%;background:var(--silver)"></div></div>'+
     '<div class="kv"><span>🚗 للشغل (شراء عربيات)</span><b>'+m(rest,rest<0?"bad":"")+'</b></div>'+
     '<div class="kv"><span>🧾 منه عهدة للمصاريف</span><b>'+m(fund)+'</b></div>'+
-    '<div class="kv" style="padding-right:14px"><span class="sub">· اتصرف منها ولسه ما اترديش</span><b>'+m(T.unre)+'</b></div>'+
-    '<div class="kv" style="padding-right:14px"><span class="sub">· الباقي في العهدة</span><b>'+m(T.fundBal,T.fundBal<0?"bad":"")+'</b></div>'+
     '<div class="sub" style="margin-top:8px">العهدة جزء من رأس المال مش خصم منه — الفلوس لسه بتاعتك، بس متخصصة للمصاريف.</div></div>';
 }
 function renderCap(){
