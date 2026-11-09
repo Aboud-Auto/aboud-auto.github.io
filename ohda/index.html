@@ -4585,5 +4585,16 @@ if("serviceWorker" in navigator){
   window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js",{scope:"./"}).catch(function(){})});
 }
 </script>
+<script>
+/* زرار تنزيل البرنامج على الموبايل (أندرويد) */
+(function(){
+  var dp=null,box=null;
+  function standalone(){return (window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone}
+  function show(html){if(standalone()||sessionStorage.getItem("ohdaInstHide"))return;if(!box){box=document.createElement("div");box.style.cssText="position:fixed;left:12px;right:12px;bottom:14px;z-index:9999;background:#1a1a1a;color:#fff;border:1px solid #d4af37;border-radius:14px;padding:12px 14px;font:15px/1.6 system-ui,sans-serif;direction:rtl;box-shadow:0 6px 24px rgba(0,0,0,.5)";document.body.appendChild(box)}box.innerHTML=html+'<button id="instX" style="margin-inline-start:8px;background:none;border:0;color:#aaa;font-size:15px">إخفاء</button>';var x=document.getElementById("instX");x.onclick=function(){try{sessionStorage.setItem("ohdaInstHide","1")}catch(e){}box.remove();box=null};var g=document.getElementById("instGo");if(g)g.onclick=function(){if(!dp)return;dp.prompt();dp.userChoice.then(function(){dp=null;if(box){box.remove();box=null}})}}
+  window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();dp=e;show('📲 نزّل برنامج العهدة على الموبايل <button id="instGo" style="background:#d4af37;color:#000;border:0;border-radius:10px;padding:6px 14px;font-weight:700;margin-inline-start:6px">نزّله</button>')});
+  window.addEventListener("appinstalled",function(){if(box){box.remove();box=null}});
+  setTimeout(function(){if(!dp&&/Android/i.test(navigator.userAgent))show('📲 عشان تنزّله: افتح اللينك في <b>Chrome</b>، ودوس على ⋮ فوق، واختار <b>«تثبيت التطبيق»</b> أو <b>«إضافة إلى الشاشة الرئيسية»</b>.')},5000);
+})();
+</script>
 </body>
 </html>

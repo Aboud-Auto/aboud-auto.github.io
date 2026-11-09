@@ -1,6 +1,7 @@
 {
- "name": "العهدة تجربة",
- "short_name": "العهدة تجربة",
+ "id": "/ohda-test/",
+ "name": "برنامج العهدة (تجربة)",
+ "short_name": "العهدة",
  "lang": "ar",
  "dir": "rtl",
  "start_url": "./",
