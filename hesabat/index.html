@@ -349,7 +349,7 @@ function calc(){
   return {ew:ew,extAvail:extTot-ew,deposits:deposits,forfT:forfT,jam:jam,addcap:addcap,extTot:extTot,cars:cars,capital:capital,fund:fund,withdraw:withdraw,repay:repay,pw:pw,wDef:wDef,deficit:deficit,capNow:capNow,undist:undist,value:value,
     profit:profit,profitEx:profitEx,recv:recv,owe:owe,sOwe:sOwe,lossDef:lossDef,lossPaid:lossPaid,lossRem:lossRem,
     soldN:soldN,stockN:stockN,stockCost:stockCost,debts:debts,cashNow:cashNow,safeBal:safeBal,instaBal:instaBal,
-    cashTot:cashTot,instaTot:instaTot,fundBal:fundBal,fundEmp:(S.settings&&S.settings.fundEmp)||"",unre:unre,pOwed:pOwed,inv:IS,check:check};
+    cashTot:cashTot,instaTot:instaTot,fundBal:fundBal,fundEmp:(S.settings&&S.settings.fundEmp)||"",unre:NF()?0:unre,pOwed:pOwed,inv:IS,check:check};
 }
 function carById(id){return calc().cars.find(function(c){return c.id===id})}
 
@@ -1002,6 +1002,7 @@ var FEATS=[
   {id:"pricing",name:"التسعير",desc:"أسعار العربية في صفقاتك القديمة"},
   {id:"split",name:"تقسيم الإنستاباي",desc:"البيعة اتحوّلت على أكتر من حساب"}
 ];
+function NF(){return featOn("fund")}
 function featOn(id){var f=S.brand&&S.brand.feat;return !f||!!f[id]}
 function featData(id){
   var T=calc();
@@ -1100,7 +1101,7 @@ function renderHome(){
   if(!S.settings){var fo=featOn("fund");h+='<div class="card"><div class="sect" style="margin-top:0">ابدأ من هنا 👋</div><div class="sub" style="margin-bottom:12px">حدّد رأس المال'+(fo?' والعهدة':'')+' الأول عشان الحسابات تظبط.</div><button class="btn" data-act="form" data-kind="settings">تحديد رأس المال'+(fo?' والعهدة':'')+'</button></div>'}
   h+=heroHtml(T);
   h+='<div class="qio"><button class="qin" data-act="qio" data-dir="in"><span class="ic">⬇️</span>داخل</button><button class="qout" data-act="qio" data-dir="out"><span class="ic">⬆️</span>خارج</button></div>';
-  h+='<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف</button>';
+  if(!NF())h+='<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف</button>';
   h+='<div class="card row" data-act="tab" data-tab="day" style="cursor:pointer"><div><div class="tl">النهاردة</div><div style="font-weight:700">مصاريف '+m(D.expT)+' · تحصيل '+m(D.cashT+D.instaT)+'</div></div><span class="sub">تقفيل اليوم ‹</span></div>';
   h+='<div class="grid2">'+
     tapTile(tile("🚗 عربيات في المعرض",'<span class="num">'+T.stockN+'</span>',"تكلفتها "+m(T.stockCost)),"stock")+
@@ -1193,7 +1194,7 @@ function renderFund(){
   var T=calc(),mv=fundMoves(),emp=esc(T.fundEmp||"الموظف");
   var h=sheetHead("🧾 العهدة")+
     '<div class="hero"><div class="l">المفروض مع '+emp+' دلوقتي</div><div class="v">'+m(T.fundBal,T.fundBal<0?"bad":"")+'</div><div class="s">العهدة المتسلّمة '+m(T.fund)+(T.unre>0.5?' · اتصرف ومستني يترد '+m(T.unre):'')+'</div></div>'+
-    '<div class="sub" style="margin:0 2px 12px">العهدة مسؤولية '+emp+' ومش جوه الخزنة، فلما تجرد الخزنة الرقم بيكون من غيرها. المصروف اللي بيتسجّل «من العهدة» بيقلل العهدة بس. ولما تبيع عربية وتعلّم إن مصاريفها اتردّت، المبلغ بيطلع من الخزنة ويرجع للعهدة.</div>'+
+    '<div class="sub" style="margin:0 2px 12px">العهدة مسؤولية '+emp+' ومش جوه الخزنة، فلما تجرد الخزنة الرقم بيكون من غيرها. كل مصاريف العربيات بيسجّلها الموظف من برنامج العهدة وبتظهر على كل عربية هنا. ولما العهدة تقرّب تخلص، زوّدها من الخزنة.</div>'+
     '<div class="actions">'+
       '<button class="abtn" data-act="form" data-kind="fundmove" data-sub="toFund"><span class="ic">💵</span>تزويد العهدة</button>'+
       '<button class="abtn" data-act="form" data-kind="fundmove" data-sub="fromFund"><span class="ic">↩️</span>رجّع فلوس للخزنة</button>'+
@@ -1800,7 +1801,7 @@ function openForm(kind,o){
     h=sheetHead("تسجيل مصروف")+fld("العربية",carSel("carId",stockFirst(T),sel))+
       '<div class="two">'+fld("المبلغ",minp("amount"))+fld("التاريخ",dinp("date"))+'</div>'+
       fld("النوع",'<select name="type">'+EXP_TYPES.map(function(t){return '<option>'+t+'</option>'}).join("")+'</select>')+
-      fld("اتدفع من",srcSel("src",featOn("fund")?"fund":"cash",true))+
+      fld("اتدفع من",srcSel("src","cash",!NF()))+
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+'<button class="btn" data-act="submit">حفظ المصروف</button>';
   }else if(kind==="sell"){
     var stock=T.cars.filter(function(c){return !c.sold});
@@ -2516,9 +2517,9 @@ function renderDetail(){
       h+='<div class="sect">🔖 العربون</div><div class="card"><div class="kv"><span>العربية محجوزة بعربون</span><b class="warn">'+m(c.dep)+'</b></div>'+(dn.length?'<div class="kv"><span>المشتري</span><b>'+esc(dn.join("، "))+'</b></div>':'')+'<div class="sub" style="margin:6px 0 10px">هيتخصم من سعر البيع لما تبيعها.</div><div class="two"><button class="btn sec" data-act="form" data-kind="dep" data-car="'+c.id+'">+ زيادة عربون</button><button class="btn danger" data-act="form" data-kind="depx" data-car="'+c.id+'">إلغاء العربون</button></div></div>';
     }else if(featOn("deposit"))h+='<button class="btn sec" style="margin-bottom:10px" data-act="form" data-kind="dep" data-car="'+c.id+'">🔖 تسجيل عربون على العربية</button>';
   }
-  h+='<div class="two" style="margin-bottom:10px"><button class="btn sec" data-act="form" data-kind="expense" data-car="'+c.id+'">+ مصروف</button>'+
+  h+='<div class="two" style="margin-bottom:10px">'+(NF()&&!c.sold?'<div class="sub" style="align-self:center;text-align:center">💸 مصاريف العربية دي بتتسجل من برنامج العهدة</div>':'<button class="btn sec" data-act="form" data-kind="expense" data-car="'+c.id+'">+ مصروف'+(NF()?' (من الخزنة)':'')+'</button>')+
      (c.sold?'<button class="btn sec" data-act="form" data-kind="collect" data-car="'+c.id+'">+ تحصيل</button>':'<button class="btn" data-act="form" data-kind="sell" data-car="'+c.id+'">بيع العربية</button>')+'</div>';
-  if(rbTot(c)>0.5){var rbt=rbTot(c),rbp=rbPaid(c),rbl=rbLeft(c),rbs=rbList(c);
+  if(!NF()&&rbTot(c)>0.5){var rbt=rbTot(c),rbp=rbPaid(c),rbl=rbLeft(c),rbs=rbList(c);
     h+='<div class="sect">💼 رد مصاريف العهدة من الخزنة</div><div class="card">'+
       '<div class="kv"><span>مصاريف العهدة</span><b>'+m(rbt)+'</b></div>'+
       '<div class="kv"><span>رجّعت</span><b>'+m(rbp,rbp>0.5?"good":"")+'</b></div>'+
