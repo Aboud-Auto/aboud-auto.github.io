@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>برنامج العهدة</title>
+<title>العهدة</title>
 <meta name="theme-color" content="#050505">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -1193,10 +1193,14 @@ function renderOhda(){
   var T=calc(),emp=esc(T.fundEmp||"الموظف"),stock=T.cars.filter(function(c){return !c.sold}),sold=T.cars.filter(function(c){return c.sold});
   function fx(c){return S.expenses.filter(function(e){return e.carId===c.id&&expSrc(e)==="fund"}).sort(function(x,y){return (y.date||"").localeCompare(x.date||"")})}
   function tot(l){return l.reduce(function(t,e){return t+(+e.amount||0)},0)}
-  var spent=tot(S.expenses.filter(function(e){return expSrc(e)==="fund"})),mv=fundMoves();
+  var mv=fundMoves(),rec=+T.fund||0,ret=0;
+  S.transfers.forEach(function(x){if(x.dir==="toFund")rec+=+x.amount||0;else if(x.dir==="fromFund")ret+=+x.amount||0});
+  T.cars.forEach(function(c){rbList(c).forEach(function(r){rec+=+r.amt||0})});
+  var spent=rec-ret-T.fundBal;
   var h='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div><h1>🧾 العهدة</h1><div class="sub">'+esc(brandName())+' · '+fdate(todayStr())+'</div></div></div>'+
-    '<div class="banner">🧪 نسخة تجربة لبرنامج العهدة. مربوط بنفس حسابات <a href="../hesabat-test/" style="color:inherit;text-decoration:underline">المعرض</a>.</div>'+
-    '<div class="hero"><div class="l">الباقي في العهدة مع '+emp+'</div><div class="v">'+m(T.fundBal,T.fundBal<0?"bad":"")+'</div><div class="s">أصل العهدة '+m(T.fund)+' · اتصرف على العربيات '+m(spent)+'</div></div>'+
+    
+    '<div class="hero"><div class="l">الموجود في العهدة مع '+emp+'</div><div class="v">'+m(T.fundBal,T.fundBal<0?"bad":"")+'</div><div class="s">أصل العهدة '+m(T.fund)+'</div></div>'+
+    '<div class="card"><div class="kv"><span>💵 إجمالي اللي اتسلّم للعهدة</span><b>'+m(rec)+'</b></div><div class="kv"><span>💸 إجمالي اللي اتصرف</span><b>'+m(spent)+'</b></div>'+(ret>0.5?'<div class="kv"><span>↩️ رجع للخزنة</span><b>'+m(ret)+'</b></div>':'')+'<div class="kv"><span><b>= الموجود دلوقتي</b></span><b>'+m(T.fundBal,T.fundBal<0?"bad":"")+'</b></div></div>'+
     '<div class="actions">'+
       '<button class="abtn" data-act="form" data-kind="expense"><span class="ic">💸</span>تسجيل مصروف</button>'+
       '<button class="abtn" data-act="form" data-kind="fundmove" data-sub="toFund"><span class="ic">💵</span>زوّد العهدة من الخزنة</button>'+
@@ -1518,7 +1522,7 @@ function renderLogin(){
     $("#loginSub").textContent=signup?"التسجيل بكود دعوة بس. اكتب الكود اللي وصلك، واختار اسم مستخدم وباسورد تدخلوا بيهم انت واللي شغالين معاك":"ادخل باسم المستخدم والباسورد";
     $("#fpBtn").style.display=signup?"none":"block";
     this.textContent=signup?"عندي حساب، رجوع للدخول":"أول مرة؟ معاك كود دعوة؟ اعمل حسابك";$("#loginErr").textContent=""};
-  $("#demoBtn").onclick=startDemo;
+  $("#demoBtn").onclick=startDemo;if(APP_MODE==="ohda")$("#demoBtn").style.display="none";
   async function checkInv(){var c=normCode($("#loginForm").inv.value),el=$("#invInfo");if(!c){el.textContent="";return}if(c.length<6){el.textContent="";return}
     el.textContent="جاري التأكد من الكود…";var iv=await inviteGet(c);if(normCode($("#loginForm").inv.value)!==c)return;var m=inviteErr(iv);
     el.innerHTML=m?'<span style="color:var(--bad)">'+esc(m)+'</span>':'<span class="ok">✔ كود صحيح'+(iv.name?" — دعوة باسم "+esc(iv.name):"")+'</span>'}
@@ -4249,7 +4253,6 @@ document.addEventListener("click",async function(e){
   else if(a==="rcDone"){if(rcSaved()){lsSet("hb_rcshow_"+ENC.uid);closeSheet()}else rcVerify()}
   else if(a==="rcCheck")rcCheck();
   else if(a==="demoSignup")exitDemo(true);
-  else if(a==="ldreset")ldReset();
   else if(a==="linkMail")openLinkMail();
   else if(a==="linkSave")linkSave(t);
   else if(a==="cloudList")openCloud();
@@ -4409,20 +4412,12 @@ async function cloudRestore(id){
 }
 
 /* ---------- demo (تجربة) ---------- */
-/* تجربة مشتركة بين «المعرض تجربة» و«العهدة»: نفس البيانات التجريبية محفوظة على الجهاز وبتتحدث في الاتنين */
-var LD_KEY="hb_linkdemo_v1",LD_KEYS=["settings","brand","ob","cars","expenses","cols","cap","pay","transfers","ledger","ext","inv","invmov","scnt"];
-function ldSave(){try{var o={};LD_KEYS.forEach(function(k){o[k]=S[k]});localStorage.setItem(LD_KEY,JSON.stringify(o))}catch(e){}}
-function ldLoad(){try{var o=JSON.parse(localStorage.getItem(LD_KEY)||"null");if(!o)return false;LD_KEYS.forEach(function(k){if(o[k]!==undefined)S[k]=o[k]});S.brandLoaded=true;return true}catch(e){return false}}
-function ldReset(){try{localStorage.removeItem(LD_KEY)}catch(e){}location.reload()}
-window.addEventListener("storage",function(e){if(e.key===LD_KEY&&DEMO&&ldLoad())refresh()});
-document.addEventListener("visibilitychange",function(){if(!document.hidden&&DEMO&&ldLoad())refresh()});
-
 var DEMO=false;
 var DEMO_RK={cars:"cars",expenses:"expenses",collections:"cols",capital:"cap",payouts:"pay",transfers:"transfers",ledger:"ledger",external:"ext",investors:"inv",invmoves:"invmov"};
 function demoId(){return "d"+Math.random().toString(36).slice(2,11)}
 function demoRef(path){
   var p=path.split("/"),c=p[0],id=p[1];
-  function after(){setTimeout(function(){ldSave();refresh()},0);return Promise.resolve()}
+  function after(){setTimeout(refresh,0);return Promise.resolve()}
   function arr(){return S[DEMO_RK[c]]}
   return {id:id,
     set:function(data,opt){
@@ -4488,13 +4483,13 @@ function promoData(){
   S.ext=[c({id:"x1",desc:"سمسرة بيع BMW 320i",seller:"م. هشام",buyer:"أ. وليد",amount:15000,date:d(5),how:"cash",note:""})];
   S.pay=[];
 }
-function startDemo(){DEMO=true;db=demoDb;demoData();if(!ldLoad()){promoData();S.brand={name:"معرض تجريبي"};S.brandLoaded=true;S.expenses.forEach(function(e,i){if(i%3===2)e.src="cash"});ldSave()}S.auth="in";S.tab="home";S.err=null;S.noDb=false;applyBrand();render();window.scrollTo(0,0)}
-function demoBar(){if(PROMO)return "";if(APP_MODE)return '<div class="banner demo">👀 تجربة مشتركة: أي حاجة تعملها هنا هتظهر في '+(APP_MODE==="ohda"?'«المعرض تجربة»':'«العهدة»')+' على نفس الموبايل. البيانات أمثلة ومش مربوطة بأي حساب.<a class="btn small" style="display:inline-block;text-decoration:none;margin-inline-end:6px" href="'+(APP_MODE==="ohda"?'../hesabat-test/?demo':'../ohda/?demo')+'">'+(APP_MODE==="ohda"?'🏠 روح للمعرض':'🧾 روح للعهدة')+'</a><button class="btn small" data-act="ldreset">رجّع الأمثلة من الأول</button></div>';return '<div class="banner demo">👀 دي نسخة تجريبية فاضية: ابدأ بتحديد رأس المال'+(featOn("fund")?' والعهدة':'')+'، وبعدها جرّب شراء وبيع براحتك. مفيش حاجة هتتحفظ.<button class="btn small" data-act="demoSignup">اعمل حسابك دلوقتي</button></div>'}
+function startDemo(){if(APP_MODE==="ohda")return;DEMO=true;db=demoDb;demoData();S.auth="in";S.tab="home";S.err=null;S.noDb=false;applyBrand();render();window.scrollTo(0,0)}
+function demoBar(){if(PROMO)return "";return '<div class="banner demo">👀 دي نسخة تجريبية فاضية: ابدأ بتحديد رأس المال'+(featOn("fund")?' والعهدة':'')+'، وبعدها جرّب شراء وبيع براحتك. مفيش حاجة هتتحفظ.<button class="btn small" data-act="demoSignup">اعمل حسابك دلوقتي</button></div>'}
 function exitDemo(signup){try{if(signup)sessionStorage.setItem("hb_signup","1")}catch(e){}location.reload()}
 
 /* ---------- boot ---------- */
 async function boot(){
-  if(PROMO||(APP_MODE&&/[?&]demo\b/.test(location.search))){startDemo();return}
+  if(PROMO){startDemo();return}
   render();
   if(!window.firebase){S.auth="in";S.noDb=true;render();return}
   FBA=firebase.initializeApp({

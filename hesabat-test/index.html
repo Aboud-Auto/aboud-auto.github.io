@@ -1585,7 +1585,7 @@ function render(){
   else if(S.tab==="more")h=renderMore();
   else if(S.tab==="feat")h=renderFeat();
   else h=renderSet();
-  app.innerHTML=(DEMO?demoBar():"")+(APP_MODE==="nofund"?'<div class="banner">🧪 نسخة تجربة: مصاريف العربيات بتتسجل من <a href="../ohda/" style="color:inherit;text-decoration:underline">برنامج العهدة</a>، ومصاريف وقت البيع بتطلع من الخزنة.</div>':"")+h;
+  app.innerHTML=(DEMO?demoBar():"")+(APP_MODE==="nofund"?'<div class="banner">🧪 نسخة تجربة: مصاريف العربيات بتتسجل من <a href="../ohda-test/" style="color:inherit;text-decoration:underline">برنامج العهدة</a>، ومصاريف وقت البيع بتطلع من الخزنة.</div>':"")+h;
   renderNav();
 }
 function refresh(){
@@ -4459,7 +4459,7 @@ function promoData(){
   S.pay=[];
 }
 function startDemo(){DEMO=true;db=demoDb;demoData();if(!ldLoad()){promoData();S.brand={name:"معرض تجريبي"};S.brandLoaded=true;S.expenses.forEach(function(e,i){if(i%3===2)e.src="cash"});ldSave()}S.auth="in";S.tab="home";S.err=null;S.noDb=false;applyBrand();render();window.scrollTo(0,0)}
-function demoBar(){if(PROMO)return "";if(APP_MODE)return '<div class="banner demo">👀 تجربة مشتركة: أي حاجة تعملها هنا هتظهر في '+(APP_MODE==="ohda"?'«المعرض تجربة»':'«العهدة»')+' على نفس الموبايل. البيانات أمثلة ومش مربوطة بأي حساب.<a class="btn small" style="display:inline-block;text-decoration:none;margin-inline-end:6px" href="'+(APP_MODE==="ohda"?'../hesabat-test/?demo':'../ohda/?demo')+'">'+(APP_MODE==="ohda"?'🏠 روح للمعرض':'🧾 روح للعهدة')+'</a><button class="btn small" data-act="ldreset">رجّع الأمثلة من الأول</button></div>';return '<div class="banner demo">👀 دي نسخة تجريبية فاضية: ابدأ بتحديد رأس المال'+(featOn("fund")?' والعهدة':'')+'، وبعدها جرّب شراء وبيع براحتك. مفيش حاجة هتتحفظ.<button class="btn small" data-act="demoSignup">اعمل حسابك دلوقتي</button></div>'}
+function demoBar(){if(PROMO)return "";if(APP_MODE)return '<div class="banner demo">👀 تجربة مشتركة: أي حاجة تعملها هنا هتظهر في '+(APP_MODE==="ohda"?'«المعرض تجربة»':'«العهدة»')+' على نفس الموبايل. البيانات أمثلة ومش مربوطة بأي حساب.<a class="btn small" style="display:inline-block;text-decoration:none;margin-inline-end:6px" href="'+(APP_MODE==="ohda"?'../hesabat-test/?demo':'../ohda-test/?demo')+'">'+(APP_MODE==="ohda"?'🏠 روح للمعرض':'🧾 روح للعهدة')+'</a><button class="btn small" data-act="ldreset">رجّع الأمثلة من الأول</button></div>';return '<div class="banner demo">👀 دي نسخة تجريبية فاضية: ابدأ بتحديد رأس المال'+(featOn("fund")?' والعهدة':'')+'، وبعدها جرّب شراء وبيع براحتك. مفيش حاجة هتتحفظ.<button class="btn small" data-act="demoSignup">اعمل حسابك دلوقتي</button></div>'}
 function exitDemo(signup){try{if(signup)sessionStorage.setItem("hb_signup","1")}catch(e){}location.reload()}
 
 /* ---------- boot ---------- */
