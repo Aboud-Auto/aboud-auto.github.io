@@ -1196,11 +1196,15 @@ function renderOhda(){
   var mv=fundMoves().map(function(x){var t=String(x.t).replace(/ \((من الخزنة|من إنستاباي)\)/,"").replace("💵 تزويد العهدة","💵 استلام عهدة").replace("↩️ رجوع فلوس للخزنة","↩️ رجّع فلوس لصاحب المعرض").replace(/^🧾 رد مصاريف (.*) من الخزنة$/,"💵 استلام عهدة (مصاريف $1)");return Object.assign({},x,{t:t})}),rec=+T.fund||0,ret=0;
   S.transfers.forEach(function(x){if(x.dir==="toFund")rec+=+x.amount||0;else if(x.dir==="fromFund")ret+=+x.amount||0});
   T.cars.forEach(function(c){rbList(c).forEach(function(r){rec+=+r.amt||0})});
-  var spent=rec-ret-T.fundBal;
+  var base=+T.fund||0,added=rec-base,spent=rec-ret-T.fundBal;
   var h='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div><h1>🧾 العهدة</h1><div class="sub">'+esc(brandName())+' · '+fdate(todayStr())+'</div></div></div>'+
-    '<div class="banner">🧪 نسخة تجربة لبرنامج العهدة. مربوط بنفس حسابات <a href="../hesabat-test/" style="color:inherit;text-decoration:underline">المعرض</a>.</div>'+
-    '<div class="hero"><div class="l">الموجود في العهدة مع '+emp+'</div><div class="v">'+m(T.fundBal,T.fundBal<0?"bad":"")+'</div><div class="s">أصل العهدة '+m(T.fund)+'</div></div>'+
-    '<div class="card"><div class="kv"><span>💵 إجمالي اللي اتسلّم للعهدة</span><b>'+m(rec)+'</b></div><div class="kv"><span>💸 إجمالي اللي اتصرف</span><b>'+m(spent)+'</b></div>'+(ret>0.5?'<div class="kv"><span>↩️ رجع لصاحب المعرض</span><b>'+m(ret)+'</b></div>':'')+'<div class="kv"><span><b>= الموجود دلوقتي</b></span><b>'+m(T.fundBal,T.fundBal<0?"bad":"")+'</b></div></div>'+
+    '<div class="hero"><div class="l">الموجود في العهدة مع '+emp+' دلوقتي</div><div class="v">'+m(T.fundBal,T.fundBal<0?"bad":"")+'</div><div class="s">أصلها كان '+m(base)+' · وبقت '+m(T.fundBal,T.fundBal<0?"bad":"")+'</div></div>'+
+    '<div class="card"><div class="sect" style="margin-top:0">تفاصيل فلوس العهدة</div>'+
+      '<div class="kv"><span>🧾 أصل العهدة</span><b>'+m(base)+'</b></div>'+
+      '<div class="kv"><span>➕ زوّدها صاحب المعرض</span><b class="num good">'+fmt(added)+'</b></div>'+
+      '<div class="kv"><span>➖ اتصرف منها مصاريف</span><b class="num bad">'+fmt(spent)+'</b></div>'+
+      (ret>0.5?'<div class="kv"><span>➖ رجع لصاحب المعرض</span><b class="num bad">'+fmt(ret)+'</b></div>':'')+
+      '<div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px"><span><b>= الموجود دلوقتي</b></span><b>'+m(T.fundBal,T.fundBal<0?"bad":"")+'</b></div></div>'+
     '<div class="actions">'+
       '<button class="abtn" data-act="form" data-kind="expense"><span class="ic">💸</span>تسجيل مصروف</button>'+
       '<button class="abtn" data-act="form" data-kind="fundcount"><span class="ic">🧮</span>جرد العهدة</button></div>';
