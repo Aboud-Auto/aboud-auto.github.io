@@ -92,6 +92,7 @@ ol.steps{padding-inline-start:20px;margin:6px 0;font-size:14px}ol.steps li{margi
 (function(){
 "use strict";
 var APP_URL="https://aboud-auto.github.io/hesabat/";
+var OHDA_URL="https://aboud-auto.github.io/ohda/";
 var $=function(s){return document.querySelector(s)};
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function toast(t){var el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(function(){el.classList.remove("show")},2600)}
@@ -101,7 +102,7 @@ function waNum(p){var d=String(p||"").replace(/\D/g,"");if(d.indexOf("00")===0)d
 function waHref(phone,text){var n=waNum(phone);return "https://wa.me/"+(n||"")+"?text="+encodeURIComponent(text)}
 function newCode(){var A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",r=new Uint8Array(8),s="";crypto.getRandomValues(r);for(var i=0;i<8;i++)s+=A[r[i]%A.length];return s}
 function inviteLink(c){return APP_URL+"?inv="+c}
-function inviteMsg(iv){return "أهلاً "+(iv.name||"")+" 👋\nده لينك برنامج حسابات المعرض، إهداء من عبود أوتو:\n"+inviteLink(iv.code)+"\n\nكود الدعوة: "+iv.code+(iv.serial?"\nرقم السيريال بتاعك: "+serialStr(iv.serial):"")+(iv.plan==="trial"?"\n🎁 أول شهر مجاني، جرّبه براحتك ولو عجبك كمّل":iv.plan?"\nالاشتراك: "+planName(iv.plan):"")+"\nالكود ده ليك انت بس، وبيشتغل مرة واحدة."}
+function inviteMsg(iv){return "أهلاً "+(iv.name||"")+" 👋\nده لينك برنامج حسابات المعرض، إهداء من عبود أوتو:\n"+inviteLink(iv.code)+"\n\nكود الدعوة: "+iv.code+(iv.serial?"\nرقم السيريال بتاعك: "+serialStr(iv.serial):"")+(iv.plan==="trial"?"\n🎁 أول شهر مجاني، جرّبه براحتك ولو عجبك كمّل":iv.plan?"\nالاشتراك: "+planName(iv.plan):"")+"\nالكود ده ليك انت بس، وبيشتغل مرة واحدة."+"\n\n🧾 ولينك برنامج العهدة (للموظف اللي بيصرف على العربيات):\n"+OHDA_URL+"\nبيدخل عليه بنفس اسم المستخدم والباسورد بتوع حسابك بعد ما تعمله."}
 async function copy(t){try{await navigator.clipboard.writeText(t);toast("اتنسخ ✔")}catch(e){prompt("انسخ من هنا:",t)}}
 function openSheet(h){$("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=0}
 function closeSheet(){$("#ov").classList.remove("show")}
