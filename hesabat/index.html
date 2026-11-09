@@ -342,7 +342,8 @@ function calc(){
   var sOwe=0;cars.forEach(function(c){sOwe+=c.sellerRem});owe+=sOwe;
   var extTot=0;S.ext.forEach(function(x){extTot+=+x.amount||0});
   var F=flowsOf(cars),fundBal=fund+F.fund,safeBal=capital-fund+F.cash,instaBal=F.insta;if(noInsta()){safeBal+=instaBal;instaBal=0}var cashNow=safeBal+instaBal;
-  var fundTot=fund;S.transfers.forEach(function(x){if(x.dir==="toFund")fundTot+=+x.amount||0;else if(x.dir==="fromFund")fundTot-=+x.amount||0});cars.forEach(function(c){rbList(c).forEach(function(r){fundTot+=+r.amt||0})});
+  var fundTot=fund;S.transfers.forEach(function(x){if(x.dir==="toFund")fundTot+=+x.amount||0;else if(x.dir==="fromFund")fundTot-=+x.amount||0});
+  var fundOut=fundTot-fundBal;
   var lossRem=lossDef-lossPaid,wDef=withdraw-repay,deficit=wDef+lossRem,capNow=capital+addcap+extTot-ew-jam-deficit;
   var undist=profitEx-repay-lossPaid-pw,value=capNow+undist;
   var IS=invStats(cars);
@@ -350,7 +351,7 @@ function calc(){
   return {ew:ew,extAvail:extTot-ew,deposits:deposits,forfT:forfT,jam:jam,addcap:addcap,extTot:extTot,cars:cars,capital:capital,fund:fund,withdraw:withdraw,repay:repay,pw:pw,wDef:wDef,deficit:deficit,capNow:capNow,undist:undist,value:value,
     profit:profit,profitEx:profitEx,recv:recv,owe:owe,sOwe:sOwe,lossDef:lossDef,lossPaid:lossPaid,lossRem:lossRem,
     soldN:soldN,stockN:stockN,stockCost:stockCost,debts:debts,cashNow:cashNow,safeBal:safeBal,instaBal:instaBal,
-    cashTot:cashTot,instaTot:instaTot,fundBal:fundBal,fundTot:fundTot,fundEmp:(S.settings&&S.settings.fundEmp)||"",unre:NF()?0:unre,pOwed:pOwed,inv:IS,check:check};
+    cashTot:cashTot,instaTot:instaTot,fundBal:fundBal,fundTot:fundTot,fundOut:fundOut,fundEmp:(S.settings&&S.settings.fundEmp)||"",unre:NF()?0:unre,pOwed:pOwed,inv:IS,check:check};
 }
 function carById(id){return calc().cars.find(function(c){return c.id===id})}
 
@@ -397,7 +398,7 @@ function srcNote(x){return x&&x.src==="held"?"من اللي معاه على حس
 function dline(){var a=[],i;for(i=0;i<arguments.length;i++)if(arguments[i])a.push(arguments[i]);return a.join(" · ")}
 function srcSel(n,sel,wf){
   var T=calc();wf=wf&&(featOn("fund")||sel==="fund");
-  return '<select name="'+n+'">'+(wf?'<option value="fund"'+(sel==="fund"?" selected":"")+'>العهدة - مع '+esc(T.fundEmp||"الموظف")+' (رصيدها '+fmt(T.fundBal)+')</option>':'')+'<option value="cash"'+(sel==="insta"||(wf&&sel!=="cash")?"":" selected")+'>الخزنة - كاش (رصيدها '+fmt(T.safeBal)+')</option><option value="insta"'+(sel==="insta"?" selected":"")+'>إنستاباي (رصيده '+fmt(T.instaBal)+')</option></select>';
+  return '<select name="'+n+'">'+(wf?'<option value="fund"'+(sel==="fund"?" selected":"")+'>العهدة - مع '+esc(T.fundEmp||"الموظف")+'</option>':'')+'<option value="cash"'+(sel==="insta"||(wf&&sel!=="cash")?"":" selected")+'>الخزنة - كاش (رصيدها '+fmt(T.safeBal)+')</option><option value="insta"'+(sel==="insta"?" selected":"")+'>إنستاباي (رصيده '+fmt(T.instaBal)+')</option></select>';
 }
 function srcVal(){var v=val("src");return v==="insta"?"insta":v==="fund"?"fund":"cash"}
 
@@ -778,11 +779,8 @@ function tileTap(k){
     if(capRecs("withdraw").length)h+=tsec("👤 السحوبات من رأس المال")+capRecRows("withdraw");
     if(capRecs("repay").length)h+=tsec("✅ السداد")+capRecRows("repay");
   }else if(k==="fund"){
-    t="💼 رصيد العهدة";cs=T.cars.filter(function(c){return rbLeft(c)>0.5});
-    h+=tkv("العهدة",m(T.fundTot));
-    if(!NF()){h+=tsec("اتصرف منها ولسه ما اترديش");
-    h+=cs.length?cs.map(function(c){var rp=rbPaid(c);return tkv(esc(c.name),m(rbLeft(c),"bad"),c.id,(c.sold?"اتباعت · رجّع المصاريف للعهدة":"لسه في المعرض")+(rp>0.5?" · رجّعت "+fmt(rp)+" من "+fmt(rbTot(c)):""))}).join(""):tnone("مفيش مصاريف مستنية ترجع");
-    h+=ttot("الباقي في العهدة",m(T.fundBal,T.fundBal<0?"bad":""));}
+    t="💼 العهدة";
+    h+=ttot("العهدة",m(T.fundTot));
   }else if(k==="profitrep"){
     t="📈 تقرير الأرباح";var PR=T.undist+T.extAvail-T.lossRem,earned=T.profitEx+T.extTot;
     h+=tsec("كسبت كام");
@@ -851,7 +849,7 @@ function edMetrics(){
   var T=calc(),M=[];
   M.push(["رصيد الخزنة",T.safeBal]);
   if(!noInsta())M.push(["رصيد الإنستاباي",T.instaBal]);
-  if(featOn("fund"))M.push(["رصيد العهدة",T.fundBal]);
+  if(featOn("fund"))M.push(["العهدة",T.fundTot]);
   M.push(["الأرباح اللي لسه ماتسحبتش",T.undist+T.extAvail-T.lossRem]);
   (T.inv&&T.inv.list||[]).forEach(function(o){M.push(["رصيد المستثمر "+(o.name||""),o.bal]);if(o.free!=null)M.push(["كاش المستثمر "+(o.name||""),o.free])});
   T.cars.forEach(function(c){if(c.sold)M.push(["باقي تمن "+c.name+" (اتحصّل أكتر من تمن البيع)",c.remaining]);(c.parts||[]).forEach(function(p){M.push(["حساب الشريك "+(p.name||"")+" في "+c.name+" (هياخد أكتر من حقه)",p.remaining])})});
@@ -895,7 +893,7 @@ function heroTap(k,T){
       (Math.abs(T.pOwed)>=0.5?tkv("+ فلوس الشركاء",m(T.pOwed)):"")+
       (Math.abs(T.inv.bal)>=0.5?tkv("+ فلوس المستثمرين",m(T.inv.bal)):"")+
       (T.deposits>0.5?tkv("+ عرابين",m(T.deposits)):"")+
-      (Math.abs(T.fundBal)>=0.5?tkv("− العهدة مع المسؤول عن الصرف",m(T.fundBal,"bad")):"")+
+      (Math.abs(T.fundTot)>=0.5?tkv("− العهدة مع المسؤول عن الصرف",m(T.fundTot,"bad")):"")+(T.fundOut>0.5?tkv("+ مصاريف من العهدة لسه ما اترجعتلهاش",m(T.fundOut)):"")+
       (T.stockCost>0.5?tkv("− عربيات في المعرض",m(T.stockCost,"bad"),null,'<span class="num">'+T.stockN+'</span> عربية'):"")+
       (T.debts>0.5?tkv("− باقي عند العملاء",m(T.debts,"bad")):"")+
       (T.recv>0.5?tkv("− سلف ادتها لناس",m(T.recv,"bad")):"")+
@@ -1185,9 +1183,6 @@ function renderDay(){
 function fundMoves(){
   var T=calc(),it=[];
   S.transfers.forEach(function(x){if(x.dir==="toFund"||x.dir==="fromFund")it.push({d:x.date,c:x.createdAt||0,t:x.dir==="toFund"?"💵 تزويد العهدة"+(x.src==="insta"?" (من إنستاباي)":" (من الخزنة)"):"↩️ رجوع فلوس للخزنة",a:x.dir==="toFund"?(+x.amount||0):-(+x.amount||0),n:x.note,del:["transfers",x.id]})});
-  T.cars.forEach(function(c){rbList(c).forEach(function(r){if(r.amt>0)it.push({d:r.date,c:0,t:"🧾 رد مصاريف "+esc(c.name)+" من الخزنة",a:r.amt})})});
-  S.expenses.forEach(function(e){if(expSrc(e)!=="fund")return;var c=S.cars.find(function(y){return y.id===e.carId});it.push({d:e.date,c:e.createdAt||0,t:"💸 "+esc(e.type||"مصروف")+" - "+esc(c?c.name:"؟"),a:-(+e.amount||0),n:e.note})});
-  S.ledger.forEach(function(x){if(x.kind==="loan"&&x.src==="fund")it.push({d:x.date,c:x.createdAt||0,t:"⚠️ عجز عهدة على "+esc(x.person||"الموظف"),a:-(+x.amount||0),n:x.note})});
   return it.sort(function(a,b){return (b.d||"").localeCompare(a.d||"")||b.c-a.c});
 }
 function openFund(){modal={type:"fund"};renderFund();$("#sheet").scrollTop=0}
@@ -1195,7 +1190,7 @@ function renderFund(){
   var T=calc(),mv=fundMoves(),emp=esc(T.fundEmp||"الموظف");
   var h=sheetHead("🧾 العهدة")+
     '<div class="hero"><div class="l">العهدة مع '+emp+'</div><div class="v">'+m(T.fundTot)+'</div></div>'+
-    '<div class="sub" style="margin:0 2px 12px">العهدة مسؤولية '+emp+' ومش جوه الخزنة، فلما تجرد الخزنة الرقم بيكون من غيرها. كل مصاريف العربيات بيسجّلها الموظف من برنامج العهدة وبتظهر على كل عربية هنا. ولما العهدة تقرّب تخلص، زوّدها من الخزنة.</div>'+
+    '<div class="sub" style="margin:0 2px 12px">العهدة مسؤولية '+emp+' ومش جوه الخزنة، فلما تجرد الخزنة الرقم بيكون من غيرها. رقم العهدة هنا ثابت: مصاريف الموظف مش بتنقّصه، وبيتغيّر بس لما تزوّد العهدة أو ترجّع منها فلوس للخزنة. المصاريف بيسجّلها الموظف من برنامج العهدة وبتظهر على كل عربية.</div>'+
     '<div class="actions">'+
       '<button class="abtn" data-act="form" data-kind="fundmove" data-sub="toFund"><span class="ic">💵</span>تزويد العهدة</button>'+
       '<button class="abtn" data-act="form" data-kind="fundmove" data-sub="fromFund"><span class="ic">↩️</span>رجّع فلوس للخزنة</button>'+
@@ -1973,7 +1968,7 @@ function openForm(kind,o){
   }else if(kind==="fundmove"){
     var tf=o.sub!=="fromFund";
     h=sheetHead(tf?"تزويد العهدة":"رجوع فلوس من العهدة")+'<input type="hidden" name="dir" value="'+(tf?"toFund":"fromFund")+'">'+
-      '<div class="two">'+fld("المبلغ",minp("amount",tf?(Math.max(Math.round(T.fund-T.fundBal),0)||""):""))+fld("التاريخ",dinp("date"))+'</div>'+
+      '<div class="two">'+fld("المبلغ",minp("amount",""))+fld("التاريخ",dinp("date"))+'</div>'+
       fld(tf?"اتدفعت من":"دخلت في",srcSel("src"))+
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+
       '<div class="preview" id="pv"></div><button class="btn" data-act="submit">حفظ</button>';
@@ -3510,11 +3505,9 @@ function rbSettle(){
   B.push({t:"table",cols:[{h:"العربية",w:.3},{h:"البيع",w:.18,k:"n"},{h:"الشراء",w:.18,k:"n"},{h:"المصاريف",w:.16,k:"n"},{h:"الربح",w:.18,k:"n",s:1}],
     rows:cars.map(function(c){return [c.name,c.sellPrice,c.cost-c.exp,c.exp,{v:c.profit,c:rcol(c.profit)}]}).concat([{cells:["الإجمالي",salesT,costT-expT,expT,{v:profT,c:rcol(profT)}]}])});
   /* 5) العهدة */
-  var fundAfter=T.fundBal+fxOpen,gap=T.fund-fundAfter;
   B.push({t:"sec",title:"العهدة"});
-  var kv2=[["رصيدها دلوقتي",rnum(T.fundBal)+" ج"],["بعد ما ترد "+rnum(fxOpen),rnum(fundAfter)+" ج",gap>0.5?RK.warn:RK.good]];
-  if(gap>0.5)kv2.push(["لسه ناقصها (مصاريف عربيات لسه متباعتش)",rnum(gap)+" ج",RK.warn]);
-  else kv2.push(["الحالة","هترجع لرقمها كامل ("+rnum(T.fund)+") ✔",RK.good,"rtl"]);
+  var kv2=[["العهدة",rnum(T.fundTot)+" ج"]];
+  if(fxOpen>0.5)kv2.push(["ترجّع للعهدة من العربيات دي",rnum(fxOpen)+" ج",RK.warn]);
   B.push({t:"kv",rows:kv2});
   B.push({t:"note",text:"الربح = البيع − (الشراء + المصاريف)، والربح بيتقسم بنسبة كل شريك بعد خصم المصاريف. التقرير ده للمراجعة بس ومش بيسجّل أي حركة."});
   var R=stlRange(),sp=modal.sp||"all",sub=cars.length+" عربية · "+(sp==="all"?"حتى "+rfd(todayStr()):"من "+rfd(R.f)+" إلى "+rfd(R.t));
@@ -3839,7 +3832,7 @@ function healthCheck(){var T=calc(),IS=T.inv;modal={type:"health"};
   h+='<div class="preview" style="display:block;font-size:16px">'+(diff===0&&!nb&&!nw?'<span class="good">✔ الحسابات متطابقة ومفيش أي ملاحظات</span>':
     (diff!==0?'<span class="bad">⚠️ في فرق في الحساب '+m(Math.abs(diff),"bad")+'</span>':'<span class="good">✔ المعادلة متطابقة</span>')+(nb||nw?'<br><span class="sub">'+(nb?nb+" مشكلة لازم تتراجع":"")+(nb&&nw?" · ":"")+(nw?nw+" ملاحظة":"")+'</span>':''))+'</div>';
   h+='<div class="sect">المعادلة</div><div class="card">'+
-    tkv(noInsta()?"💵 الكاش (الخزنة)":"💵 الكاش (خزنة + إنستاباي)",m(T.cashNow))+(Math.abs(T.fundBal)>=0.5?tkv("+ العهدة مع "+esc(T.fundEmp||"الموظف"),m(T.fundBal)):"")+(T.stockCost>0.5?tkv("+ عربيات في المعرض (بالتكلفة)",m(T.stockCost)):"")+(T.debts>0.5?tkv("+ باقي عند العملاء",m(T.debts)):"")+
+    tkv(noInsta()?"💵 الكاش (الخزنة)":"💵 الكاش (خزنة + إنستاباي)",m(T.cashNow))+(Math.abs(T.fundTot)>=0.5?tkv("+ العهدة مع "+esc(T.fundEmp||"الموظف"),m(T.fundTot)):"")+(T.fundOut>0.5?tkv("− مصاريف من العهدة لسه ما اترجعتلهاش",m(T.fundOut,"bad")):"")+(T.stockCost>0.5?tkv("+ عربيات في المعرض (بالتكلفة)",m(T.stockCost)):"")+(T.debts>0.5?tkv("+ باقي عند العملاء",m(T.debts)):"")+
     (T.recv>0.5?tkv("+ سلف ليك عند الناس",m(T.recv)):"")+(IS.held>0.5?tkv("+ إنستاباي في محافظ المستثمرين",m(IS.held)):"")+
     (T.owe>0.5?tkv("− عليك للناس",m(T.owe,"bad")):"")+(T.deposits>0.5?tkv("− عرابين",m(T.deposits,"bad")):"")+(Math.abs(T.pOwed)>=0.5?tkv("− مستحق للشركاء",m(T.pOwed,"bad")):"")+(Math.abs(IS.bal)>=0.5?tkv("− فلوس المستثمرين",m(IS.bal,"bad")):"")+
     ttot("= صافي اللي بتاعك",m(net))+tkv("رأس المال + الأرباح",m(T.value))+
