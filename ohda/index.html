@@ -1518,7 +1518,7 @@ function renderLogin(){
     $("#loginSub").textContent=signup?"التسجيل بكود دعوة بس. اكتب الكود اللي وصلك، واختار اسم مستخدم وباسورد تدخلوا بيهم انت واللي شغالين معاك":"ادخل باسم المستخدم والباسورد";
     $("#fpBtn").style.display=signup?"none":"block";
     this.textContent=signup?"عندي حساب، رجوع للدخول":"أول مرة؟ معاك كود دعوة؟ اعمل حسابك";$("#loginErr").textContent=""};
-  $("#demoBtn").onclick=startDemo;
+  $("#demoBtn").onclick=startDemo;if(APP_MODE==="ohda")$("#demoBtn").style.display="none";
   async function checkInv(){var c=normCode($("#loginForm").inv.value),el=$("#invInfo");if(!c){el.textContent="";return}if(c.length<6){el.textContent="";return}
     el.textContent="جاري التأكد من الكود…";var iv=await inviteGet(c);if(normCode($("#loginForm").inv.value)!==c)return;var m=inviteErr(iv);
     el.innerHTML=m?'<span style="color:var(--bad)">'+esc(m)+'</span>':'<span class="ok">✔ كود صحيح'+(iv.name?" — دعوة باسم "+esc(iv.name):"")+'</span>'}
@@ -1600,7 +1600,7 @@ function render(){
   if(S.err&&!allLoaded()){app.innerHTML='<div class="banner">حصلت مشكلة في تحميل البيانات. اقفل التطبيق وافتحه تاني.</div>';return}
   if(!allLoaded()){app.innerHTML='<div class="empty">جاري تحميل بياناتك…</div>';return}
   var h="";
-  if(needOnboard()){app.innerHTML=(DEMO?demoBar():"")+renderOnboard();$("#nav").innerHTML="";return}
+  if(APP_MODE!=="ohda"&&needOnboard()){app.innerHTML=(DEMO?demoBar():"")+renderOnboard();$("#nav").innerHTML="";return}
   if(APP_MODE==="ohda"){app.innerHTML=(DEMO?demoBar():"")+renderOhda();$("#nav").innerHTML="";$("#nav").className="";return}
   if((S.tab==="inv"&&!featOn("investors"))||(S.tab==="led"&&!featOn("loans")))S.tab="more";
   if(S.tab==="home")h='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div><h1>'+esc(brandName())+'</h1><div class="sub">'+fdate(todayStr())+'</div></div></div>'+renderHome();
@@ -4479,7 +4479,7 @@ function promoData(){
   S.ext=[c({id:"x1",desc:"سمسرة بيع BMW 320i",seller:"م. هشام",buyer:"أ. وليد",amount:15000,date:d(5),how:"cash",note:""})];
   S.pay=[];
 }
-function startDemo(){DEMO=true;db=demoDb;demoData();S.auth="in";S.tab="home";S.err=null;S.noDb=false;applyBrand();render();window.scrollTo(0,0)}
+function startDemo(){if(APP_MODE==="ohda")return toast("ادخل بحساب المعرض بتاعك، برنامج العهدة مربوط بيه");DEMO=true;db=demoDb;demoData();S.auth="in";S.tab="home";S.err=null;S.noDb=false;applyBrand();render();window.scrollTo(0,0)}
 function demoBar(){if(PROMO)return "";return '<div class="banner demo">👀 دي نسخة تجريبية فاضية: ابدأ بتحديد رأس المال'+(featOn("fund")?' والعهدة':'')+'، وبعدها جرّب شراء وبيع براحتك. مفيش حاجة هتتحفظ.<button class="btn small" data-act="demoSignup">اعمل حسابك دلوقتي</button></div>'}
 function exitDemo(signup){try{if(signup)sessionStorage.setItem("hb_signup","1")}catch(e){}location.reload()}
 
