@@ -1216,10 +1216,10 @@ function jamAll(){return ((S.settings&&S.settings.jams)||[]).slice()}
 function jamActive(){return jamAll().filter(function(j){return j.status!=="done"})}
 function jamById(id){return jamAll().find(function(j){return j.id===id})||null}
 function jamStat(j){
-  var paid=0,n=0,got=0,inst=+j.inst||0,mo=+j.months||0;
-  S.cap.forEach(function(x){if(!x.jid||x.jid!==j.id)return;if(x.kind==="jam"){paid+=+x.amount||0;n++}else if(x.kind==="addcap")got+=+x.amount||0});
-  var cnt=inst>0?Math.floor(paid/inst+0.001):n;
-  return {paid:paid,n:n,cnt:cnt,got:got,total:inst*mo,left:Math.max(mo-cnt,0),full:mo>0&&cnt>=mo};
+  var paid=0,n=0,got=0,gotN=0,inst=+j.inst||0,mo=+j.months||0,nm=Math.max(+j.names||1,1),mon=inst*nm;
+  S.cap.forEach(function(x){if(!x.jid||x.jid!==j.id)return;if(x.kind==="jam"){paid+=+x.amount||0;n++}else if(x.kind==="addcap"){got+=+x.amount||0;gotN++}});
+  var cnt=mon>0?Math.floor(paid/mon+0.001):n;
+  return {paid:paid,n:n,cnt:cnt,got:got,gotN:gotN,names:nm,monthly:mon,payout:inst*mo,namesLeft:Math.max(nm-gotN,0),total:mon*mo,left:Math.max(mo-cnt,0),full:mo>0&&cnt>=mo};
 }
 async function jamSave(list,title){
   if(!S.settings){toast("حدد رأس المال الأول");return false}
@@ -1229,15 +1229,15 @@ async function jamSave(list,title){
 }
 function jamRow(j,act){
   var st=jamStat(j),mo=+j.months||0,inst=+j.inst||0;
-  var top=(inst>0?"قسط "+fmt(inst):"")+(mo>0?" × "+mo+" شهر = "+fmt(st.total):"")+(j.start?" · من "+fdate(j.start):"");
+  var top=(st.names>1?"داخل بـ "+st.names+" أسماء · قسط الاسم "+fmt(inst)+" → الشهري "+fmt(st.monthly):"قسط "+fmt(inst))+(mo>0?" × "+mo+" شهر = "+fmt(st.total):"")+(j.start?" · من "+fdate(j.start):"");
   var prog=mo>0?"دفعت "+st.cnt+" من "+mo+" قسط ("+fmt(st.paid)+")"+(st.left>0?" · فاضل "+st.left:" ✔"):"دفعت "+st.n+" قسط ("+fmt(st.paid)+")";
-  var got=st.got>0.5?'<span style="color:var(--good);font-weight:700">قبضت '+fmt(st.got)+'</span>':'<span class="sub">لسه ما قبضتش</span>';
+  var got=st.names>1?'<span style="color:'+(st.gotN?'var(--good)':'inherit')+';font-weight:700">قبضت '+Math.min(st.gotN,st.names)+' من '+st.names+' اسم'+(st.got>0.5?' ('+fmt(st.got)+')':'')+'</span>'+(st.namesLeft>0?' <span class="sub">· فاضل '+st.namesLeft+' اسم'+(st.payout>0?' (الاسم بـ '+fmt(st.payout)+')':'')+'</span>':''):(st.got>0.5?'<span style="color:var(--good);font-weight:700">قبضت '+fmt(st.got)+'</span>':'<span class="sub">لسه ما قبضتش'+(st.payout>0?' (هتقبض '+fmt(st.payout)+')':'')+'</span>');
   var h='<div class="item" style="flex-wrap:wrap"><div style="flex:1;min-width:60%"><div class="t">🤝 '+esc(j.name||"جمعية")+(act&&st.full?' <span style="color:var(--good);font-size:12px">· كملت الأقساط</span>':'')+'</div>'+
     '<div class="d">'+top+'</div><div class="d">'+prog+' · '+got+(!act&&j.doneAt?' · خلصت '+fdate(j.doneAt):'')+'</div></div>'+
     '<button class="del" data-act="jamedit" data-jid="'+esc(j.id)+'" aria-label="تعديل">✏️</button>';
   if(act)h+='<div style="display:flex;gap:6px;width:100%;margin-top:8px">'+
     '<button class="btn sec" style="flex:1;margin:0;padding:8px 4px;font-size:13px" data-act="form" data-kind="capital" data-sub="jam" data-jid="'+esc(j.id)+'">💸 دفع قسط</button>'+
-    '<button class="btn sec" style="flex:1;margin:0;padding:8px 4px;font-size:13px" data-act="form" data-kind="capital" data-sub="addcap" data-jid="'+esc(j.id)+'">💰 قبضتها</button>'+
+    '<button class="btn sec" style="flex:1;margin:0;padding:8px 4px;font-size:13px" data-act="form" data-kind="capital" data-sub="addcap" data-jid="'+esc(j.id)+'">💰 '+(st.names>1?'قبضت اسم':'قبضتها')+'</button>'+
     '<button class="btn sec" style="flex:1;margin:0;padding:8px 4px;font-size:13px" data-act="jamdone" data-jid="'+esc(j.id)+'">✔ خلصت</button></div>';
   else h+='<div style="width:100%;margin-top:6px"><button class="btn sec" style="margin:0;padding:6px 10px;font-size:13px;width:auto" data-act="jamback" data-jid="'+esc(j.id)+'">↩ رجّعها شغالة</button></div>';
   return h+'</div>';
@@ -1929,12 +1929,12 @@ function openForm(kind,o){
       hint=(pf!=="ext"?"متاح من أرباح العربيات: <b>"+m(T.undist)+"</b>":"")+(pf==="both"?"<br>":"")+(pf!=="car"?"متاح من العمولات: <b>"+m(T.extAvail)+"</b>":"")+(pf==="both"?"<br>اكتب المبلغ كله، واكتب تحت كام منه من العمولات والباقي يتخصم من أرباح العربيات":"")+(T.deficit>0.5?"<br>لسه عليك عجز في رأس المال "+m(T.deficit):"");
     }
     else if(sub==="repay")hint="عجز السحب الحالي: "+m(T.wDef)+" · أرباح متاحة: "+m(T.undist);
-    else if(sub==="jam"){var hj=jamById(o.jid),hs=hj?jamStat(hj):null;hint="قسط الجمعية بيتخصم من رأس المال مباشرة (مش من الأرباح). رأس المال الحالي: "+m(T.capNow)+(hs?"<br>"+esc(hj.name||"الجمعية")+": دفعت "+hs.cnt+((+hj.months||0)?" من "+hj.months:"")+" قسط ("+m(hs.paid)+")"+(hs.left>0?" · فاضل "+hs.left:""):" · اتدفع أقساط لحد دلوقتي: "+m(T.jam))}
-    else if(sub==="addcap")hint="المبلغ بيتضاف لرأس المال وللخزنة (مثلاً قبض جمعية أو فلوس من بره). رأس المال الحالي: "+m(T.capNow);
+    else if(sub==="jam"){var hj=jamById(o.jid),hs=hj?jamStat(hj):null;hint="قسط الجمعية بيتخصم من رأس المال مباشرة (مش من الأرباح). رأس المال الحالي: "+m(T.capNow)+(hs?"<br>"+esc(hj.name||"الجمعية")+(hs.names>1?" (داخل بـ "+hs.names+" أسماء، الشهري "+m(hs.monthly)+")":"")+": دفعت "+hs.cnt+((+hj.months||0)?" من "+hj.months:"")+" قسط ("+m(hs.paid)+")"+(hs.left>0?" · فاضل "+hs.left:""):" · اتدفع أقساط لحد دلوقتي: "+m(T.jam))}
+    else if(sub==="addcap"){var cj=o.jid?jamById(o.jid):null,cs=cj?jamStat(cj):null;hint="المبلغ بيتضاف لرأس المال وللخزنة (مثلاً قبض جمعية أو فلوس من بره). رأس المال الحالي: "+m(T.capNow)+(cs?"<br>"+esc(cj.name||"الجمعية")+": قبضت "+cs.gotN+" من "+cs.names+" اسم"+(cs.namesLeft>0?" · ده هيتسجل قبض اسم رقم "+(cs.gotN+1):" · ⚠️ كل الأسماء اتقبضت"):"")}
     else hint="أرباح متاحة للسداد: "+m(T.undist);
     h=sheetHead("حركة رأس المال")+'<div class="seg">'+KS.map(function(k){return '<button data-act="capkind" data-k="'+k[0]+'" class="'+(sub===k[0]?"on":"")+'">'+k[1]+'</button>'}).join("")+'</div>'+
       '<input type="hidden" name="kind" value="'+sub+'">'+carField+
-      '<div class="two">'+fld("المبلغ",minp("amount",sub==="jam"&&jamById(o.jid)&&(+jamById(o.jid).inst||0)?+jamById(o.jid).inst:""))+fld("التاريخ",dinp("date"))+'</div>'+srcField+
+      '<div class="two">'+fld("المبلغ",minp("amount",(function(){var aj=(sub==="jam"||sub==="addcap")&&o.jid?jamById(o.jid):null;if(!aj)return "";var as=jamStat(aj);return (sub==="jam"?as.monthly:as.payout)||""})()))+fld("التاريخ",dinp("date"))+'</div>'+srcField+
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+
       '<div class="preview" style="display:block">'+hint+'</div><button class="btn" data-act="submit">حفظ</button>';
   }else if(kind==="loan"){
@@ -1952,9 +1952,10 @@ function openForm(kind,o){
     if(!S.settings){modal=prevModal;return toast("حدد رأس المال الأول")}
     h=sheetHead(ej?"✏️ تعديل الجمعية":"➕ جمعية جديدة")+'<input type="hidden" name="jid" value="'+esc(ej?ej.id:"")+'">'+
       fld("اسم الجمعية",'<input name="jnm" autocomplete="off" placeholder="مثال: جمعية الحاج محمد" value="'+esc(ej?ej.name||"":"")+'">')+
-      '<div class="two">'+fld("القسط الشهري",minp("inst",ej?ej.inst:""))+fld("عدد الشهور",'<input name="months" inputmode="numeric" autocomplete="off" placeholder="10" value="'+esc(ej&&ej.months?ej.months:"")+'">')+'</div>'+
+      fld("داخل بكام اسم",'<input name="names" inputmode="numeric" autocomplete="off" placeholder="1" value="'+esc(ej&&ej.names?ej.names:"1")+'">')+
+      '<div class="two">'+fld("قسط الاسم الواحد في الشهر",minp("inst",ej?ej.inst:""))+fld("عدد الشهور",'<input name="months" inputmode="numeric" autocomplete="off" placeholder="10" value="'+esc(ej&&ej.months?ej.months:"")+'">')+'</div>'+
       fld("بدأت من",dinp("start",ej?ej.start:""))+
-      '<div class="preview" style="display:block">كل قسط تدفعه للجمعية دي بيتخصم من رأس المال، ولما تقبضها سجّلها «قبضتها» وهتتضاف لرأس المال. لما تخلص دوس «✔ خلصت» وهتتنقل لقايمة الجمعيات اللي خلصت.</div>'+
+      '<div class="preview" style="display:block">لو داخل بأكتر من اسم، القسط الشهري = قسط الاسم × عدد الأسماء، وبيتخصم من رأس المال. وكل مرة تقبض اسم سجّله «قبضت اسم» وهيتضاف لرأس المال، والبرنامج بيعد قبضت كام اسم وفاضل كام. لما تخلص دوس «✔ خلصت» وهتتنقل لقايمة الجمعيات اللي خلصت.</div>'+
       '<button class="btn" data-act="submit">حفظ</button>'+(ej?'<button class="btn sec" style="margin-top:8px;color:var(--bad)" data-act="jamdel" data-jid="'+esc(ej.id)+'">🗑 مسح الجمعية</button>':'');
   }else if(kind==="itemedit"){
     var ex=edRec(o.coll,o.eid);if(!ex||!canEdit(o.coll,o.eid)){modal=prevModal;return}
@@ -2353,7 +2354,9 @@ async function submitForm(){QF=null;
       var rec={kind:ck,amount:am,date:val("date")||todayStr(),note:val("note").trim()};
       if(ck==="withdraw"||ck==="pwithdraw"||ck==="jam"||ck==="addcap")rec.src=srcVal();
       if(ck==="jam"&&val("jname").trim())rec.jname=val("jname").trim();
-      if((ck==="jam"||ck==="addcap")&&val("jid")){var rj=jamById(val("jid"));if(rj){rec.jid=rj.id;rec.jname=rj.name||""}}
+      if((ck==="jam"||ck==="addcap")&&val("jid")){var rj=jamById(val("jid"));if(rj){
+        if(ck==="addcap"){var rjs=jamStat(rj);if(rjs.namesLeft<=0&&!confirm("انت قبضت كل أسماء «"+(rj.name||"الجمعية")+"» ("+rjs.names+" من "+rjs.names+"). تسجّل قبض تاني برضه؟"))return}
+        rec.jid=rj.id;rec.jname=rj.name||""}}
       if(ck==="pwithdraw"){
         var pf2=val("pfrom")||"car",pe=pf2==="ext"?am:pf2==="both"?parseNum(val("pext")):0;
         if(pf2==="both"&&(pe<=0||pe>=am))return toast("اكتب كام من العمولات (أقل من المبلغ كله)");
@@ -2418,7 +2421,9 @@ async function submitForm(){QF=null;
     }else if(k==="jamform"){
       var jnm=val("jnm").trim(),jin=parseNum(val("inst")),jmo=parseInt(String(val("months")).replace(/[٠-٩]/g,function(d){return "٠١٢٣٤٥٦٧٨٩".indexOf(d)}),10)||0,jid0=val("jid");
       if(!jnm)return toast("اكتب اسم الجمعية");if(jin<=0)return toast("اكتب القسط الشهري");if(jmo<=0)return toast("اكتب عدد الشهور");
-      var jl=jamAll(),jo={name:jnm,inst:jin,months:jmo,start:val("start")||todayStr()};
+      var jnn=parseInt(String(val("names")).replace(/[٠-٩]/g,function(d){return "٠١٢٣٤٥٦٧٨٩".indexOf(d)}),10)||1;if(jnn<1)jnn=1;
+      if(jid0){var oj=jamById(jid0),ojs=oj?jamStat(oj):null;if(ojs&&ojs.gotN>jnn)return toast("انت مسجّل قبض "+ojs.gotN+" أسماء، مينفعش عدد الأسماء يبقى أقل من كده")}
+      var jl=jamAll(),jo={name:jnm,inst:jin,months:jmo,names:jnn,start:val("start")||todayStr()};
       if(jid0){jl=jl.map(function(j){return j.id===jid0?Object.assign({},j,jo):j})}else{jo.id="j"+Date.now().toString(36);jo.status="active";jo.createdAt=Date.now();jl.push(jo)}
       if(await jamSave(jl,(jid0?"تعديل جمعية: ":"جمعية جديدة: ")+jnm)){
         if(o.back){openForm("capital",{sub:"jam",jid:jid0||jo.id});toast("اتفتحت الجمعية ✔")}else{closeSheet();toast(jid0?"اتعدّلت ✔":"اتفتحت الجمعية ✔")}}
@@ -4213,7 +4218,7 @@ document.addEventListener("click",async function(e){
   else if(a==="jamedit")openForm("jamform",{jid:t.dataset.jid});
   else if(a==="jampick"){var keepj={date:val("date"),note:val("note"),src:val("src")};openForm("capital",{sub:"jam",jid:t.dataset.jid});Object.keys(keepj).forEach(function(n){var el=$("#sheet [name='"+n+"']");if(el&&keepj[n])el.value=keepj[n]})}
   else if(a==="jamdone"){var dj=jamById(t.dataset.jid);if(!dj)return;var dst=jamStat(dj);
-    if(!confirm("تسجّل إن «"+(dj.name||"الجمعية")+"» خلصت؟"+(dst.left>0?"\n(لسه فاضل "+dst.left+" قسط حسب المسجّل)":"")+(dst.got<0.5?"\n(مش متسجّل إنك قبضتها)":"")))return;
+    if(!confirm("تسجّل إن «"+(dj.name||"الجمعية")+"» خلصت؟"+(dst.left>0?"\n(لسه فاضل "+dst.left+" قسط حسب المسجّل)":"")+(dst.namesLeft>0?"\n(مش متسجّل إنك قبضت "+(dst.names>1?dst.namesLeft+" من "+dst.names+" أسماء":"الجمعية")+")":"")))return;
     jamSave(jamAll().map(function(j){return j.id===dj.id?Object.assign({},j,{status:"done",doneAt:todayStr()}):j}),"جمعية خلصت: "+(dj.name||"")).then(function(ok){if(ok)toast("اتسجّلت إنها خلصت ✔")})}
   else if(a==="jamback"){var bj=jamById(t.dataset.jid);if(!bj)return;
     jamSave(jamAll().map(function(j){if(j.id!==bj.id)return j;var c=Object.assign({},j,{status:"active"});delete c.doneAt;return c}),"رجوع جمعية شغالة: "+(bj.name||"")).then(function(ok){if(ok)toast("رجعت شغالة ✔")})}
