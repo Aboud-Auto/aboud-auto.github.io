@@ -1,5 +1,5 @@
 // Customer app (hesabat) — offline support for the app page only (not admin)
-var CACHE = "ohda-r2v85";
+var CACHE = "ohda-r2v86";
 var CORE = [
   "./",
   "./index.html",

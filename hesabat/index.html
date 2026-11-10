@@ -4541,5 +4541,53 @@ if("serviceWorker" in navigator){
   window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js",{scope:"./"}).catch(function(){})});
 }
 </script>
+<script>
+/* زرار «نزّل البرنامج» — يظهر لما حد يفتح اللينك من المتصفح (مش من البرنامج المتنزّل) */
+(function(){
+  var APP="حسابات المعرض", KEY="instHideHes";
+  var dp=null, box=null, ua=navigator.userAgent||"";
+  var isIOS=/iPhone|iPad|iPod/i.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  var isAndroid=/Android/i.test(ua);
+  var inApp=/FBAN|FBAV|FB_IAB|Instagram|WhatsApp|Line\/|Snapchat|TikTok|; wv\)/i.test(ua);
+  var iosNotSafari=isIOS&&/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+  function standalone(){try{return (window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true}catch(e){return false}}
+  function hidden(){try{return sessionStorage.getItem(KEY)}catch(e){return null}}
+  var btn='background:#d4af37;color:#000;border:0;border-radius:12px;padding:12px 16px;font:700 17px system-ui,sans-serif;width:100%;margin-top:10px;cursor:pointer';
+  var btn2='background:#2a2a2a;color:#fff;border:1px solid #555;border-radius:12px;padding:10px 16px;font:600 15px system-ui,sans-serif;width:100%;margin-top:8px;cursor:pointer';
+  function close(){if(box){box.remove();box=null}}
+  function show(inner){
+    if(standalone()||hidden())return;
+    if(!box){
+      box=document.createElement("div");
+      box.style.cssText="position:fixed;left:12px;right:12px;bottom:14px;z-index:99999;max-width:460px;margin:0 auto;background:#141414;color:#fff;border:1.5px solid #d4af37;border-radius:18px;padding:16px;font:15px/1.7 system-ui,sans-serif;direction:rtl;text-align:right;box-shadow:0 10px 32px rgba(0,0,0,.6)";
+      document.body.appendChild(box);
+    }
+    box.innerHTML='<div style="display:flex;align-items:center;gap:10px"><img src="icon-192.png" alt="" style="width:46px;height:46px;border-radius:11px"><div style="flex:1"><div style="font-weight:800;font-size:17px">نزّل '+APP+' على موبايلك</div><div style="color:#bbb;font-size:13px">يفتح على طول من الشاشة الرئيسية زي أي برنامج</div></div><button id="instX" aria-label="إغلاق" style="background:none;border:0;color:#999;font-size:22px;line-height:1;cursor:pointer">✕</button></div>'+inner;
+    document.getElementById("instX").onclick=function(){try{sessionStorage.setItem(KEY,"1")}catch(e){}close()};
+    var g=document.getElementById("instGo");
+    if(g)g.onclick=function(){if(!dp)return;dp.prompt();dp.userChoice.then(function(){dp=null;close()})};
+    var c=document.getElementById("instCopy");
+    if(c)c.onclick=function(){var u=location.href.split("#")[0];function ok(){c.textContent="✓ اتنسخ — الصقه في "+(isIOS?"Safari":"Chrome")}
+      if(navigator.clipboard)navigator.clipboard.writeText(u).then(ok,function(){prompt("انسخ اللينك:",u)});else prompt("انسخ اللينك:",u)};
+  }
+  var copyBtn='<button id="instCopy" style="'+btn2+'">📋 انسخ اللينك</button>';
+  function steps(){
+    if(isIOS&&(inApp||iosNotSafari))
+      return '<div style="margin-top:10px;background:#1f1f1f;border-radius:12px;padding:10px 12px">١- افتح اللينك في <b>Safari</b> (من ⋯ أو علامة البوصلة اختار «فتح في Safari»)<br>٢- دوس على زرار المشاركة <b>⬆︎</b> تحت<br>٣- اختار <b>«إضافة إلى الشاشة الرئيسية»</b> وبعدين <b>«إضافة»</b></div>'+copyBtn;
+    if(isIOS)
+      return '<div style="margin-top:10px;background:#1f1f1f;border-radius:12px;padding:10px 12px">١- دوس على زرار المشاركة <b>⬆︎</b> تحت في Safari<br>٢- انزل واختار <b>«إضافة إلى الشاشة الرئيسية»</b><br>٣- دوس <b>«إضافة»</b> فوق — وهتلاقي البرنامج على الشاشة</div>';
+    if(isAndroid&&inApp)
+      return '<div style="margin-top:10px;background:#1f1f1f;border-radius:12px;padding:10px 12px">إنت فاتح اللينك من جوه الواتساب. دوس على <b>⋮</b> فوق واختار <b>«فتح في Chrome»</b>، وهيظهرلك زرار التنزيل.</div>'+copyBtn;
+    if(isAndroid)
+      return '<div style="margin-top:10px;background:#1f1f1f;border-radius:12px;padding:10px 12px">في <b>Chrome</b> دوس على <b>⋮</b> فوق، واختار <b>«تثبيت التطبيق»</b> أو <b>«إضافة إلى الشاشة الرئيسية»</b>.</div>';
+    return "";
+  }
+  window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();dp=e;show('<button id="instGo" style="'+btn+'">📲 نزّل البرنامج</button>')});
+  window.addEventListener("appinstalled",close);
+  function fallback(){if(dp||standalone())return;var s=steps();if(s)show(s)}
+  // أندرويد: نستنى شوية يمكن Chrome يدّي زرار التنزيل المباشر. آيفون: نظهر الخطوات على طول.
+  window.addEventListener("load",function(){setTimeout(fallback,(isAndroid&&!inApp)?2500:800)});
+})();
+</script>
 </body>
 </html>
