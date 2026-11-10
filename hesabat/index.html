@@ -2018,12 +2018,12 @@ function openForm(kind,o){
     if(!dc||!dc.sold||!(dc.invs.length||dc.parts.length)){modal=prevModal;return toast("العربية دي مفيهاش شركاء ولا مستثمرين")}
     var drem=Math.max(0,dc.remaining||0);if(drem<=0.5){modal=prevModal;return toast("مفيش باقي على العميل في العربية دي")}
     var dsp=dc.xDebtLeft>0.5;
-    h=sheetHead("✂️ الباقي على العميل على مين؟")+'<div class="preview" style="display:block">'+(o.fromSale?'العربية اتباعت وفيها شركاء أو مستثمرين، والعميل لسه عليه باقي.<br>':'')+esc(dc.name)+' · باقي على العميل: <b class="warn">'+m(drem)+'</b></div>'+
+    h=sheetHead("✂️ الباقي على العميل على مين؟")+'<div class="preview" style="display:block">'+(o.fromSale?'العربية اتباعت وفيها شركاء أو مستثمرين، والعميل لسه عليه باقي.<br>':o.fromCollect?'اتحصّل جزء من العميل. الأرقام تحت متقسمة بنفس النسبة القديمة، وتقدر تغيّرها وتقسّم الباقي بمزاجك (عليك كله، على مستثمر، أو بينكم).<br>':'')+esc(dc.name)+' · باقي على العميل: <b class="warn">'+m(drem)+'</b></div>'+
       '<div class="sub" style="margin:0 2px 10px">جزء المستثمر بيفضل محجوز من رصيده (مش هيبقى كاش حر يسحبه)، وجزء الشريك بيتخصم من اللي هتسلّمه دلوقتي، لحد ما العميل يدفع. وكل دفعة بتتحصّل بترجع لكل واحد منها بنفس النسبة. والباقي عليك.</div>'+
       '<div class="seg"><button data-act="idbset" data-m="me"'+(dsp?'':' class="on"')+'>عليّا كله</button><button data-act="idbset" data-m="inv">'+(dc.parts.length&&dc.invs.length?"عليهم كلهم":dc.parts.length?"على الشركاء":"على المستثمر كله")+'</button><button data-act="idbset" data-m="split"'+(dsp?' class="on"':'')+'>تقسيم</button></div>'+
       dc.invs.map(function(v,i){return fld("على 💼 "+esc(v.name)+" (أقصى "+fmt(invDebtCap(v))+")",minp("idb"+i,v.debtLeft>0.5?Math.round(v.debtLeft):"","0 = مفيش عليه"))}).join("")+
       dc.parts.map(function(p,i){return fld("على 🤝 "+esc(p.name)+" (أقصى "+fmt(pDebtCap(p))+")",minp("pdb"+i,p.debtLeft>0.5?Math.round(p.debtLeft):"","0 = مفيش عليه"))}).join("")+
-      '<div class="preview" id="pv"></div><div class="two"><button class="btn" data-act="submit">حفظ</button>'+(o.fromSale?'<button class="btn sec" data-act="car" data-id="'+esc(dc.id)+'">مش دلوقتي</button>':'<button class="btn sec" data-act="close">إلغاء</button>')+'</div>';
+      '<div class="preview" id="pv"></div><div class="two"><button class="btn" data-act="submit">حفظ</button>'+(o.fromSale?'<button class="btn sec" data-act="car" data-id="'+esc(dc.id)+'">مش دلوقتي</button>':o.fromCollect?'<button class="btn sec" data-act="car" data-id="'+esc(dc.id)+'">خليه بنفس النسبة</button>':'<button class="btn sec" data-act="close">إلغاء</button>')+'</div>';
   }else if(kind==="settings"){
     h=featOn("fund")?sheetHead("رأس المال والعهدة")+fld("رأس المال الأصلي",minp("capital",T.capital||""))+fld("منه عهدة للمصاريف (جزء من رأس المال)",minp("fund",T.fund||""))+fld("اسم الموظف المسؤول عن العهدة",'<input name="fundEmp" autocomplete="off" placeholder="مثال: أحمد" value="'+esc(T.fundEmp)+'">'):
       sheetHead("رأس المال")+fld("رأس المال الأصلي",minp("capital",T.capital||""))+'<input type="hidden" name="fund" value="'+(T.fund||0)+'"><input type="hidden" name="fundEmp" value="'+esc(T.fundEmp||"")+'">';
@@ -2288,7 +2288,7 @@ async function submitForm(){QF=null;
       var cisp=ispRead(i1);if(cisp.error)return toast(cisp.error);
       var ccid=val("carId"),cdt=val("date")||todayStr(),ccol=await create("collections",{carId:ccid,date:cdt,cash:c1,insta:i1,note:val("note").trim()});
       if(ccol&&cisp.list.length&&!(await ispSave(cisp.list,ccol,ccid,cdt)))return;
-      if(ccol){done(o);toast("اتسجّل التحصيل ✔")}
+      if(ccol){done(o);toast("اتسجّل التحصيل ✔");setTimeout(function(){afterCollect(ccid)},400)}
     }else if(k==="payout"){
       var pa=parseNum(val("amount"));if(pa<=0)return toast("اكتب المبلغ");
       if(await create("payouts",{carId:val("carId"),pid:val("pid"),amount:pa,date:val("date")||todayStr(),src:srcVal(),note:val("note").trim()})){done(o);toast("اتسجّل التسليم ✔")}
@@ -2623,6 +2623,8 @@ function invCheck(plist,ilist,price){
 /* الباقي على العميل في عربية فيها مستثمرين: يتقسم على مين */
 function invDebtCap(v){return Math.max(0,(v.amount||0)+(v.profit||0))}
 function pDebtCap(p){return Math.max(0,(p.remaining||0))}
+/* بعد تحصيل جزء: الباقي يتقسم من جديد بمزاجه */
+function afterCollect(cid){var c=carById(cid);if(c&&c.sold&&(c.invs.length||c.parts.length)&&c.xDebtLeft>0.5&&c.remaining>0.5)openForm("invdebt",{carId:cid,fromCollect:true})}
 function afterSale(cid){var c=carById(cid);if(c&&c.sold&&(c.invs.length||c.parts.length)&&c.remaining>0.5)openForm("invdebt",{carId:cid,fromSale:true});else invLossPrompt(cid)}
 function invDebtBox(c,from){
   if(!c.invs.length&&!c.parts.length)return "";
