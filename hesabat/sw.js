@@ -1,5 +1,5 @@
 // Customer app (hesabat) — offline support for the app page only (not admin)
-var CACHE = "hesabat-v91";
+var CACHE = "hesabat-v92";
 var CORE = [
   "./",
   "./index.html",
