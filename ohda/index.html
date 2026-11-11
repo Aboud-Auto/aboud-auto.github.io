@@ -1198,8 +1198,7 @@ function renderOhda(){
   /* نفس رقم العهدة الثابت اللي في حسابات المعرض: المبلغ الأساسي + التزويد − المرتجع للخزنة (رد مصاريف العربيات المباعة مش بيزوّده) */
   var had=rec-ret;
   var h='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div><h1>🧾 العهدة</h1><div class="sub">'+esc(brandName())+' · '+fdate(todayStr())+'</div></div></div>'+
-    '<div class="hero"><div class="l">العهدة اللي مع '+emp+'</div><div class="v">'+m(had)+'</div>'+
-      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,.15)"><div class="l">بقت دلوقتي</div><div class="v">'+m(T.fundBal,T.fundBal<0?"bad":"")+'</div></div></div>'+
+    '<div class="hero"><div class="l">العهدة اللي مع '+emp+'</div><div class="v">'+m(T.fundBal,T.fundBal<0?"bad":"")+'</div></div>'+
     '<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف</button>';
   h+='<div class="sect">العربيات اللي في المعرض ('+stock.length+')</div>';
   h+=stock.length?stock.map(function(c){var l=fx(c);
