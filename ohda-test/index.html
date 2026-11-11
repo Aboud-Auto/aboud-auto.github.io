@@ -1189,6 +1189,9 @@ function fundMoves(){
   S.ledger.forEach(function(x){if(x.kind==="loan"&&x.src==="fund")it.push({d:x.date,c:x.createdAt||0,t:"⚠️ عجز عهدة على "+esc(x.person||"الموظف"),a:-(+x.amount||0),n:x.note})});
   return it.sort(function(a,b){return (b.d||"").localeCompare(a.d||"")||b.c-a.c});
 }
+function ohdaFixed(){var T=calc(),r=+T.fund||0;S.transfers.forEach(function(x){if(x.dir==="toFund")r+=+x.amount||0;else if(x.dir==="fromFund")r-=+x.amount||0});return r}
+/* الباقي مع الموظف = العهدة الثابتة − مصاريفه على العربيات اللي لسه في المعرض (العربية لما تتباع مصاريفها بتتقفل) */
+function ohdaLeft(){var st={};calc().cars.forEach(function(c){if(!c.sold)st[c.id]=1});var sp=0;S.expenses.forEach(function(e){if(expSrc(e)==="fund"&&st[e.carId])sp+=+e.amount||0});return ohdaFixed()-sp}
 function renderOhda(){
   var T=calc(),emp=esc(T.fundEmp||"الموظف"),stock=T.cars.filter(function(c){return !c.sold}),sold=T.cars.filter(function(c){return c.sold});
   function fx(c){return S.expenses.filter(function(e){return e.carId===c.id&&expSrc(e)==="fund"}).sort(function(x,y){return (y.date||"").localeCompare(x.date||"")})}
@@ -1199,7 +1202,7 @@ function renderOhda(){
   var had=rec-ret;
   var h='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div><h1>🧾 العهدة</h1><div class="sub">'+esc(brandName())+' · '+fdate(todayStr())+'</div></div></div>'+
     '<div class="hero"><div class="l">العهدة اللي مع '+emp+'</div><div class="v">'+m(had)+'</div>'+
-      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,.15)"><div class="l">باقي معاك بعد المصاريف</div><div class="v">'+m(T.fundBal,T.fundBal<0?"bad":"")+'</div></div></div>'+
+      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,.15)"><div class="l">باقي معاك بعد المصاريف</div><div class="v">'+m(ohdaLeft(),ohdaLeft()<0?"bad":"")+'</div></div></div>'+
     '<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف</button>';
   h+='<div class="sect">العربيات اللي في المعرض ('+stock.length+')</div>';
   h+=stock.length?stock.map(function(c){var l=fx(c);
@@ -1821,7 +1824,7 @@ function openForm(kind,o){
     if(!T.cars.length)return toast("سجّل عربية الأول");
     if(APP_MODE==="ohda"&&!T.cars.some(function(c){return !c.sold}))return toast("مفيش عربيات في المعرض دلوقتي");
     var sel=o.carId||stockFirst(T)[0].id;
-    h=sheetHead("تسجيل مصروف")+(APP_MODE==="ohda"?'<div class="sub" style="margin:0 2px 10px">باقي في العهدة: <b>'+m(T.fundBal)+'</b></div>':'')+fld("العربية",carSel("carId",APP_MODE==="ohda"?T.cars.filter(function(c){return !c.sold}):stockFirst(T),sel))+
+    h=sheetHead("تسجيل مصروف")+(APP_MODE==="ohda"?'<div class="sub" style="margin:0 2px 10px">باقي معاك: <b>'+m(ohdaLeft())+'</b></div>':'')+fld("العربية",carSel("carId",APP_MODE==="ohda"?T.cars.filter(function(c){return !c.sold}):stockFirst(T),sel))+
       '<div class="two">'+fld("المبلغ",minp("amount"))+fld("التاريخ",dinp("date"))+'</div>'+
       fld("النوع",'<select name="type">'+EXP_TYPES.map(function(t){return '<option>'+t+'</option>'}).join("")+'</select>')+
       (APP_MODE==="ohda"?'<input type="hidden" name="src" value="fund">':fld("اتدفع من",srcSel("src",featOn("fund")?"fund":"cash",true)))+
@@ -2266,8 +2269,8 @@ async function submitForm(){QF=null;
       if(await patch("cars/"+o.id,d)){if(ROLLC)await syncRoll(o.id,rp2.list,d.buyDate,nm);done(o);toast("اتعدّلت ✔")}
     }else if(k==="expense"){
       var a=parseNum(val("amount"));if(a<=0)return toast("اكتب المبلغ");
-      if(APP_MODE==="ohda"&&!o.id&&a>calc().fundBal+0.5)return toast("العهدة مش مكفية (فيها "+fmt(calc().fundBal)+")، زوّدها الأول");
-      if(await create("expenses",{carId:val("carId"),amount:a,date:val("date")||todayStr(),type:val("type"),src:srcVal(),sv:2,note:val("note").trim()})){done(o);toast("اتسجّل المصروف ✔"+(APP_MODE==="ohda"?" — باقي معاك "+fmt(calc().fundBal):""))}
+      if(APP_MODE==="ohda"&&!o.id&&a>ohdaLeft()+0.5)return toast("العهدة مش مكفية (باقي معاك "+fmt(ohdaLeft())+")، زوّدها الأول");
+      if(await create("expenses",{carId:val("carId"),amount:a,date:val("date")||todayStr(),type:val("type"),src:srcVal(),sv:2,note:val("note").trim()})){done(o);toast("اتسجّل المصروف ✔"+(APP_MODE==="ohda"?" — باقي معاك "+fmt(ohdaLeft()):""))}
     }else if(k==="sell"){
       var sp2=parseNum(val("price")),cash=parseNum(val("cash")),ins=parseNum(val("insta")),cid=val("carId"),dt=val("date")||todayStr();
       if(sp2<=0)return toast("اكتب سعر البيع");
