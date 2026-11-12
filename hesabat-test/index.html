@@ -264,6 +264,7 @@ function allLoaded(){var l=S.loaded;return l.cars&&l.expenses&&l.cols&&l.cap&&l.
 
 /* ---------- calculations ---------- */
 function paidNow(c){var b=+c.buyPrice||0;return typeof c.buyPaid==="number"?Math.max(0,Math.min(c.buyPaid,b)):b}
+function expCarName(e){if(e&&e.other)return "مصروفات أخرى"+(e.refCar?" ("+e.refCar+")":"");var c=S.cars.find(function(y){return y.id===e.carId});return c?c.name:"؟"}
 function expSrc(e){return e.sv===2?(e.src==="insta"?"insta":e.src==="fund"?"fund":"cash"):(e.src==="insta"?"insta":"fund")}
 function reimbDay(c){return c.reimbDate||c.sellDate||c.buyDate}
 function rbTot(c){return typeof c.fexp==="number"?c.fexp:(+c.exp||0)}
@@ -1150,7 +1151,7 @@ function renderDay(){
     items.push({t:"🚗 شراء "+esc(c.name),d:dline(c.tradeIn?"🔁 دخلت في بيعة بقيمة "+fmt(c.tradeIn):"",srcNote({src:c.buySrc}),c.owedSeller>0.5?"السعر "+fmt(c.buyPrice)+" · باقي للبايع "+fmt(c.owedSeller):""),a:-paidNow(c)+(+c.tradeIn||0),del:["car",c.id]});
     if(c.pCash>0)items.push({t:"🤝 مساهمة الشركاء في "+esc(c.name),d:"",a:c.pCash,del:["car",c.id]});if(c.pTotal-c.pCash>0.5)items.push({t:"🔁 شركاء نقلوا حسابهم لـ "+esc(c.name),d:dline(c.parts.filter(function(p){return p.roll}).map(function(p){return esc(p.name)+" "+fmt(p.amount)}).join(" · "),"(مش بيأثر على السيولة)"),a:0,info:c.pTotal-c.pCash,del:["car",c.id]});
   });
-  D.exps.forEach(function(e){var c=S.cars.find(function(x){return x.id===e.carId});var fe=expSrc(e)==="fund",ea=+e.amount||0;items.push({t:"💸 "+esc(e.type||"مصروف")+" - "+esc(c?c.name:"؟"),d:dline(srcNote({src:expSrc(e)}),esc(e.note||""),fe?"(مش من السيولة)":""),a:fe?0:-ea,info:fe?ea:null,del:["expenses",e.id]})});
+  D.exps.forEach(function(e){var fe=expSrc(e)==="fund",ea=+e.amount||0;items.push({t:"💸 "+esc(e.type||"مصروف")+" - "+esc(expCarName(e)),d:dline(srcNote({src:expSrc(e)}),esc(e.note||""),fe?"(مش من السيولة)":""),a:fe?0:-ea,info:fe?ea:null,del:["expenses",e.id]})});
   D.cols.forEach(function(x){var c=S.cars.find(function(y){return y.id===x.carId});if(x.trade){items.push({t:"🔁 "+esc(x.tradeName||"عربية")+" دخلت بدل "+esc(c?c.name:"؟"),d:tradeLine(x)+" · (مش بيأثر على السيولة)",a:0,info:+x.trade,del:["collections",x.id]});return}items.push({t:(x.depRef?"↩️ رد عربون ":x.dep?"🔖 عربون ":x.refund?"↩️ مرتجع - رد فلوس ":"💰 تحصيل ")+esc(c?c.name:"؟"),d:(x.dname?esc(x.dname)+" · ":"")+"كاش "+fmt(Math.abs(+x.cash||0))+" · إنستاباي "+fmt(Math.abs(+x.insta||0))+(x.note?" · "+esc(x.note):""),a:(+x.cash||0)+(+x.insta||0),del:["collections",x.id]})});
   S.cols.forEach(function(x){if(!x.forf||x.fdate!==S.day)return;var c=S.cars.find(function(y){return y.id===x.carId});items.push({t:"🔖 عربون اتصادر (بقى ربح) - "+esc(c?c.name:"؟"),d:"الفلوس في الخزنة من يوم ما اتدفع",a:0,info:(+x.cash||0)+(+x.insta||0),del:["collections",x.id]})});
   D.pays.forEach(function(x){var c=carById(x.carId),p=c&&c.parts.find(function(q){return q.id===x.pid});if(x.roll){items.push({t:"🔁 "+esc(p?p.name:"شريك")+" نقل حسابه من "+esc(c?c.name:"؟")+" لـ "+esc(carNameById(x.toCar)),d:"(مش بيأثر على السيولة)",a:0,info:+x.amount||0,del:["payouts",x.id]});return}items.push({t:"🤝 تسليم "+esc(p?p.name:"شريك")+" - "+esc(c?c.name:"؟"),d:dline(srcNote(x),esc(x.note||"")),a:-(+x.amount||0),del:["payouts",x.id]})});
@@ -3801,7 +3802,7 @@ function hcIssues(T){
   });
   T.inv.list.forEach(function(o){if(o.free<-0.5)add("bad","💼 المستثمر "+esc(o.name)+": الكاش بتاعه بالسالب "+m(o.free,"bad"),"دخل بفلوس في عربيات أو سلف أكتر من رصيده. راجع إيداعاته وسحوباته")});
   var orph={e:0,ea:0,c:0,ca:0,p:0,pa:0};
-  S.expenses.forEach(function(e){if(!ids[e.carId]){orph.e++;orph.ea+=+e.amount||0}});
+  S.expenses.forEach(function(e){if(!e.other&&!ids[e.carId]){orph.e++;orph.ea+=+e.amount||0}});
   S.cols.forEach(function(x){if(!ids[x.carId]){orph.c++;orph.ca+=(+x.cash||0)+(+x.insta||0)}});
   S.pay.forEach(function(x){if(!pk[x.carId+"|"+x.pid]){orph.p++;orph.pa+=+x.amount||0}});
   if(orph.e)add("warn","فيه "+orph.e+" مصروف مربوط بعربية اتمسحت ("+m(orph.ea)+")","المصاريف دي مش داخلة في أي حساب دلوقتي");
