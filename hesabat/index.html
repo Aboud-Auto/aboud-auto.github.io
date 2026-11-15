@@ -769,7 +769,7 @@ function tileTap(k){
     h+=cs.length?cs.map(function(c){return tkv(esc(c.name),m(c.cost),c.id,"شراء "+m(+c.buyPrice||0)+(c.exp>0.5?" + مصاريف "+m(c.exp):"")+" · "+fdate(c.buyDate))}).join(""):tnone("مفيش عربيات في المعرض");
     h+=ttot("إجمالي التكلفة",m(T.stockCost));
   }else if(k==="profit"){
-    t="🚗 أرباح العربيات";cs=T.cars.filter(function(c){return c.sold});h+=profitSplit(T);if(cs.length)h+=tsec("كل عربية");
+    t="🚗 أرباح العربيات";cs=T.cars.filter(function(c){return c.sold}).sort(soldDesc);h+=profitSplit(T);if(cs.length)h+=tsec("كل عربية");
     h+=cs.length?cs.map(function(c){return tkv(esc(c.name)+(c.tradeGot>0?" 🔁":""),m(c.profit,c.profit>=0?"good":"bad")+' · '+pctB(carPct(c)),c.id,"بيع "+m(c.sellPrice)+" − تكلفة "+m(c.cost)+'<br>'+shareLine(c)+(c.lossActive?" · خسارة على مراحل":""))}).join(""):tnone("لسه مفيش عربيات اتباعت");
     cs=T.cars.filter(function(c){return c.forfAmt>0.5});
     if(cs.length)h+=tsec("🔖 عرابين اتصادرت (ربح)")+cs.map(function(c){return tkv(esc(c.name),m(c.forfAmt,"good"),c.id)}).join("");
@@ -1130,7 +1130,7 @@ function renderHome(){
 
 function filteredCars(){
   var T=calc(),q=S.q.trim().toLowerCase();
-  return T.cars.filter(function(c){
+  var L=T.cars.filter(function(c){
     if(S.filter==="stock"&&c.sold)return false;
     if(S.filter==="sold"&&!c.sold)return false;
     if(S.filter==="debt"&&!(c.sold&&c.remaining>0))return false;
@@ -1138,7 +1138,10 @@ function filteredCars(){
     if(q&&[c.name,c.sName,c.sPhone,c.bName,c.bPhone].join(" ").toLowerCase().indexOf(q)<0)return false;
     return true;
   });
+  if(S.filter==="sold"||S.filter==="debt")L.sort(soldDesc);
+  return L;
 }
+function soldDesc(a,b){return (b.sellDate||"").localeCompare(a.sellDate||"")||(+b.soldAt||0)-(+a.soldAt||0)}
 function carListHtml(){
   var l=filteredCars();
   if(!l.length)return '<div class="empty">'+(S.cars.length?"مفيش عربيات بالشكل ده":"لسه مسجلتش أي عربية.<br>دوس على «شراء عربية» وابدأ.")+'</div>';
