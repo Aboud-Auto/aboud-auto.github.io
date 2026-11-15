@@ -270,6 +270,7 @@ function rbTot(c){return typeof c.fexp==="number"?c.fexp:(+c.exp||0)}
 function rbList(c,tot){if(tot==null)tot=rbTot(c);if(Array.isArray(c.reimbs))return c.reimbs.map(function(r){return{amt:+r.amt||0,date:r.date||""}});return c.reimbursed&&tot>0?[{amt:tot,date:reimbDay(c)||""}]:[]}
 function rbPaid(c){return rbList(c).reduce(function(a,r){return a+r.amt},0)}
 function rbLeft(c){return Math.max(0,rbTot(c)-rbPaid(c))}
+function fundRetInfo(T){var bal=Math.max(0,T.fundBal),pend=T.cars.filter(function(c){return c.sold&&rbLeft(c)>0.5}).sort(function(a,b){return String(a.sellDate||"").localeCompare(String(b.sellDate||""))}),pt=pend.reduce(function(a,c){return a+rbLeft(c)},0);return{bal:bal,pend:pend,pendTot:pt,max:bal+pt}}
 function flowsOf(cars,d,em){
   var cash=0,insta=0,fund=0,ids={},pk={},fx={},cn={};
   cars.forEach(function(c){ids[c.id]=1;cn[c.id]=c.name||"عربية";c.parts.forEach(function(p){pk[c.id+"|"+p.id]=1})});
@@ -2037,6 +2038,7 @@ function openForm(kind,o){
       '<div class="two">'+fld("المبلغ",minp("amount",""))+fld("التاريخ",dinp("date"))+'</div>'+
       fld(tf?"اتدفعت من":"دخلت في",srcSel("src"))+
       fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off">')+
+      (tf?'':(function(){var Tr=calc(),R=fundRetInfo(Tr);return '<div class="preview" style="display:block;margin-bottom:10px">تقدر ترجّع لحد <b>'+m(R.max)+'</b><br>• كاش مع '+esc(Tr.fundEmp||"الموظف")+': '+m(R.bal)+(R.pendTot>0.5?'<br>• مصاريف عربيات اتباعت (فلوسها رجعت الخزنة مع البيع): '+m(R.pendTot):'')+'</div>'})())+
       '<div class="preview" id="pv"></div><button class="btn" data-act="submit">حفظ</button>';
   }else if(kind==="fundcount"){
     h=sheetHead("جرد العهدة")+'<div class="preview" style="display:block">المفروض مع '+esc(T.fundEmp||"الموظف")+': <b>'+m(T.fundBal)+'</b></div>'+
@@ -2131,7 +2133,7 @@ function openQuick(dir){
     if(featOn("ext"))L.push(["🤝","عمولة خارجية","ext"]);
     L.push(["➕","زيادة رأس المال","capital","addcap"]);
     if(io)L.push(["💼","إيداع مستثمر","invmove","dep"]);
-    if(fo&&T.fundBal>0.5)L.push(["🧾","رجوع فلوس من العهدة","fundmove","fromFund"]);
+    if(fo&&fundRetInfo(T).max>0.5)L.push(["🧾","رجوع فلوس من العهدة","fundmove","fromFund"]);
   }else{
     L.push(["🚗","شراء عربية","buy"]);
     if(featOn("loans"))L.push(["🤝","سلفة لحد","loan","out"]);
@@ -2214,8 +2216,9 @@ function updatePreview(){
   }
   if(k==="fundmove"){
     var Tm=calc(),fa0=parseNum(val("amount")),tf0=val("dir")!=="fromFund",fi0=val("src")==="insta",sg=tf0?-fa0:fa0;
-    var fs=Tm.safeBal+(fi0?0:sg),fi=Tm.instaBal+(fi0?sg:0),fb=Tm.fundBal-sg;
-    pv.innerHTML='بعد العملية: العهدة <b>'+m(fb)+'</b> · الخزنة <b class="'+(fs<0?"bad":"")+'">'+m(fs)+'</b> · إنستاباي <b class="'+(fi<0?"bad":"")+'">'+m(fi)+'</b>';
+    var fs=Tm.safeBal+(fi0?0:sg),fi=Tm.instaBal+(fi0?sg:0),fb=Tm.fundBal-sg,fx0=0;
+    if(!tf0){var R0=fundRetInfo(Tm);fx0=Math.max(0,Math.min(fa0,R0.max)-R0.bal);fs-=fx0;fb+=fx0}
+    pv.innerHTML=(!tf0&&fa0>0?'العهدة هتبقى <b>'+m(Tm.fundTot-fa0)+'</b>'+(fx0>0.5?'<br>الموظف هيسلّمك كاش <b>'+m(fa0-fx0)+'</b> بس، والباقي '+m(fx0)+' هو مصاريف عربيات اتباعت وفلوسها في الخزنة أصلاً':'')+'<br>':'')+'بعد العملية: الخزنة <b class="'+(fs<0?"bad":"")+'">'+m(fs)+'</b>'+(noInsta()?'':' · إنستاباي <b class="'+(fi<0?"bad":"")+'">'+m(fi)+'</b>');
     return;
   }
   if(k==="fundcount"){
@@ -2394,8 +2397,11 @@ async function submitForm(){QF=null;
     }else if(k==="fundmove"){
       var fa=parseNum(val("amount"));if(fa<=0)return toast("اكتب المبلغ");
       var fdir=val("dir")==="fromFund"?"fromFund":"toFund";
-      if(fdir==="fromFund"&&fa>calc().fundBal+0.5)return toast("المبلغ أكبر من اللي في العهدة ("+fmt(calc().fundBal)+")");
-      if(await create("transfers",{dir:fdir,src:srcVal(),amount:fa,date:val("date")||todayStr(),note:val("note").trim()})){closeSheet();openFund();toast("اتسجّل ✔")}
+      var fdt=val("date")||todayStr();
+      if(fdir==="fromFund"){var R1=fundRetInfo(calc());if(fa>R1.max+0.5)return toast("أقصى مبلغ تقدر ترجّعه "+fmt(R1.max));
+        var fex=fa-R1.bal;for(var ri=0;ri<R1.pend.length&&fex>0.5;ri++){var pc=R1.pend[ri],pl=rbLeft(pc),pa=Math.min(pl,fex),parr=rbList(pc);parr.push({amt:pa,date:fdt});
+          if(!(await patch("cars/"+pc.id,{reimbs:parr,reimbursed:pl-pa<=0.5,reimbDate:fdt})))return toast("حصلت مشكلة، جرّب تاني");fex-=pa}}
+      if(await create("transfers",{dir:fdir,src:srcVal(),amount:fa,date:fdt,note:val("note").trim()})){closeSheet();openFund();toast("اتسجّل ✔")}
     }else if(k==="fundcount"){
       if(val("amount").trim()==="")return toast("اكتب المبلغ اللي مع الموظف");
       var Tf=calc(),df=parseNum(val("amount"))-Tf.fundBal;
