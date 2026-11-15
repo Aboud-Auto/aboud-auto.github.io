@@ -1811,21 +1811,22 @@ function unsellPlan(id){
   var lrep=S.cap.filter(function(x){return x.kind==="lossrepay"&&x.carId===id});
   var rb=rbList(c).reduce(function(a,r){return a+r.amt},0);
   var money=cols.reduce(function(a,x){return a+(+x.cash||0)+(+x.insta||0)},0);
-  return {err:err,c:c,cols:cols,exps:exps,pays:pays,tcs:tcs,rollIn:rollIn,lrep:lrep,rb:rb,money:money,dep:S.cols.filter(function(x){return x.carId===id&&x.dep&&!x.forf}).reduce(function(a,x){return a+(+x.cash||0)+(+x.insta||0)},0)};
+  var dl=S.cols.filter(function(x){return x.carId===id&&x.dep&&!x.forf}),dc=dl.reduce(function(a,x){return a+(+x.cash||0)},0),di=dl.reduce(function(a,x){return a+(+x.insta||0)},0);
+  return {err:err,c:c,cols:cols,exps:exps,pays:pays,tcs:tcs,rollIn:rollIn,lrep:lrep,rb:rb,money:money,depList:dl,depCash:dc,depInsta:di,dep:dc+di};
 }
 function unsellAsk(id){
   var P=unsellPlan(id);if(P.err)return toast(P.err);
   var L=[];
   if(P.money>0.5)L.push("التحصيلات بتاعة البيعة ("+fmt(P.money)+") هتتشال من الخزنة/الإنستاباي، ومعاها تقسيم الإنستاباي لو كان فيه");
-  if(P.dep>0.5)L.push("العربون ("+fmt(P.dep)+") يفضل عربون على العربية زي ما كان");
   if(P.exps.length)L.push("مصاريف البيع ("+fmt(P.exps.reduce(function(a,x){return a+(+x.amount||0)},0))+") تتمسح وفلوسها ترجع الخزنة");
   if(P.rb>0.5)L.push("ترجيع المصاريف للعهدة ("+fmt(P.rb)+") يتلغي، والمصاريف ترجع على العربية تاني");
   if(P.pays.length)L.push("اللي اتسلّم للشركاء بعد البيع ("+fmt(P.pays.reduce(function(a,x){return a+(+x.amount||0)},0))+") يتمسح ويرجع الخزنة");
   if(P.lrep.length)L.push("سداد خسارة العربية يتمسح");
   if(P.tcs.length)L.push("العربية الداخلة («"+P.tcs.map(function(t){return t.name}).join("، ")+"») تتمسح");
   if(P.c.remaining>0.5)L.push("الباقي على العميل ("+fmt(P.c.remaining)+") وتقسيمه على الشركاء/المستثمرين يتلغي");
-  confirmBox('إلغاء البيع هيرجّع <b>'+esc(P.c.name)+'</b> للمعرض وكل حاجة ترجع زي ما كانت قبل البيع:<ul style="margin:8px 0;padding-right:18px;line-height:1.8">'+L.map(function(x){return "<li>"+x+"</li>"}).join("")+'</ul>لو العميل رجّع العربية بعد ما دفع، استخدم «مرتجع» بدل إلغاء البيع.',async function(){
-    var Q=unsellPlan(id);if(Q.err)return toast(Q.err);var ok=true;
+  window.UNS_DEP="keep";
+  confirmBox('إلغاء البيع هيرجّع <b>'+esc(P.c.name)+'</b> للمعرض وكل حاجة ترجع زي ما كانت قبل البيع:<ul style="margin:8px 0;padding-right:18px;line-height:1.8">'+L.map(function(x){return "<li>"+x+"</li>"}).join("")+'</ul>'+(P.dep>0.5?'<div style="margin-bottom:10px"><div class="sub" style="margin-bottom:4px">العربون اللي على العربية ('+fmt(P.dep)+'):</div><select onchange="window.UNS_DEP=this.value" style="width:100%"><option value="keep">يفضل عربون على العربية (العميل لسه هيشتري)</option><option value="ref">يترد للعميل'+(P.depCash>0.5&&P.depInsta>0.5?' (كاش '+fmt(P.depCash)+' + إنستاباي '+fmt(P.depInsta)+')':P.depInsta>0.5?' (إنستاباي)':' (كاش)')+'</option><option value="forf">يبقى ربح للمعرض (العميل رجع في كلامه)</option></select></div>':'')+'لو العميل رجّع العربية بعد ما دفع، استخدم «مرتجع» بدل إلغاء البيع.',async function(){
+    var Q=unsellPlan(id);if(Q.err)return toast(Q.err);var ok=true,dch=window.UNS_DEP||"keep";
     for(var i=0;ok&&i<Q.cols.length;i++){await ispDelete(Q.cols[i].id);ok=await removeDoc("collections/"+Q.cols[i].id)}
     for(var j=0;ok&&j<Q.exps.length;j++)ok=await removeDoc("expenses/"+Q.exps[j].id);
     for(var k=0;ok&&k<Q.pays.length;k++)ok=await removeDoc("payouts/"+Q.pays[k].id);
@@ -1833,7 +1834,9 @@ function unsellAsk(id){
     for(var t2=0;ok&&t2<Q.tcs.length;t2++)ok=await removeDoc("cars/"+Q.tcs[t2].id);
     for(var q=0;ok&&q<Q.lrep.length;q++)ok=await removeDoc("capital/"+Q.lrep[q].id);
     if(ok)ok=await patch("cars/"+id,{sellPrice:null,sellDate:null,soldAt:null,bName:null,bPhone:null,trS:null,lossDeferred:false,invDebt:[],invDebtBase:0,reimbs:[],reimbursed:false,reimbDate:null});
-    toast(ok?"اتلغى البيع ورجع كل حاجة زي ما كانت ✔":"حصلت مشكلة في النص، افتح العربية وجرّب إلغاء البيع تاني")});
+    if(ok&&Q.dep>0.5&&dch==="ref")ok=!!(await create("collections",{carId:id,date:todayStr(),cash:-Q.depCash,insta:-Q.depInsta,dep:true,depRef:true,note:"رد عربون (إلغاء بيع)"}));
+    if(ok&&Q.dep>0.5&&dch==="forf"){var fnw=Date.now();for(var fq=0;ok&&fq<Q.depList.length;fq++)ok=await patch("collections/"+Q.depList[fq].id,{forf:true,fdate:todayStr(),fat:fnw})}
+    toast(ok?"اتلغى البيع"+(Q.dep>0.5?(dch==="ref"?" واترد العربون":dch==="forf"?" والعربون بقى ربح للمعرض":" والعربون فاضل على العربية"):"")+" ✔":"حصلت مشكلة في النص، افتح العربية وجرّب إلغاء البيع تاني")});
 }
 function minp(n,v,ph){return '<input name="'+n+'" data-money="1" inputmode="numeric" autocomplete="off" placeholder="'+(ph||"0")+'" value="'+(v==null||v===""?"":esc(fmtIn(v)))+'">'}
 function dinp(n,v){return '<input type="date" name="'+n+'" value="'+(v||todayStr())+'">'}
