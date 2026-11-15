@@ -1,5 +1,5 @@
 // صفحة المستثمر — تشتغل من غير نت بآخر نسخة اتحمّلت
-var CACHE = "mostathmer-v2";
+var CACHE = "mostathmer-v3";
 var CORE = [
   "./",
   "./index.html",

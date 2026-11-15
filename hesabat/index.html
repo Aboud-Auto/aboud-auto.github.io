@@ -2835,10 +2835,10 @@ async function ivwId(u){return ivwHex(await crypto.subtle.digest("SHA-256",TE.en
 async function ivwDerive(pw,salt,it){var m=await crypto.subtle.importKey("raw",TE.encode(pw),"PBKDF2",false,["deriveBits"]);return b64(await crypto.subtle.deriveBits({name:"PBKDF2",salt:unb64(salt),iterations:it,hash:"SHA-256"},m,256))}
 function ivwSnap(o){
   var lg=brandLogo();if(!/^data:image\//.test(lg)||lg.length>180000)lg="";
-  return {v:1,shop:brandName(),logo:lg,name:o.name,pct:o.pct,dep:o.dep,wd:o.wd,prof:o.prof,loss:o.loss,lr:o.lr,lossRem:Math.max(0,o.lossRem),pwd:o.pwd,profAvail:o.profAvail,
-    bal:o.bal,working:o.working,cash:o.free+o.held,lent:o.lent,cdebt:o.cdebt,
+  /* المستثمر بيشوف عربياته وتفاصيلها بس (من غير رصيده وحركات فلوسه) */
+  return {v:2,shop:brandName(),logo:lg,name:o.name,
     cars:o.cars.map(function(x){var c=x.c,v=x.v;return {n:c.name||"",sold:!!c.sold,bd:c.buyDate||"",bp:+c.buyPrice||0,ex:+c.exp||0,sp:c.sold?(+c.sellPrice||0):0,sd:c.sold?(c.sellDate||""):"",amt:+v.amount||0,share:+v.share||0,mode:invModeTxt(v),profit:c.sold?(+v.profit||0):null,debt:c.sold?(+v.debtLeft||0):0}}),
-    moves:o.moves.map(function(x){return {d:x.date||"",k:x.kind,a:+x.amount||0}})}
+  }
 }
 async function ivwPush(o,vw,force){
   var body=JSON.stringify(ivwSnap(o)),hk="hb_ivh_"+vw.id,hh=b64(await crypto.subtle.digest("SHA-256",TE.encode(body+"|"+vw.k)));
@@ -2859,7 +2859,7 @@ function invViewOpen(iid){
   var v=invById(iid);if(!v)return;if(DEMO)return toast("مش متاح في التجربة");var vw=v.vw||null;
   modal={type:"invview",iid:iid};
   openSheet(sheetHead("🔑 دخول "+esc(v.name)+" على عربياته")+
-    '<div class="sub" style="margin:0 2px 10px">المستثمر يفتح صفحة خاصة بيه ويشوف العربيات اللي هو داخل فيها بس: حالتها، سعر الشرا والبيع والمصاريف، فلوسه فيها ونصيبه من الربح، ورصيده والمسحوب. مايقدرش يعدّل حاجة ولا يشوف أي حاجة تانية في حساباتك.</div>'+
+    '<div class="sub" style="margin:0 2px 10px">المستثمر يفتح صفحة خاصة بيه ويشوف العربيات اللي هو داخل فيها بس وتفاصيلها: حالتها، سعر الشرا والبيع والمصاريف، فلوسه فيها ونصيبه وربحه منها. مايقدرش يعدّل حاجة ولا يشوف أي حاجة تانية في حساباتك.</div>'+
     (vw?'<div class="card"><div class="kv"><span>اسم الدخول</span><b>'+esc(vw.u)+'</b></div><div class="kv"><span>الحالة</span><b class="good">شغّال ✔ وبيتحدّث لوحده</b></div></div>'+
       '<button class="btn" style="margin-bottom:10px" onclick="invViewShare(\''+esc(iid)+'\')">📲 ابعتله الرابط على واتساب</button>':'')+
     '<div class="sect">'+(vw?"تغيير اسم الدخول أو الباسورد":"اعمله دخول")+'</div>'+

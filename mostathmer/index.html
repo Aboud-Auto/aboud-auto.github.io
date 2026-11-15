@@ -102,7 +102,7 @@ function sess(){try{return JSON.parse(lsGet(LS)||"null")}catch(e){return null}}
 
 /* ---------- الدخول ---------- */
 function renderLogin(msg){
-  $("#app").innerHTML='<div class="login"><div class="brand" style="justify-content:center;flex-direction:column;text-align:center"><img src="icon-192.png" alt=""><h1>حساب المستثمر</h1><div class="sub">تابع عربياتك وفلوسك</div></div>'+
+  $("#app").innerHTML='<div class="login"><div class="brand" style="justify-content:center;flex-direction:column;text-align:center"><img src="icon-192.png" alt=""><h1>حساب المستثمر</h1><div class="sub">تابع عربياتك</div></div>'+
     '<form id="lf" class="card" autocomplete="on">'+
     '<label class="fld"><span>اسم الدخول</span><input name="u" autocomplete="username" autocapitalize="none" spellcheck="false" dir="ltr"></label>'+
     '<label class="fld"><span>الباسورد</span><input name="p" type="password" autocomplete="current-password" dir="ltr"></label>'+
@@ -158,20 +158,8 @@ function render(){
   var h='<div class="brand"><img src="'+esc(S.logo||"icon-192.png")+'" alt=""><div><h1>'+esc(S.shop||"المعرض")+'</h1><div class="sub">أهلًا '+esc(S.name)+(at?' · آخر تحديث '+at.toLocaleDateString("en-GB")+' '+at.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):'')+'</div></div></div>';
   if(ST.offline)h+='<div class="banner">مفيش نت دلوقتي، دي آخر أرقام اتحمّلت.</div>';
   h+='<div class="top-actions"><button class="btn sec small" id="rf">'+(ST.loading?"جاري التحديث…":"🔄 تحديث")+'</button>'+'</div>';
-  h+='<div class="hero"><div class="l">رصيدك الحالي</div><div class="v">'+m(S.bal)+'</div>'+
-    '<div class="s">شغال في عربيات '+m(S.working)+' · كاش '+m(S.cash)+'</div>'+(S.pct!=null?'<div class="s">نسبتك المتفق عليها '+esc(S.pct)+'%</div>':'')+'</div>';
-  h+='<div class="tiles">'+tile("💰 إجمالي اللي دفعته",m(S.dep))+tile("📈 أرباحك من العربيات",m(S.prof,"good"))+
-    tile("💵 أرباح اتسحبتلك",m(S.pwd))+tile("✅ أرباح متاحة للسحب",m(S.profAvail,"good"))+
-    (S.wd>0.5?tile("➖ اتسحب من رأس مالك",m(S.wd)):"")+
-    (S.loss>0.5?tile("📉 خسائر",m(S.loss,"bad")):"")+
-    (S.lossRem>0.5?tile("⏳ خسارة لسه هتتسدد من أرباحك",m(S.lossRem,"warn")):"")+
-    (S.cdebt>0.5?tile("🧾 لسه عند مشترين",m(S.cdebt,"warn")):"")+
-    (S.lent>0.5?tile("🤝 في سلف",m(S.lent)):"")+'</div>';
-  h+='<div class="sect">🚗 عربياتك</div><div class="seg"><button data-t="stock" class="'+(ST.tab==="stock"?"on":"")+'">شغالة ('+stock.length+')</button><button data-t="sold" class="'+(ST.tab==="sold"?"on":"")+'">اتباعت ('+sold.length+')</button><button data-t="mv" class="'+(ST.tab==="mv"?"on":"")+'">فلوسك</button></div>';
-  if(ST.tab==="mv"){
-    var mv=S.moves||[];
-    h+=mv.length?'<div class="card">'+mv.map(function(x){var out=x.k!=="dep";return '<div class="row"><div><div style="font-weight:700">'+(MV[x.k]||"حركة")+'</div><div class="sub">'+fdate(x.d)+'</div></div>'+m(x.a,out?"bad":"good")+'</div>'}).join("")+'</div>':'<div class="empty">مفيش حركات لسه</div>';
-  }else{
+  h+='<div class="sect">🚗 عربياتك</div><div class="seg"><button data-t="stock" class="'+(ST.tab==="stock"?"on":"")+'">شغالة ('+stock.length+')</button><button data-t="sold" class="'+(ST.tab==="sold"?"on":"")+'">اتباعت ('+sold.length+')</button></div>';
+  {
     var L=ST.tab==="sold"?sold:stock;
     h+=L.length?L.map(carCard).join(""):'<div class="empty">'+(ST.tab==="sold"?"مفيش عربيات اتباعت لسه":"مفيش عربيات شغالة دلوقتي")+'</div>';
   }
