@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>حساب المستثمر</title>
+<meta name="theme-color" content="#050505">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="حسابي">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#050505; --card:#121110; --text:#f3ecda; --muted:#a89f8a; --line:#2b2517;
+  --primary:#d4af37; --primary-ink:#0a0804; --soft:#201a09;
+  --good:#3ddc84; --good-bg:#10291a; --bad:#ff6b60; --bad-bg:#341816; --warn:#ffb74d; --warn-bg:#33260d;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Cairo",Tahoma,"Segoe UI",Arial,sans-serif;font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+button,input{font-family:inherit;font-size:16px;color:var(--text)}
+.num{direction:ltr;unicode-bidi:isolate;display:inline-block}
+#app{max-width:640px;margin:0 auto;padding:14px 14px 40px}
+.sub{color:var(--muted);font-size:13px}
+.brand{display:flex;align-items:center;gap:12px;margin:6px 2px 14px}
+.brand img{width:52px;height:52px;border-radius:12px;object-fit:cover;background:#000;border:1px solid var(--line)}
+.brand h1{font-size:19px;margin:0;font-weight:800}
+.hero{background:linear-gradient(135deg,#e9c75a,#b8902a);color:var(--primary-ink);border-radius:18px;padding:16px 18px;margin-bottom:14px}
+.hero .l{font-size:13px;font-weight:700;opacity:.8}
+.hero .v{font-size:30px;font-weight:800}
+.hero .s{font-size:13px;font-weight:600;opacity:.85}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.tile .l{font-size:12px;color:var(--muted)}
+.tile .v{font-size:18px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 16px;margin-bottom:12px}
+.sect{font-weight:800;margin:18px 4px 8px;color:var(--primary)}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line)}
+.kv:last-child{border-bottom:0}
+.kv span{color:var(--muted);font-size:14px}
+.good{color:var(--good)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.car .t{font-weight:800;font-size:17px;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
+.badge{font-size:12px;font-weight:700;border-radius:20px;padding:2px 10px;white-space:nowrap}
+.b-stock{background:var(--warn-bg);color:var(--warn)}.b-sold{background:var(--good-bg);color:var(--good)}
+.seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;margin-bottom:10px}
+.seg button{flex:1;border:0;background:none;border-radius:9px;padding:8px;font-weight:700;color:var(--muted);cursor:pointer}
+.seg button.on{background:var(--primary);color:var(--primary-ink)}
+.btn{display:block;width:100%;border:0;border-radius:14px;padding:13px;font-weight:800;background:var(--primary);color:var(--primary-ink);cursor:pointer}
+.btn.sec{background:var(--soft);color:var(--primary);border:1px solid var(--line)}
+.btn.small{padding:8px 12px;width:auto;display:inline-block;font-size:14px}
+.fld{display:block;margin-bottom:12px}
+.fld span{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+.fld input{width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;outline:none}
+.fld input:focus{border-color:var(--primary)}
+.login{max-width:420px;margin:8vh auto 0}
+.err{color:var(--bad);font-weight:700;min-height:24px;margin-bottom:8px;font-size:14px}
+.empty{text-align:center;color:var(--muted);padding:22px 10px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed var(--line)}
+.row:last-child{border-bottom:0}
+.top-actions{display:flex;gap:8px;justify-content:flex-end;margin:-4px 0 10px;flex-wrap:wrap}
+.banner{background:var(--warn-bg);color:var(--warn);border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+var FB_CFG={
+  apiKey:"AIzaSyBhedAxeakhHhVJc1GHMNd277is_VoIDL4",
+  authDomain:"aboud-auto.firebaseapp.com",
+  projectId:"aboud-auto",
+  storageBucket:"aboud-auto.firebasestorage.app",
+  messagingSenderId:"1075120993023",
+  appId:"1:1075120993023:web:5609b07289841a0bd3d2ca"
+};
+var TE=new TextEncoder(),TD=new TextDecoder(),LS="ivw_sess",FS=null;
+var ST={snap:null,tab:"stock",offline:false,loading:false};
+function $(s){return document.querySelector(s)}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function fmt(n){n=Math.round(+n||0);return (n<0?"-":"")+Math.abs(n).toLocaleString("en-US")}
+function m(n,c){return '<span class="num'+(c?" "+c:"")+'">'+fmt(n)+'</span>'}
+function fdate(d){if(!d)return "";var p=String(d).split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:esc(d)}
+function pct(x){return (Math.round((+x||0)*1000)/10)+"%"}
+function b64(u8){u8=new Uint8Array(u8);var s="";for(var i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
+function unb64(s){var b=atob(s),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{if(v)localStorage.setItem(k,v);else localStorage.removeItem(k)}catch(e){}}
+async function viewId(u){var h=await crypto.subtle.digest("SHA-256",TE.encode("aboud-inv|"+String(u).trim().toLowerCase()));return Array.from(new Uint8Array(h)).map(function(b){return b.toString(16).padStart(2,"0")}).join("")}
+async function deriveKey(pw,salt,it){var mk=await crypto.subtle.importKey("raw",TE.encode(pw),"PBKDF2",false,["deriveBits"]);return b64(await crypto.subtle.deriveBits({name:"PBKDF2",salt:unb64(salt),iterations:it,hash:"SHA-256"},mk,256))}
+async function decrypt(k,s){var key=await crypto.subtle.importKey("raw",unb64(k),{name:"AES-GCM"},false,["decrypt"]),u=unb64(s);
+  return JSON.parse(TD.decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:u.subarray(0,12)},key,u.subarray(12))))}
+function fs(){if(!FS){var app=firebase.initializeApp(FB_CFG,"mostathmer");FS=app.firestore()}return FS}
+async function fetchDoc(id){var d=await fs().doc("invviews/"+id).get({source:"server"});return d.exists?d.data():null}
+function sess(){try{return JSON.parse(lsGet(LS)||"null")}catch(e){return null}}
+
+/* ---------- الدخول ---------- */
+function renderLogin(msg){
+  $("#app").innerHTML='<div class="login"><div class="brand" style="justify-content:center;flex-direction:column;text-align:center"><img src="icon-192.png" alt=""><h1>حساب المستثمر</h1><div class="sub">تابع عربياتك وفلوسك</div></div>'+
+    '<form id="lf" class="card" autocomplete="on">'+
+    '<label class="fld"><span>اسم الدخول</span><input name="u" autocomplete="username" autocapitalize="none" spellcheck="false" dir="ltr"></label>'+
+    '<label class="fld"><span>الباسورد</span><input name="p" type="password" autocomplete="current-password" dir="ltr"></label>'+
+    '<div class="err" id="le">'+esc(msg||"")+'</div><button class="btn" id="lb">دخول</button></form>'+
+    '<div class="sub" style="text-align:center">اسم الدخول والباسورد بتاخدهم من صاحب المعرض.</div></div>';
+  $("#lf").onsubmit=async function(e){e.preventDefault();
+    var u=this.u.value.trim().toLowerCase(),p=this.p.value,b=$("#lb"),er=$("#le");er.textContent="";
+    if(!u||!p){er.textContent="اكتب اسم الدخول والباسورد";return}
+    b.disabled=true;b.textContent="جاري الدخول…";
+    try{
+      var id=await viewId(u),d=await fetchDoc(id);
+      if(!d)throw {bad:1};
+      var k=await deriveKey(p,d.s,d.it),snap;
+      try{snap=await decrypt(k,d.e)}catch(x){throw {bad:1}}
+      lsSet(LS,JSON.stringify({u:u,id:id,k:k}));lsSet(LS+"_snap",JSON.stringify(snap));
+      ST.snap=snap;ST.offline=false;render();
+    }catch(x){er.textContent=x&&x.bad?"اسم الدخول أو الباسورد غلط":"مفيش نت، اتأكد من الاتصال وجرّب تاني";b.disabled=false;b.textContent="دخول"}
+  };
+}
+function logout(){lsSet(LS);lsSet(LS+"_snap");ST.snap=null;renderLogin()}
+
+/* ---------- تحديث من السيرفر ---------- */
+async function reload(silent){
+  var s=sess();if(!s)return renderLogin();
+  ST.loading=true;if(!silent)render();
+  try{
+    var d=await fetchDoc(s.id);
+    if(!d){logout();return renderLogin("الدخول ده اتوقف. كلّم صاحب المعرض.")}
+    var snap;try{snap=await decrypt(s.k,d.e)}catch(x){logout();return renderLogin("الباسورد اتغيّر، ادخل بالباسورد الجديد")}
+    ST.snap=snap;ST.offline=false;lsSet(LS+"_snap",JSON.stringify(snap));
+  }catch(e){ST.offline=true}
+  ST.loading=false;render();
+}
+
+/* ---------- الصفحة ---------- */
+function tile(l,v){return '<div class="tile"><div class="l">'+l+'</div><div class="v">'+v+'</div></div>'}
+function kv(l,v){return '<div class="kv"><span>'+l+'</span><b>'+v+'</b></div>'}
+var MV={dep:"➕ إيداع",wd:"➖ سحب من رأس المال",pwd:"💵 سحب أرباح",lossrepay:"📉 سداد خسارة من الأرباح"};
+function carCard(c){
+  var h='<div class="card car"><div class="t"><span>🚗 '+esc(c.n||"عربية")+'</span><span class="badge '+(c.sold?"b-sold":"b-stock")+'">'+(c.sold?"اتباعت":"في المعرض")+'</span></div>'+
+    kv("اتشرت"+(c.bd?" يوم "+fdate(c.bd):"")+" بـ",m(c.bp))+
+    kv("المصاريف عليها",m(c.ex));
+  if(c.sold)h+=kv("اتباعت"+(c.sd?" يوم "+fdate(c.sd):"")+" بـ",m(c.sp));
+  h+=kv("فلوسك فيها",m(c.amt))+kv("نصيبك",pct(c.share)+(c.mode?' <span class="sub">('+esc(c.mode)+')</span>':''));
+  if(c.sold)h+=kv(c.profit>=0?"ربحك منها":"خسارتك فيها",m(Math.abs(c.profit),c.profit>=0?"good":"bad"));
+  if(c.sold&&c.debt>0.5)h+=kv("لسه عند المشتري (من نصيبك)",m(c.debt,"warn"));
+  return h+'</div>';
+}
+function render(){
+  var S=ST.snap;if(!S)return renderLogin();
+  var cars=S.cars||[],stock=cars.filter(function(c){return !c.sold}),sold=cars.filter(function(c){return c.sold});
+  var at=S.at?new Date(S.at):null;
+  var h='<div class="brand"><img src="'+esc(S.logo||"icon-192.png")+'" alt=""><div><h1>'+esc(S.shop||"المعرض")+'</h1><div class="sub">أهلًا '+esc(S.name)+(at?' · آخر تحديث '+at.toLocaleDateString("en-GB")+' '+at.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):'')+'</div></div></div>';
+  if(ST.offline)h+='<div class="banner">مفيش نت دلوقتي، دي آخر أرقام اتحمّلت.</div>';
+  h+='<div class="top-actions"><button class="btn sec small" id="rf">'+(ST.loading?"جاري التحديث…":"🔄 تحديث")+'</button>'+(window.deferredPrompt?'<button class="btn small" id="inst">📲 تثبيت التطبيق</button>':'')+'</div>';
+  h+='<div class="hero"><div class="l">رصيدك الحالي</div><div class="v">'+m(S.bal)+'</div>'+
+    '<div class="s">شغال في عربيات '+m(S.working)+' · كاش '+m(S.cash)+'</div>'+(S.pct!=null?'<div class="s">نسبتك المتفق عليها '+esc(S.pct)+'%</div>':'')+'</div>';
+  h+='<div class="tiles">'+tile("💰 إجمالي اللي دفعته",m(S.dep))+tile("📈 أرباحك من العربيات",m(S.prof,"good"))+
+    tile("💵 أرباح اتسحبتلك",m(S.pwd))+tile("✅ أرباح متاحة للسحب",m(S.profAvail,"good"))+
+    (S.wd>0.5?tile("➖ اتسحب من رأس مالك",m(S.wd)):"")+
+    (S.loss>0.5?tile("📉 خسائر",m(S.loss,"bad")):"")+
+    (S.lossRem>0.5?tile("⏳ خسارة لسه هتتسدد من أرباحك",m(S.lossRem,"warn")):"")+
+    (S.cdebt>0.5?tile("🧾 لسه عند مشترين",m(S.cdebt,"warn")):"")+
+    (S.lent>0.5?tile("🤝 في سلف",m(S.lent)):"")+'</div>';
+  h+='<div class="sect">🚗 عربياتك</div><div class="seg"><button data-t="stock" class="'+(ST.tab==="stock"?"on":"")+'">شغالة ('+stock.length+')</button><button data-t="sold" class="'+(ST.tab==="sold"?"on":"")+'">اتباعت ('+sold.length+')</button><button data-t="mv" class="'+(ST.tab==="mv"?"on":"")+'">فلوسك</button></div>';
+  if(ST.tab==="mv"){
+    var mv=S.moves||[];
+    h+=mv.length?'<div class="card">'+mv.map(function(x){var out=x.k!=="dep";return '<div class="row"><div><div style="font-weight:700">'+(MV[x.k]||"حركة")+'</div><div class="sub">'+fdate(x.d)+'</div></div>'+m(x.a,out?"bad":"good")+'</div>'}).join("")+'</div>':'<div class="empty">مفيش حركات لسه</div>';
+  }else{
+    var L=ST.tab==="sold"?sold:stock;
+    h+=L.length?L.map(carCard).join(""):'<div class="empty">'+(ST.tab==="sold"?"مفيش عربيات اتباعت لسه":"مفيش عربيات شغالة دلوقتي")+'</div>';
+  }
+  h+='<button class="btn sec" style="margin-top:18px" id="lo">تسجيل خروج</button>';
+  $("#app").innerHTML=h;
+  $("#rf").onclick=function(){reload()};$("#lo").onclick=logout;
+  var ib=$("#inst");if(ib)ib.onclick=function(){var p=window.deferredPrompt;window.deferredPrompt=null;p.prompt();render()};
+  document.querySelectorAll(".seg button").forEach(function(b){b.onclick=function(){ST.tab=b.dataset.t;render()}});
+}
+
+window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.deferredPrompt=e;if(ST.snap)render()});
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"&&sess())reload(true)});
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){});
+
+(function boot(){
+  var s=sess();if(!s)return renderLogin();
+  try{ST.snap=JSON.parse(lsGet(LS+"_snap")||"null")}catch(e){}
+  render();reload(true);
+})();
+</script>
+</body>
+</html>

@@ -1635,7 +1635,7 @@ function render(){
   renderNav();
 }
 function refresh(){
-  bkBoot();rcBoot();encMigrate();
+  bkBoot();rcBoot();encMigrate();ivwSync();
   var act=document.activeElement;
   if(act&&(act.id==="q")){renderListOnly();return}
   render();
@@ -2825,6 +2825,85 @@ function renderInv(){
   return h;
 }
 function openInv(id){modal={type:"inv",id:id};renderInvDetail();$("#sheet").scrollTop=0}
+/* ---------- دخول المستثمر ----------
+   كل مستثمر ليه اسم دخول وباسورد. البرنامج بيعمل نسخة من حسابه هو بس (عربياته وفلوسه)،
+   متشفرة بمفتاح طالع من الباسورد بتاعه، ويحطها في invviews/{id}. المستثمر بيفتحها من صفحة /mostathmer/
+   ومحدش يقدر يقراها من غير الباسورد، ولا يشوف أي حاجة تانية من حسابات المعرض. */
+var IVW_URL="https://aboud-auto.github.io/mostathmer/",IVW_IT=210000;
+function ivwHex(buf){return Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,"0")}).join("")}
+async function ivwId(u){return ivwHex(await crypto.subtle.digest("SHA-256",TE.encode("aboud-inv|"+String(u).trim().toLowerCase())))}
+async function ivwDerive(pw,salt,it){var m=await crypto.subtle.importKey("raw",TE.encode(pw),"PBKDF2",false,["deriveBits"]);return b64(await crypto.subtle.deriveBits({name:"PBKDF2",salt:unb64(salt),iterations:it,hash:"SHA-256"},m,256))}
+function ivwSnap(o){
+  var lg=brandLogo();if(!/^data:image\//.test(lg)||lg.length>180000)lg="";
+  return {v:1,shop:brandName(),logo:lg,name:o.name,pct:o.pct,dep:o.dep,wd:o.wd,prof:o.prof,loss:o.loss,lr:o.lr,lossRem:Math.max(0,o.lossRem),pwd:o.pwd,profAvail:o.profAvail,
+    bal:o.bal,working:o.working,cash:o.free+o.held,lent:o.lent,cdebt:o.cdebt,
+    cars:o.cars.map(function(x){var c=x.c,v=x.v;return {n:c.name||"",sold:!!c.sold,bd:c.buyDate||"",bp:+c.buyPrice||0,ex:+c.exp||0,sp:c.sold?(+c.sellPrice||0):0,sd:c.sold?(c.sellDate||""):"",amt:+v.amount||0,share:+v.share||0,mode:invModeTxt(v),profit:c.sold?(+v.profit||0):null,debt:c.sold?(+v.debtLeft||0):0}}),
+    moves:o.moves.map(function(x){return {d:x.date||"",k:x.kind,a:+x.amount||0}})}
+}
+async function ivwPush(o,vw,force){
+  var body=JSON.stringify(ivwSnap(o)),hk="hb_ivh_"+vw.id,hh=b64(await crypto.subtle.digest("SHA-256",TE.encode(body+"|"+vw.k)));
+  if(!force&&lsGet(hk)===hh)return true;
+  var key=await crypto.subtle.importKey("raw",unb64(vw.k),{name:"AES-GCM"},false,["encrypt"]),snap=JSON.parse(body);snap.at=Date.now();
+  var e=await aesEnc(key,TE.encode(JSON.stringify(snap)));
+  await FS.doc("invviews/"+vw.id).set({o:S.user.uid,s:vw.s,it:vw.it,e:e,at:snap.at});
+  lsSet(hk,hh);return true;
+}
+var ivwT=null;
+function ivwSync(){
+  if(DEMO||!S.user||!FS||!allLoaded()||!S.inv.some(function(v){return v.vw&&v.vw.id}))return;
+  clearTimeout(ivwT);ivwT=setTimeout(async function(){var L=calc().inv.list;
+    for(var i=0;i<S.inv.length;i++){var v=S.inv[i];if(!v.vw||!v.vw.id)continue;var o=L.find(function(x){return x.id===v.id});if(o)try{await ivwPush(o,v.vw)}catch(e){}}},2500);
+}
+function ivwLink(){return IVW_URL}
+function invViewOpen(iid){
+  var v=invById(iid);if(!v)return;if(DEMO)return toast("مش متاح في التجربة");var vw=v.vw||null;
+  modal={type:"invview",iid:iid};
+  openSheet(sheetHead("🔑 دخول "+esc(v.name)+" على عربياته")+
+    '<div class="sub" style="margin:0 2px 10px">المستثمر يفتح صفحة خاصة بيه ويشوف العربيات اللي هو داخل فيها بس: حالتها، سعر الشرا والبيع والمصاريف، فلوسه فيها ونصيبه من الربح، ورصيده والمسحوب. مايقدرش يعدّل حاجة ولا يشوف أي حاجة تانية في حساباتك.</div>'+
+    (vw?'<div class="card"><div class="kv"><span>اسم الدخول</span><b>'+esc(vw.u)+'</b></div><div class="kv"><span>الحالة</span><b class="good">شغّال ✔ وبيتحدّث لوحده</b></div></div>'+
+      '<button class="btn" style="margin-bottom:10px" onclick="invViewShare(\''+esc(iid)+'\')">📲 ابعتله الرابط على واتساب</button>':'')+
+    '<div class="sect">'+(vw?"تغيير اسم الدخول أو الباسورد":"اعمله دخول")+'</div>'+
+    '<div class="two">'+fld("اسم الدخول",'<input name="ivu" autocomplete="off" autocapitalize="none" placeholder="مثال: ahmed22" value="'+esc(vw?vw.u:"")+'">')+fld("الباسورد",'<input name="ivp" autocomplete="new-password" placeholder="٦ حروف أو أرقام على الأقل">')+'</div>'+
+    '<div class="sub" style="margin:0 2px 12px">اكتب الباسورد وابعتهولُه. لو نسيه اعمله باسورد جديد من هنا.</div>'+
+    '<button class="btn" onclick="invViewSave()">'+(vw?"حفظ التغيير":"تفعيل الدخول")+'</button>'+
+    (vw?'<button class="btn danger" style="margin-top:10px" onclick="invViewOff()">إيقاف دخوله</button>':'')+
+    '<button class="btn sec" style="margin-top:8px" onclick="openInv(\''+esc(iid)+'\')">رجوع</button>');
+}
+async function invViewSave(){if(submitting)return;
+  var iid=modal&&modal.iid,v=invById(iid);if(!v)return;
+  var u=val("ivu").trim().toLowerCase(),pw=val("ivp");
+  if(!/^[a-z0-9._-]{3,30}$/.test(u))return toast("اسم الدخول بالإنجليزي أو أرقام (٣ حروف على الأقل) ومن غير مسافات");
+  if(pw.length<6)return toast("الباسورد ٦ حروف أو أرقام على الأقل");
+  submitting=true;toast("جاري التفعيل…");
+  try{
+    var id=await ivwId(u),ex=null;
+    try{ex=await FS.doc("invviews/"+id).get({source:"server"})}catch(e){return toast(/permission/.test(e&&e.code||"")?"لازم صاحب البرنامج يحدّث إعدادات الأمان الأول":"مفيش نت، اتأكد من الاتصال")}
+    if(ex.exists&&ex.data().o!==S.user.uid)return toast("اسم الدخول ده مستخدم، اختار اسم تاني");
+    var mine=S.inv.some(function(x){return x.id!==iid&&x.vw&&x.vw.id===id});if(mine)return toast("الاسم ده لمستثمر تاني عندك");
+    var salt=b64(rnd(16)),k=await ivwDerive(pw,salt,IVW_IT),vw={u:u,id:id,s:salt,it:IVW_IT,k:k},old=v.vw;
+    var o=calc().inv.list.find(function(x){return x.id===iid});
+    try{await ivwPush(o,vw,true)}catch(e){return toast(/permission/.test(e&&e.code||"")?"لازم صاحب البرنامج يحدّث إعدادات الأمان الأول":"تعذر التفعيل، جرّب تاني")}
+    if(!(await patch("investors/"+iid,{vw:vw})))return;
+    v.vw=vw;
+    if(old&&old.id&&old.id!==id)FS.doc("invviews/"+old.id).delete().catch(function(){});
+    modal.pw=pw;invViewDone(iid,u,pw);
+  }finally{submitting=false}
+}
+function invViewDone(iid,u,pw){var v=invById(iid);
+  openSheet(sheetHead("✔ اتفعّل")+'<div class="card"><div class="kv"><span>الرابط</span><b style="direction:ltr">'+esc(ivwLink())+'</b></div><div class="kv"><span>اسم الدخول</span><b>'+esc(u)+'</b></div><div class="kv"><span>الباسورد</span><b>'+esc(pw)+'</b></div></div>'+
+    '<div class="sub" style="margin:0 2px 12px">ابعتهم لـ'+esc(v?v.name:"المستثمر")+'. أي حركة تسجلها على عربياته أو فلوسه بتوصله لوحدها.</div>'+
+    '<button class="btn" style="margin-bottom:10px" onclick="invViewShare(\''+esc(iid)+'\',1)">📲 ابعتهم على واتساب</button>'+
+    '<button class="btn sec" onclick="openInv(\''+esc(iid)+'\')">تمام</button>');
+}
+function invViewShare(iid,withPw){var v=invById(iid);if(!v||!v.vw)return;
+  var t="أهلًا "+v.name+" 👋\nتقدر تتابع عربياتك وفلوسك معانا في "+brandName()+" من هنا:\n"+ivwLink()+"\nاسم الدخول: "+v.vw.u+(withPw&&modal&&modal.pw?"\nالباسورد: "+modal.pw:"");
+  window.open("https://wa.me/?text="+encodeURIComponent(t),"_blank")}
+function invViewOff(){var iid=modal&&modal.iid,v=invById(iid);if(!v||!v.vw)return;
+  confirmBox("توقف دخول "+esc(v.name)+"؟ مش هيقدر يفتح صفحته تاني لحد ما تفعّلها.",async function(){
+    try{await FS.doc("invviews/"+v.vw.id).delete()}catch(e){return toast("تعذر الإيقاف، اتأكد من النت")}
+    lsSet("hb_ivh_"+v.vw.id);if(await patch("investors/"+iid,{vw:null})){v.vw=null;openInv(iid);toast("اتوقف ✔")}})}
+window.invViewOpen=invViewOpen;window.invViewSave=invViewSave;window.invViewShare=invViewShare;window.invViewOff=invViewOff;
+
 
 /* ---------- فلوس المستثمر الحرة: في الخزنة كام وفي الإنستاباي كام ----------
    الإنستاباي بتاعه = إيداعاته إنستاباي − سحوباته إنستاباي ± نقل فلوسه بين الخزنة والإنستاباي (transfers عليها iid).
@@ -3054,6 +3133,7 @@ function renderInvDetail(){
   if(o.repayable>0.5)h+='<button class="btn" style="margin-bottom:10px" data-act="form" data-kind="invloss" data-iid="'+esc(o.id)+'">📉 سداد خسارته من أرباحه (عليه '+fmt(o.lossRem)+')</button>';
   else if(o.lossRem>0.5)h+='<div class="banner">عليه خسارة '+fmt(o.lossRem)+' ج، وتقدر تسددها من أرباحه أول ما يكسب في عربية.</div>';
   h+='<button class="btn sec" style="margin-bottom:10px" data-act="report" data-kind="inv" data-name="'+esc(o.id)+'">📄 كشف حساب المستثمر (صورة / PDF)</button>';
+  if(!DEMO){var ivw=(invById(o.id)||{}).vw;h+='<button class="btn sec" style="margin-bottom:10px" onclick="invViewOpen(\''+esc(o.id)+'\')">🔑 '+(ivw&&ivw.id?'دخول المستثمر: شغّال ('+esc(ivw.u)+')':'اعمل للمستثمر دخول يشوف عربياته')+'</button>'}
   if(o.cars.length)h+='<div class="sect">العربيات اللي دخل فيها</div><div class="card" style="padding:6px 16px">'+o.cars.map(function(x){
     var c=x.c,v=x.v;
     return '<div class="item car" data-act="car" data-id="'+c.id+'" style="cursor:pointer"><div style="flex:1"><div class="t">'+esc(c.name)+'</div><div class="d">من فلوسه '+fmt(v.amount)+' · نصيبه '+pct(v.share)+' ('+invModeTxt(v)+') · '+(c.sold?"اتباعت "+fdate(c.sellDate):"في المعرض")+'</div></div>'+
@@ -4346,7 +4426,7 @@ document.addEventListener("click",async function(e){
   else if(a==="ilfull"||a==="ilpart"){document.querySelectorAll("#sheet .seg button").forEach(function(b){b.classList.toggle("on",b===t)});var fa=$("#sheet [name='amount']");if(fa){if(a==="ilfull")fa.value=fmtIn(t.dataset.v);else{fa.value="";fa.focus()}}}
   else if(a==="delinv"){var did=t.dataset.id,dO=calc().inv.list.find(function(x){return x.id===did});if(!dO)return;
     if(dO.cars.length||dO.moves.length)return toast("المستثمر عليه حركات أو داخل في عربيات، امسحها الأول");
-    confirmBox("تحذف المستثمر "+esc(dO.name)+"؟",async function(){if(await removeDoc("investors/"+did)){closeSheet();toast("اتحذف")}})}
+    confirmBox("تحذف المستثمر "+esc(dO.name)+"؟",async function(){var dvw=(invById(did)||{}).vw;if(await removeDoc("investors/"+did)){if(dvw&&dvw.id)FS.doc("invviews/"+dvw.id).delete().catch(function(){});closeSheet();toast("اتحذف")}})}
   else if(a==="ldkind"){
     var lb=$("#lib");if(lb)lb.style.display=t.dataset.k==="out"?"":"none";
     document.querySelectorAll("#sheet .seg button").forEach(function(b){b.classList.toggle("on",b===t)});
