@@ -265,6 +265,23 @@ function allLoaded(){var l=S.loaded;return l.cars&&l.expenses&&l.cols&&l.cap&&l.
 function paidNow(c){var b=+c.buyPrice||0;return typeof c.buyPaid==="number"?Math.max(0,Math.min(c.buyPaid,b)):b}
 function expCarName(e){if(e&&e.other)return "مصروفات أخرى"+(e.refCar?" ("+e.refCar+")":"");var c=S.cars.find(function(y){return y.id===e.carId});return c?c.name:"؟"}
 function expSrc(e){return e.sv===2?(e.src==="insta"?"insta":e.src==="fund"?"fund":"cash"):(e.src==="insta"?"insta":"fund")}
+/* مصاريف الموظف من برنامج العهدة: مابتدخلش التكلفة لوحدها، صاحب المعرض هو اللي يجمّعها (من 16/11/2026 وبعد كده بس، القديم زي ما هو) */
+var PEND_CUT=Date.parse("2026-11-16T20:00:00Z");
+function expPend(e){return !!e.carId&&expSrc(e)==="fund"&&!e.inc&&(+e.createdAt||0)>=PEND_CUT}
+function expIn(e){return !expPend(e)}
+async function expInclude(cid,conf){
+  var L=S.expenses.filter(function(e){return e.carId===cid&&expPend(e)});if(!L.length)return true;
+  var tot=L.reduce(function(a,e){return a+(+e.amount||0)},0);
+  if(conf&&!confirm("تضيف مصاريف العهدة ("+fmt(tot)+") على تكلفة العربية؟ الربح هيقل بالمبلغ ده، وهتظهر في ترجيع المصاريف للعهدة."))return false;
+  for(var i=0;i<L.length;i++){if(!(await patch("expenses/"+L[i].id,{inc:true})))return false}
+  toast("اتجمّعت على التكلفة ✔");return true;
+}
+async function askPendAtSale(cid){
+  var L=S.expenses.filter(function(e){return e.carId===cid&&expPend(e)});if(!L.length)return true;
+  var tot=L.reduce(function(a,e){return a+(+e.amount||0)},0);
+  if(confirm("🧾 العربية دي مصروف عليها من العهدة "+fmt(tot)+" لسه مش داخلين في التكلفة.\n\nتضيفهم على التكلفة قبل البيع؟\n(موافق = يتضافوا ويتخصموا من الربح · إلغاء = تتباع من غيرهم وتقدر تجمّعهم بعدين)"))return await expInclude(cid,false);
+  return true;
+}
 function reimbDay(c){return c.reimbDate||c.sellDate||c.buyDate}
 function rbTot(c){return typeof c.fexp==="number"?c.fexp:(+c.exp||0)}
 function rbList(c,tot){if(tot==null)tot=rbTot(c);if(Array.isArray(c.reimbs))return c.reimbs.map(function(r){return{amt:+r.amt||0,date:r.date||""}});return c.reimbursed&&tot>0?[{amt:tot,date:reimbDay(c)||""}]:[]}
@@ -278,7 +295,7 @@ function flowsOf(cars,d,em){
   function put(k,n,lb,dt,ex){if(k==="fund")fund+=n;else if(k==="insta")insta+=n;else cash+=n;if(em&&n)em({k:k,n:n,lb:lb,date:dt||"",ex:ex||null})}
   function add(src,n,lb,dt,ex){put(src==="fund"?"fund":src==="insta"?"insta":"cash",n,lb,dt,ex)}
   cars.forEach(function(c){if(ok(c.buyDate))add(c.buySrc,-paidNow(c)+(+c.tradeIn||0)+c.pCash,"شراء "+cn[c.id],c.buyDate,{car:c.id})});
-  S.expenses.forEach(function(e){if(!ids[e.carId])return;var s=expSrc(e);if(s==="fund")fx[e.carId]=(fx[e.carId]||0)+(+e.amount||0);if(ok(e.date))add(s,-(+e.amount||0),"مصروف "+(e.type||"")+" · "+cn[e.carId],e.date,{car:e.carId})});
+  S.expenses.forEach(function(e){if(!ids[e.carId])return;var s=expSrc(e);if(s==="fund"&&expIn(e))fx[e.carId]=(fx[e.carId]||0)+(+e.amount||0);if(ok(e.date))add(s,-(+e.amount||0),"مصروف "+(e.type||"")+" · "+cn[e.carId],e.date,{car:e.carId})});
   cars.forEach(function(c){rbList(c,fx[c.id]||0).forEach(function(r){if(r.amt&&ok(r.date)){put("cash",-r.amt,"ترجيع مصاريف للعهدة · "+cn[c.id],r.date,{car:c.id});put("fund",r.amt)}})});
   S.cols.forEach(function(x){if(ids[x.carId]&&ok(x.date)){put("cash",+x.cash||0,"بيع / تحصيل · "+cn[x.carId],x.date,{car:x.carId});put("insta",+x.insta||0,"بيع / تحصيل · "+cn[x.carId],x.date,{car:x.carId})}});
   S.pay.forEach(function(x){if(!x.roll&&pk[x.carId+"|"+x.pid]&&ok(x.date))add(x.src,-(+x.amount||0),"دفع لشريك · "+cn[x.carId],x.date,{car:x.carId})});
@@ -294,7 +311,7 @@ function flowsOf(cars,d,em){
 }
 function calc(){
   var exp={},cash={},insta={},paidBy={},rolledBy={},lossPd={},spd={};
-  var fex={};S.expenses.forEach(function(e){exp[e.carId]=(exp[e.carId]||0)+(+e.amount||0);if(expSrc(e)==="fund")fex[e.carId]=(fex[e.carId]||0)+(+e.amount||0)});
+  var fex={},pnd={};S.expenses.forEach(function(e){if(expPend(e)){pnd[e.carId]=(pnd[e.carId]||0)+(+e.amount||0);return}exp[e.carId]=(exp[e.carId]||0)+(+e.amount||0);if(expSrc(e)==="fund")fex[e.carId]=(fex[e.carId]||0)+(+e.amount||0)});
   var trd={},fft={};S.cols.forEach(function(c){if(c.forf){fft[c.carId]=(fft[c.carId]||0)+(+c.cash||0)+(+c.insta||0);return}if(c.trade)trd[c.carId]=(trd[c.carId]||0)+(+c.trade||0);cash[c.carId]=(cash[c.carId]||0)+(+c.cash||0);insta[c.carId]=(insta[c.carId]||0)+(+c.insta||0)});
   S.pay.forEach(function(p){var k=p.carId+"|"+p.pid;paidBy[k]=(paidBy[k]||0)+(+p.amount||0);if(p.roll)rolledBy[k]=(rolledBy[k]||0)+(+p.amount||0)});
   S.cap.forEach(function(x){if(x.kind==="lossrepay"&&x.carId)lossPd[x.carId]=(lossPd[x.carId]||0)+(+x.amount||0)});
@@ -320,7 +337,7 @@ function calc(){
     var ownerCap=buy-pTotal-iTotal,ownerShare=R0-invs.reduce(function(a,v){return a+v.share},0);
     var mp=sold?profit*ownerShare:null;
     var lossActive=!!(sold&&c.lossDeferred&&mp<0),lossAmt=lossActive?-mp:0,lossPaid=lossActive?(lossPd[c.id]||0):0;
-    return Object.assign({},c,{fexp:fex[c.id]||0,owedSeller:owedS,sellerPaid:sPaid,sellerRem:owedS-sPaid,exp:e,cashIn:ca,instaIn:ins,cost:cost,sold:sold,profit:profit,
+    return Object.assign({},c,{pendExp:pnd[c.id]||0,fexp:fex[c.id]||0,owedSeller:owedS,sellerPaid:sPaid,sellerRem:owedS-sPaid,exp:e,cashIn:ca,instaIn:ins,cost:cost,sold:sold,profit:profit,
       dep:sold?0:Math.max(0,ca+ins),forfAmt:fft[c.id]||0,tradeGot:trd[c.id]||0,remaining:sold?c.sellPrice-ca-ins-(trd[c.id]||0):null,parts:parts,pTotal:pTotal,pCash:pCash,invs:invs,iTotal:iTotal,iDebt:iDebt,iDebtLeft:iDebtLeft,pDebtLeft:pDebtLeft,xDebtLeft:iDebtLeft+pDebtLeft,ownerCap:ownerCap,ownerShare:ownerShare,
       myProfit:mp,lossActive:lossActive,lossAmt:lossAmt,lossPaid:lossPaid,lossRem:lossAmt-lossPaid});
   }).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)});
@@ -349,8 +366,9 @@ function calc(){
   var lossRem=lossDef-lossPaid,wDef=withdraw-repay,deficit=wDef+lossRem,capNow=capital+addcap+extTot-ew-jam-deficit;
   var undist=profitEx-repay-lossPaid-pw,value=capNow+undist+sadj;
   var IS=invStats(cars);
-  var check=Math.round(cashNow+fundBal+stockCost+debts+recv-owe-deposits-pOwed-IS.bal+IS.held-value)===0;
-  return {sadj:sadj,ew:ew,extAvail:extTot-ew,deposits:deposits,forfT:forfT,jam:jam,addcap:addcap,extTot:extTot,cars:cars,capital:capital,fund:fund,withdraw:withdraw,repay:repay,pw:pw,wDef:wDef,deficit:deficit,capNow:capNow,undist:undist,value:value,
+  var pendExp=0;cars.forEach(function(c){pendExp+=c.pendExp});
+  var check=Math.round(cashNow+fundBal+stockCost+pendExp+debts+recv-owe-deposits-pOwed-IS.bal+IS.held-value)===0;
+  return {pendExp:pendExp,sadj:sadj,ew:ew,extAvail:extTot-ew,deposits:deposits,forfT:forfT,jam:jam,addcap:addcap,extTot:extTot,cars:cars,capital:capital,fund:fund,withdraw:withdraw,repay:repay,pw:pw,wDef:wDef,deficit:deficit,capNow:capNow,undist:undist,value:value,
     profit:profit,profitEx:profitEx,recv:recv,owe:owe,sOwe:sOwe,lossDef:lossDef,lossPaid:lossPaid,lossRem:lossRem,
     soldN:soldN,stockN:stockN,stockCost:stockCost,debts:debts,cashNow:cashNow,safeBal:safeBal,instaBal:instaBal,
     cashTot:cashTot,instaTot:instaTot,fundBal:fundBal,fundTot:fundTot,fundOut:fundOut,fundEmp:(S.settings&&S.settings.fundEmp)||"",unre:NF()?0:unre,pOwed:pOwed,inv:IS,check:check};
@@ -904,7 +922,7 @@ function heroTap(k,T){
       (Math.abs(T.pOwed)>=0.5?tkv("+ فلوس الشركاء",m(T.pOwed)):"")+
       (Math.abs(T.inv.bal)>=0.5?tkv("+ فلوس المستثمرين",m(T.inv.bal)):"")+
       (T.deposits>0.5?tkv("+ عرابين",m(T.deposits)):"")+
-      (Math.abs(T.fundTot)>=0.5?tkv("− العهدة مع المسؤول عن الصرف",m(T.fundTot,"bad")):"")+(T.fundOut>0.5?tkv("+ مصاريف من العهدة لسه ما اترجعتلهاش",m(T.fundOut)):"")+
+      (Math.abs(T.fundTot)>=0.5?tkv("− العهدة مع المسؤول عن الصرف",m(T.fundTot,"bad")):"")+(T.fundOut>0.5?tkv("+ مصاريف من العهدة لسه ما اترجعتلهاش",m(T.fundOut)):"")+(T.pendExp>0.5?tkv("− مصاريف عهدة لسه ماتجمعتش على العربيات",m(T.pendExp,"bad")):"")+
       (T.stockCost>0.5?tkv("− عربيات في المعرض",m(T.stockCost,"bad"),null,'<span class="num">'+T.stockN+'</span> عربية'):"")+
       (T.debts>0.5?tkv("− باقي عند العملاء",m(T.debts,"bad")):"")+
       (T.recv>0.5?tkv("− سلف ادتها لناس",m(T.recv,"bad")):"")+
@@ -2374,6 +2392,7 @@ async function submitForm(){QF=null;
       if(cash+ins+pre>sp2-tr+0.5)return toast(tv>=sp2?"إنت اللي هتدفع الفرق، سيب التحصيل فاضي":"المحصّل أكبر من الفرق ("+fmt(Math.max(0,sp2-tr-pre))+")");
       var isp=ispRead(ins);if(isp.error)return toast(isp.error);
       var sxr=sxRead();if(sxr.error)return toast(sxr.error);
+      if(!(await askPendAtSale(cid))){submitting=false;return}
       var trS2=trName(val("trS")),ok=await patch("cars/"+cid,{sellPrice:sp2,sellDate:dt,soldAt:Date.now(),trS:trS2,bName:ctv("bName"),bPhone:ctv("bPhone")}),scol=null;
       if(ok&&(cash>0||ins>0)){scol=await create("collections",{carId:cid,date:dt,cash:cash,insta:ins,note:"عند البيع"});ok=!!scol}
       if(ok&&scol&&isp.list.length)ok=await ispSave(isp.list,scol,cid,dt);
@@ -2594,7 +2613,8 @@ function renderDetail(){
   var hasP=c.parts.length>0;
   var h=sheetHead(esc(c.name))+'<div style="margin:-4px 0 10px">'+statusBadge(c)+(hasP?'<span class="ptag">🤝 شراكة</span>':'')+((c.returns||[]).length?'<span class="ptag">↩️ رجعت قبل كده</span>':'')+'<span class="ptag" data-act="hist" data-id="'+c.id+'" style="cursor:pointer">📜 سجل العربية</span></div>';
   h+='<div class="card"><div class="kv"><span>تاريخ الشراء</span><b>'+fdate(c.buyDate)+'</b></div><div class="kv"><span>سعر الشراء</span><b>'+m(c.buyPrice)+'</b></div>'+tradeInKv(c)+ctKv("البايع",c.sName,c.sPhone)+
-     (c.owedSeller>0.5?'<div class="kv"><span>اتدفع للبايع</span><b>'+m(paidNow(c)+c.sellerPaid)+'</b></div><div class="kv"><span>'+(c.tradeFrom?"باقي للعميل (فرق البدل)":"باقي للبايع")+'</span><b class="'+(c.sellerRem>0.5?"warn":"good")+'">'+(c.sellerRem>0.5?m(c.sellerRem):"اتسدد بالكامل ✔")+'</b></div>':'')+'<div class="kv"><span>المصاريف</span><b>'+m(c.exp)+'</b></div><div class="kv"><span>التكلفة الإجمالية</span><b>'+m(c.cost)+'</b></div>';
+     (c.owedSeller>0.5?'<div class="kv"><span>اتدفع للبايع</span><b>'+m(paidNow(c)+c.sellerPaid)+'</b></div><div class="kv"><span>'+(c.tradeFrom?"باقي للعميل (فرق البدل)":"باقي للبايع")+'</span><b class="'+(c.sellerRem>0.5?"warn":"good")+'">'+(c.sellerRem>0.5?m(c.sellerRem):"اتسدد بالكامل ✔")+'</b></div>':'')+'<div class="kv"><span>المصاريف</span><b>'+m(c.exp)+'</b></div><div class="kv"><span>التكلفة الإجمالية</span><b>'+m(c.cost)+'</b></div>'+
+     (c.pendExp>0.5?'<div class="banner" style="margin:8px 0 2px">🧾 العربية دي مصروف عليها من العهدة <b class="num">'+fmt(c.pendExp)+'</b> لسه مش داخلين في التكلفة.<button class="btn small" style="display:block;margin-top:8px" data-act="expinc" data-id="'+c.id+'">➕ جمّعهم على التكلفة</button></div>':'');
   if(c.sold){
     h+='<div class="kv"><span>تاريخ البيع</span><b>'+fdate(c.sellDate)+'</b></div><div class="kv"><span>سعر البيع</span><b>'+m(c.sellPrice)+'</b></div>'+
        '<div class="kv"><span>محصّل كاش</span><b>'+m(c.cashIn)+'</b></div><div class="kv"><span>محصّل إنستاباي</span><b>'+m(c.instaIn)+'</b></div>'+tradeOutKv(c)+ctKv("المشتري",c.bName,c.bPhone)+
@@ -2671,7 +2691,7 @@ function renderDetail(){
       (rbl>0.5?'<button class="btn'+(c.sold?'':' sec')+'" style="margin-top:10px" data-act="form" data-kind="reimb" data-car="'+c.id+'">💼 رجّعت مبلغ للعهدة</button>':'<div class="sub good" style="margin-top:8px">✔ كل مصاريف العهدة اترجّعت</div>')+'</div>';
   }
   if(exps.length){h+='<div class="sect">المصاريف</div><div class="card" style="padding:6px 16px">'+exps.map(function(e){
-    return '<div class="item"><div style="flex:1"><div class="t">'+esc(e.type||"مصروف")+'</div><div class="d">'+fdate(e.date)+(dline(srcNote({src:expSrc(e)}),esc(e.note||""))?" · "+dline(srcNote({src:expSrc(e)}),esc(e.note||"")):"")+'</div></div><span class="num" style="font-weight:700">'+fmt(e.amount)+'</span>'+edBtn("expenses",e.id)+'<button class="del" data-act="delitem" data-coll="expenses" data-id="'+e.id+'" aria-label="حذف">🗑</button></div>'}).join("")+'</div>'}
+    return '<div class="item"><div style="flex:1"><div class="t">'+esc(e.type||"مصروف")+(expPend(e)?' <span class="ptag">مش داخل التكلفة</span>':'')+'</div><div class="d">'+fdate(e.date)+(dline(srcNote({src:expSrc(e)}),esc(e.note||""))?" · "+dline(srcNote({src:expSrc(e)}),esc(e.note||"")):"")+'</div></div><span class="num" style="font-weight:700">'+fmt(e.amount)+'</span>'+edBtn("expenses",e.id)+'<button class="del" data-act="delitem" data-coll="expenses" data-id="'+e.id+'" aria-label="حذف">🗑</button></div>'}).join("")+'</div>'}
   if(cols.length){h+='<div class="sect">التحصيلات</div><div class="card" style="padding:6px 16px">'+cols.map(function(x){
     return '<div class="item"><div style="flex:1"><div class="t">'+(x.trade?'🔁 عربية داخلة: '+esc(x.tradeName||"")+' بقيمة '+fmt(x.trade):x.depRef?'↩️ رد عربون: كاش '+fmt(-(+x.cash||0))+' · إنستاباي '+fmt(-(+x.insta||0))+(x.forf?' — اتحسب في المصادرة':''):x.dep?'🔖 عربون'+(x.dname?' من '+esc(x.dname):'')+': كاش '+fmt(x.cash)+' · إنستاباي '+fmt(x.insta)+(x.forf?' — اتصادر وبقى ربح':''):x.refund?'↩️ رد للمشتري: كاش '+fmt(-(+x.cash||0))+' · إنستاباي '+fmt(-(+x.insta||0)):'كاش '+fmt(x.cash)+' · إنستاباي '+fmt(x.insta))+'</div><div class="d">'+fdate(x.date)+(x.note?" · "+esc(x.note):"")+'</div>'+ispLinesHtml(x.id)+'</div>'+edBtn("collections",x.id)+'<button class="del" data-act="delitem" data-coll="collections" data-id="'+x.id+'" aria-label="حذف">🗑</button></div>'}).join("")+'</div>'}
   if(pays.length){h+='<div class="sect">التسليمات للشركاء</div><div class="card" style="padding:6px 16px">'+pays.map(function(x){
@@ -3655,7 +3675,7 @@ function rbPartner(){
       kv.push(["الحالة","لسه في المعرض، ربحه هيتحسب عند البيع",RK.muted,"rtl"]);
     }
     B.push({t:"kv",rows:kv});
-    var ex=S.expenses.filter(function(e){return e.carId===c.id}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")});
+    var ex=S.expenses.filter(function(e){return e.carId===c.id&&expIn(e)}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")});
     if(ex.length&&modal.exd!==false)B.push({t:"table",cols:[{h:"مصاريف العربية",w:.5},{h:"التاريخ",w:.25},{h:"المبلغ",w:.25,k:"n"}],rows:ex.map(function(e){return [e.type||"مصروف",rfd(e.date),+e.amount||0]}).concat([{cells:["الإجمالي","",c.exp]}])});
     var py=S.pay.filter(function(x){return x.carId===c.id&&x.pid===p.id}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")});
     if(py.length)B.push({t:"table",cols:[{h:"تسليمات للشريك",w:.5},{h:"التاريخ",w:.25},{h:"المبلغ",w:.25,k:"n"}],rows:py.map(function(x){return [x.roll?"اتنقل لـ "+carNameById(x.toCar):"دفعة",rfd(x.date),+x.amount||0]}).concat([{cells:["الإجمالي","",p.paid]}])});
@@ -3684,7 +3704,7 @@ function rbCarPartners(){
     B.push({t:"table",cols:[{h:"الشريك",w:.34},{h:"دفع",w:.24,k:"n"},{h:"النسبة من الربح",w:.2},{h:"اتسلّم",w:.22,k:"n"}],rows:rows2.concat([{cells:["الإجمالي",c.buyPrice,"",""]}])});
     B.push({t:"note",text:"العربية لسه في المعرض، أرباح كل شريك هتتحسب لما تتباع."});
   }
-  var ex=S.expenses.filter(function(e){return e.carId===c.id}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")});
+  var ex=S.expenses.filter(function(e){return e.carId===c.id&&expIn(e)}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")});
   if(ex.length&&modal.exd!==false)B.push({t:"table",cols:[{h:"مصاريف العربية",w:.5},{h:"التاريخ",w:.25},{h:"المبلغ",w:.25,k:"n"}],rows:ex.map(function(e){return [e.type||"مصروف",rfd(e.date),+e.amount||0]}).concat([{cells:["الإجمالي","",c.exp]}])});
   var py=S.pay.filter(function(x){return x.carId===c.id}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")});
   if(py.length)B.push({t:"table",cols:[{h:"تسليمات للشركاء",w:.4},{h:"التاريخ",w:.3},{h:"المبلغ",w:.3,k:"n"}],rows:py.map(function(x){var p=c.parts.find(function(q){return q.id===x.pid});return [(p?p.name:"شريك")+(x.roll?" - اتنقل لـ "+carNameById(x.toCar):""),rfd(x.date),+x.amount||0]})});
@@ -4364,6 +4384,7 @@ document.addEventListener("click",async function(e){
   else if(a==="obGo")obGo();
   else if(a==="filter"){S.filter=t.dataset.f;render()}
   else if(a==="hist")openHist(t.dataset.id||null);
+  else if(a==="expinc")expInclude(t.dataset.id,true);
   else if(a==="hlmore")hlLoad(true);
   else if(a==="hlname")hlNameDev();
   else if(a==="car")openDetail(t.dataset.id);
