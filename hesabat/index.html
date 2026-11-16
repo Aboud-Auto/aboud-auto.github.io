@@ -1094,8 +1094,13 @@ function heroHtml(T){
     hb("💰","الأرباح",m(prof),"اللي لسه ماتسحبش",prof<-0.5?"neg":"pos","hprof")+
     (function(){var A=outsOf(T),B=owesOf(T);function half(ic,l,O,k,cls,emp){return '<div data-act="tinfo" data-k="'+k+'" style="flex:1;min-width:0;cursor:pointer"><div class="hl">'+ic+' '+l+'<span class="hgo">‹</span></div><div class="hv'+(O.tot>0.5?' '+cls:'')+'">'+m(O.tot)+'</div><div class="hs">'+(O.list.length?(k==="outs"?"عند ":"لـ ")+'<span class="num">'+O.list.length+'</span> '+(O.list.length===1?"حد":"أشخاص"):emp)+'</div></div>'}
       return '<div class="hb w hlr" style="display:flex;gap:10px">'+half("📥","ليك عند الناس",A,"outs","lpos","مفيش حاجة بره")+'<div style="width:1px;background:rgba(23,17,10,.25)"></div>'+half("📤","عليك للناس",B,"owes","lneg","مفيش حاجة عليك")+'</div>'})()+
-    T.inv.list.filter(function(o){return Math.abs(o.bal)>0.5||Math.abs(o.free)>0.5||Math.abs(o.working)>0.5}).map(function(o,i,L){
-      return '<div class="hb'+(L.length%2&&i===L.length-1?' w':'')+'" data-act="inv" data-id="'+esc(o.id)+'" style="cursor:pointer"><div class="hl">💼 '+esc(o.name||"مستثمر")+'<span class="hgo">‹</span></div><div class="hv">'+m(o.bal)+'</div><div class="hs">كاش '+m(o.free)+'<br>في عربيات '+m(o.working)+'</div></div>'}).join("")+
+    (function(){
+      var B=[];
+      if(T.cars.some(function(c){return c.parts.length})||T.inv.list.length){var ow=cashOwn(T);
+        B.push(function(w){return '<div class="hb'+(ow.mine<-0.5?' neg':'')+w+'" data-act="tinfo" data-k="hcash" style="cursor:pointer"><div class="hl">🙋 الكاش بتاعك<span class="hgo">‹</span></div><div class="hv">'+m(ow.mine)+'</div><div class="hs">من غير فلوس '+(ow.ic>0.5&&ow.pc>0.5?"المستثمرين والشركاء":ow.pc>0.5?"الشركاء":"المستثمرين")+'</div></div>'})}
+      T.inv.list.filter(function(o){return Math.abs(o.bal)>0.5||Math.abs(o.free)>0.5||Math.abs(o.working)>0.5}).forEach(function(o){
+        B.push(function(w){return '<div class="hb'+w+'" data-act="inv" data-id="'+esc(o.id)+'" style="cursor:pointer"><div class="hl">💼 '+esc(o.name||"مستثمر")+'<span class="hgo">‹</span></div><div class="hv">'+m(o.bal)+'</div><div class="hs">كاش '+m(o.free)+'<br>في عربيات '+m(o.working)+'</div></div>'})});
+      return B.map(function(f,i){return f(B.length%2&&i===B.length-1?' w':'')}).join("")})()+
   '</div>';
   var ch=[["📊 الإجمالي (رأس المال + الأرباح) "+m(T.value),"htot"]];
   if(T.inv.list.length>1)ch.push(["💼 كل المستثمرين "+m(T.inv.bal),"hinv"]);
