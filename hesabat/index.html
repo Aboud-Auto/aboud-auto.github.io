@@ -265,9 +265,12 @@ function allLoaded(){var l=S.loaded;return l.cars&&l.expenses&&l.cols&&l.cap&&l.
 function paidNow(c){var b=+c.buyPrice||0;return typeof c.buyPaid==="number"?Math.max(0,Math.min(c.buyPaid,b)):b}
 function expCarName(e){if(e&&e.other)return "مصروفات أخرى"+(e.refCar?" ("+e.refCar+")":"");var c=S.cars.find(function(y){return y.id===e.carId});return c?c.name:"؟"}
 function expSrc(e){return e.sv===2?(e.src==="insta"?"insta":e.src==="fund"?"fund":"cash"):(e.src==="insta"?"insta":"fund")}
-/* مصاريف الموظف من برنامج العهدة: مابتدخلش التكلفة لوحدها، صاحب المعرض هو اللي يجمّعها (من 16/11/2026 وبعد كده بس، القديم زي ما هو) */
+/* مصاريف الموظف من برنامج العهدة: مابتدخلش التكلفة لوحدها، صاحب المعرض هو اللي يجمّعها */
 var PEND_CUT=Date.parse("2026-11-16T20:00:00Z");
-function expPend(e){return !!e.carId&&expSrc(e)==="fund"&&!e.inc&&(+e.createdAt||0)>=PEND_CUT}
+/* العربيات اللي اتباعت قبل التعديل: مصاريفها القديمة فاضلة في التكلفة. أي عربية تانية (في المعرض أو رجعت) مصاريف العهدة عليها مش داخلة لحد ما تتجمّع */
+var PC_M=null,PC_A=null;
+function soldBeforeCut(cid){if(PC_A!==S.cars){PC_A=S.cars;PC_M={};(S.cars||[]).forEach(function(c){PC_M[c.id]=typeof c.sellPrice==="number"&&((+c.soldAt||0)?+c.soldAt<PEND_CUT:!!c.sellDate&&String(c.sellDate)<="2026-11-16")})}return !!PC_M[cid]}
+function expPend(e){return !!e.carId&&expSrc(e)==="fund"&&!e.inc&&((+e.createdAt||0)>=PEND_CUT||!soldBeforeCut(e.carId))}
 function expIn(e){return !expPend(e)}
 async function expInclude(cid,conf){
   var L=S.expenses.filter(function(e){return e.carId===cid&&expPend(e)});if(!L.length)return true;
