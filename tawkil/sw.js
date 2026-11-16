@@ -1,5 +1,5 @@
 // برنامج التوكيلات — تشتغل من غير نت بآخر نسخة اتحمّلت
-var CACHE = "tawkil-v1";
+var CACHE = "tawkil-v2";
 var CORE = [
   "./",
   "./index.html",

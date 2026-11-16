@@ -89,6 +89,10 @@ button,input,textarea{font-family:inherit;font-size:16px;color:var(--text)}
 #toast.show{transform:translateX(-50%) translateY(0)}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .row .btn{flex:1}
+.flt{display:flex;gap:6px;overflow-x:auto;margin:-2px 0 12px;padding-bottom:2px}
+.flt button{flex:none;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:99px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer}
+.flt button.on{background:var(--soft);color:var(--primary);border-color:var(--primary)}
+.sel{width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;outline:none;color:var(--text);font-family:inherit;font-size:16px}
 .cnt{display:flex;gap:8px;margin-bottom:12px}
 .cnt>div{flex:1;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px 12px}
 .cnt .l{font-size:12px;color:var(--muted)}.cnt .v{font-size:20px;font-weight:800}
@@ -227,7 +231,7 @@ function start(u){
 function listen(){
   unsub=col().onSnapshot({includeMetadataChanges:true},function(s){
     RECS=s.docs.map(function(d){var x=d.data();x.id=d.id;x.local=d.metadata.hasPendingWrites;return x});
-    RECS.sort(function(a,b){return (b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0)});
+    RECS.sort(function(a,b){return (parseInt(digits(b.n),10)||0)-(parseInt(digits(a.n),10)||0)||(b.createdAt||0)-(a.createdAt||0)});
     if(MEM&&!s.metadata.fromCache&&MEM.count!==RECS.length){MEM.count=RECS.length;FS.doc("tmembers/"+ME.uid).update({count:RECS.length}).catch(function(){})}
     if(!$("#ov").classList.contains("show")||VIEW)renderList();
     if(VIEW)renderView();
@@ -235,8 +239,17 @@ function listen(){
 }
 function logout(){if(!confirm("تسجيل خروج؟"))return;if(unsub)unsub();unsub=null;FBA.auth().signOut().then(function(){location.reload()})}
 
-/* ---------- القائمة ---------- */
-function match(r,q){return [r.car,r.to,r.from,r.phone,r.num,r.office,r.note].join(" ").toLowerCase().indexOf(q)>=0||digits(r.phone).replace(/\D/g,"").indexOf(digits(q).replace(/\D/g,""))>=0&&/\d/.test(digits(q))}
+/* ---------- القائمة (الدفتر) ---------- */
+var FLT="all";
+function carName(r){return [r.make,r.model].filter(Boolean).join(" ")||r.car||"عربية"}
+function txt(r){return [r.n,r.year,r.make,r.model,r.color,r.plate,r.traffic,r.fines,r.source,r.trader,r.car,r.to,r.from,r.phone,r.num,r.office,r.note].join(" ").toLowerCase()}
+function match(r,q){if(txt(r).indexOf(q)>=0)return true;var d=digits(q).replace(/\D/g,"");return d.length>=3&&digits(r.phone).replace(/\D/g,"").indexOf(d)>=0}
+function daysTo(d){if(!d)return null;var t=new Date(d+"T00:00:00").getTime();return isNaN(t)?null:Math.ceil((t-Date.now())/864e5)}
+function licSoon(r){var x=daysTo(r.licExp);return !r.sellDate&&x!==null&&x<=30}
+function papersOk(r){return r.papers==="ok"}
+function hasPoa(r){return !!(r.to||r.phone||(r.imgs||[]).length)}
+var FLTS=[["all","الكل"],["stock","في المعرض"],["sold","اتباعت"],["nopap","الورق لسه"],["lic","الترخيص قرب يخلص"],["nopoa","اتباعت من غير توكيل"]];
+function fltOk(r){return FLT==="all"||(FLT==="stock"&&!r.sellDate)||(FLT==="sold"&&!!r.sellDate)||(FLT==="nopap"&&!papersOk(r))||(FLT==="lic"&&licSoon(r))||(FLT==="nopoa"&&!!r.sellDate&&!hasPoa(r))}
 function render(){
   if(!ME)return renderLogin();
   if(!MEM){$("#app").innerHTML='<div class="empty">جاري التحميل…</div>';return}
@@ -246,28 +259,33 @@ function render(){
   }
   renderList();
 }
+function chip(t,c){return '<span class="tag"'+(c==="w"?' style="color:var(--warn);background:var(--warn-bg)"':c==="g"?' style="color:var(--good);background:var(--good-bg)"':'')+'>'+t+'</span>'}
 function recCard(r){
-  var th=(r.thumbs||[])[0];
-  var line=[r.car,r.date?fdate(r.date):""].filter(Boolean).map(esc).join(" · ");
-  var n=(r.imgs||[]).length;
-  return '<div class="card rec" data-act="view" data-id="'+r.id+'">'+(th?'<img class="th" src="'+th.t+'" alt="">':'<div class="ph">📄</div>')+
-    '<div class="tx"><div class="t">'+esc(r.to||"بدون اسم")+'</div><div class="s">'+(line||"&nbsp;")+'</div><div class="s"><span class="num">'+esc(r.phone||"")+'</span></div></div>'+
-    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">'+(n?'<span class="tag">📷 '+n+'</span>':'<span class="tag" style="color:var(--warn);background:var(--warn-bg)">من غير صور</span>')+(r.local?'<span class="sub">⏳ مستني النت</span>':'')+'</div></div>';
+  var l1=[r.year,r.color,r.plate].filter(Boolean).map(esc).join(" · ");
+  var l2=r.sellDate?("اتباعت "+fdate(r.sellDate)+(r.to?" لـ "+esc(r.to):"")):(r.buyDate?"اتشرت "+fdate(r.buyDate):"")+(r.trader?" · "+esc(r.trader):"");
+  var n=(r.imgs||[]).length,lx=daysTo(r.licExp),ch=[];
+  ch.push(papersOk(r)?chip("الورق ✔","g"):chip("الورق لسه","w"));
+  if(r.sellDate)ch.push(n?chip("📄 توكيل "+n):chip("من غير توكيل","w"));
+  if(licSoon(r))ch.push(chip(lx<0?"الترخيص خلص":"الترخيص فاضله "+lx+" يوم","w"));
+  if(r.local)ch.push('<span class="sub">⏳ مستني النت</span>');
+  return '<div class="card rec" data-act="view" data-id="'+r.id+'"><div class="ph" style="font-size:15px;font-weight:800;color:var(--primary)">'+(r.n?esc(r.n):"🚗")+'</div>'+
+    '<div class="tx"><div class="t">'+esc(carName(r))+'</div><div class="s">'+(l1||"&nbsp;")+'</div><div class="s">'+(l2||"&nbsp;")+'</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">'+ch.join("")+'</div></div></div>';
 }
 function renderList(){
   if(!ME||!MEM||!MEM.active)return;
   var a=document.activeElement,qf=a&&a.id==="q",pos=qf?a.selectionStart:0;
   var shop=MEM.shop||"";
-  var h='<div class="brand"><img src="icon-192.png" alt=""><div style="flex:1"><h1>التوكيلات</h1><div class="sub">'+(shop?esc(shop)+" · ":"")+esc(MEM.username||"")+'</div></div><button class="x" data-act="menu" aria-label="الإعدادات">⚙️</button></div>';
-  if(RECS===null)return $("#app").innerHTML=h+'<div class="empty">جاري التحميل…</div>';
-  var q=Q.trim().toLowerCase(),L=q?RECS.filter(function(r){return match(r,q)}):RECS;
-  var noPic=RECS.filter(function(r){return !(r.imgs||[]).length}).length;
-  h+='<div class="cnt"><div><div class="l">كل التوكيلات</div><div class="v">'+RECS.length+'</div></div><div><div class="l">من غير صور</div><div class="v" style="color:'+(noPic?"var(--warn)":"var(--good)")+'">'+noPic+'</div></div></div>';
-  h+='<input id="q" class="search" type="search" placeholder="🔍 دوّر بالاسم أو التليفون أو العربية" value="'+esc(Q)+'" autocomplete="off">';
-  if(!RECS.length)h+='<div class="empty">لسه مفيش توكيلات.<br>كل توكيل تعمله، سجّله من الزرار اللي تحت<br>بصورة التوكيل وصورة بطاقة اللي اتعمله ورقم تليفونه.</div>';
-  else if(!L.length)h+='<div class="empty">مفيش توكيل بالشكل ده</div>';
+  var h='<div class="brand"><img src="icon-192.png" alt=""><div style="flex:1"><h1>دفتر العربيات والتوكيلات</h1><div class="sub">'+(shop?esc(shop)+" · ":"")+esc(MEM.username||"")+'</div></div><button class="x" data-act="menu" aria-label="الإعدادات">⚙️</button></div>';
+  if(RECS===null){$("#app").innerHTML=h+'<div class="empty">جاري التحميل…</div>';return}
+  var q=Q.trim().toLowerCase(),L=RECS.filter(function(r){return fltOk(r)&&(!q||match(r,q))});
+  var cnt=function(f){var o=FLT;FLT=f;var c=RECS.filter(fltOk).length;FLT=o;return c};
+  h+='<div class="cnt"><div><div class="l">في المعرض</div><div class="v">'+cnt("stock")+'</div></div><div><div class="l">الورق لسه</div><div class="v" style="color:'+(cnt("nopap")?"var(--warn)":"var(--good)")+'">'+cnt("nopap")+'</div></div><div><div class="l">من غير توكيل</div><div class="v" style="color:'+(cnt("nopoa")?"var(--warn)":"var(--good)")+'">'+cnt("nopoa")+'</div></div></div>';
+  h+='<input id="q" class="search" type="search" placeholder="🔍 دوّر بالعربية أو اللوحة أو الاسم أو التليفون" value="'+esc(Q)+'" autocomplete="off">';
+  h+='<div class="flt">'+FLTS.map(function(f){return '<button data-act="flt" data-id="'+f[0]+'" class="'+(FLT===f[0]?"on":"")+'">'+f[1]+(f[0]!=="all"?' ('+cnt(f[0])+')':'')+'</button>'}).join("")+'</div>';
+  if(!RECS.length)h+='<div class="empty">الدفتر لسه فاضي.<br>كل عربية تدخل المعرض سجّلها من الزرار اللي تحت،<br>ولما تتباع ضيف عليها التوكيل بصورته وصورة البطاقة.</div>';
+  else if(!L.length)h+='<div class="empty">مفيش عربيات بالشكل ده</div>';
   else h+=L.map(recCard).join("");
-  h+='<button class="btn fab" data-act="new">+ توكيل جديد</button>';
+  h+='<button class="btn fab" data-act="new">+ عربية جديدة</button>';
   $("#app").innerHTML=h;
   if(qf&&$("#q")){$("#q").focus();try{$("#q").setSelectionRange(pos,pos)}catch(e){}}
 }
@@ -280,24 +298,37 @@ async function prepImg(file){var img=await loadImg(file),d=toJpeg(img,1600,0.62)
   var t=toJpeg(img,140,0.5);try{URL.revokeObjectURL(img.src)}catch(e){}return {d:d,t:t}}
 
 /* ---------- الفورم ---------- */
-function openForm(r){
+function dl(id,key){var seen={},o=[];(RECS||[]).forEach(function(r){var v=String(r[key]||"").trim();if(v&&!seen[v]){seen[v]=1;o.push(v)}});return '<datalist id="'+id+'">'+o.slice(0,60).map(function(v){return '<option value="'+esc(v)+'">'}).join("")+'</datalist>'}
+function inp(n,l,v,x){return '<label class="fld"><span>'+l+'</span><input name="'+n+'" autocomplete="off" value="'+esc(v||"")+'"'+(x||"")+'></label>'}
+function nextN(){var mx=0;(RECS||[]).forEach(function(r){var v=parseInt(digits(r.n),10);if(v>mx)mx=v});return mx?String(mx+1):""}
+function openForm(r,focusPoa){
   r=r||{};
-  FORM={id:r.id||null,pics:(r.imgs||[]).map(function(x){var th=(r.thumbs||[]).find(function(t){return t.id===x.id});return {id:x.id,k:x.k,t:th?th.t:"",old:true}}),removed:[],busy:0};
-  var h=head(r.id?"تعديل التوكيل":"توكيل جديد")+
-    '<label class="fld"><span>اتعمل التوكيل لـ (اسمه)</span><input name="to" autocomplete="off" value="'+esc(r.to||"")+'"></label>'+
-    '<div class="two"><label class="fld"><span>تليفونه</span><input name="phone" type="tel" inputmode="tel" dir="ltr" autocomplete="off" placeholder="01xxxxxxxxx" value="'+esc(r.phone||"")+'"></label>'+
-    '<label class="fld"><span>التاريخ</span><input name="date" type="date" value="'+esc(r.date||today())+'"></label></div>'+
-    '<label class="fld"><span>العربية (النوع والموديل / اللوحة)</span><input name="car" autocomplete="off" placeholder="مثال: هيونداي توسان 2019 - ر ق م 1234" value="'+esc(r.car||"")+'"></label>'+
-    '<label class="fld"><span>التوكيل كان باسم مين عندنا (اختياري)</span><input name="from" autocomplete="off" placeholder="الموظف اللي التوكيل خرج منه" value="'+esc(r.from||"")+'"></label>'+
-    '<div class="two"><label class="fld"><span>رقم التوكيل (اختياري)</span><input name="num" autocomplete="off" dir="ltr" value="'+esc(r.num||"")+'"></label>'+
-    '<label class="fld"><span>مكتب الشهر العقاري (اختياري)</span><input name="office" autocomplete="off" value="'+esc(r.office||"")+'"></label></div>'+
+  FORM={id:r.id||null,pics:(r.imgs||[]).map(function(x){return {id:x.id,k:x.k,old:true}}),removed:[],busy:0};
+  var h=head(r.id?"تعديل "+esc(carName(r)):"عربية جديدة")+
+    '<div class="sect" style="margin-top:0">🚗 العربية</div>'+
+    '<div class="two">'+inp("n","م (رقم مسلسل)",r.id?r.n:nextN(),' inputmode="numeric" dir="ltr"')+inp("year","سنة الصنع",r.year,' inputmode="numeric" dir="ltr" placeholder="2019"')+'</div>'+
+    '<div class="two">'+inp("make","الماركة",r.make,' list="dlMake" placeholder="هيونداي"')+inp("model","الموديل",r.model||(!r.make&&r.car)||"",' placeholder="النترا CN7"')+'</div>'+
+    '<div class="two">'+inp("color","اللون",r.color,' list="dlColor"')+inp("plate","اللوحة",r.plate,' placeholder="ب ع ج / 629"')+'</div>'+
+    '<div class="sect">📑 الورق</div>'+
+    '<div class="two">'+inp("traffic","المرور",r.traffic,' list="dlTraffic" placeholder="القاهرة الجديدة"')+'<label class="fld"><span>نهاية الترخيص</span><input name="licExp" type="date" value="'+esc(r.licExp||"")+'"></label></div>'+
+    '<div class="two">'+inp("fines","المخالفات",r.fines,' placeholder="لا يوجد / 9600"')+'<label class="fld"><span>الورق</span><select name="papers" class="sel"><option value="ok"'+(r.papers==="ok"?" selected":"")+'>تم استلام الورق</option><option value="no"'+(r.papers!=="ok"?" selected":"")+'>لسه ما استلمناش</option></select></label></div>'+
+    '<div class="sect">🤝 الشراء والبيع</div>'+
+    '<div class="two">'+inp("source","المصدر (اتشرت من مين)",r.source,' list="dlSource"')+inp("trader","التاجر",r.trader,' list="dlTrader"')+'</div>'+
+    '<div class="two"><label class="fld"><span>تاريخ الشراء</span><input name="buyDate" type="date" value="'+esc(r.buyDate||(r.id?"":today()))+'"></label><label class="fld"><span>تاريخ البيع</span><input name="sellDate" type="date" value="'+esc(r.sellDate||"")+'"></label></div>'+
+    '<div class="sect" id="poaSect">📄 التوكيل (لما تتباع)</div>'+
+    inp("from","التوكيل كان باسم مين عندنا",r.from,' list="dlFrom" placeholder="الموظف اللي التوكيل خرج منه"')+
+    '<div class="two">'+inp("to","اتعمل التوكيل لـ (اسمه)",r.to)+'<label class="fld"><span>تليفونه</span><input name="phone" type="tel" inputmode="tel" dir="ltr" autocomplete="off" placeholder="01xxxxxxxxx" value="'+esc(r.phone||"")+'"></label></div>'+
+    '<div class="two">'+inp("num","رقم التوكيل (اختياري)",r.num,' dir="ltr"')+inp("office","الشهر العقاري (اختياري)",r.office,' list="dlOffice"')+'</div>'+
     picBlock("poa")+picBlock("id")+
     '<label class="fld"><span>ملاحظة (اختياري)</span><textarea name="note">'+esc(r.note||"")+'</textarea></label>'+
-    '<div class="err" id="fe"></div><button class="btn" data-act="save">حفظ التوكيل</button>';
+    dl("dlMake","make")+dl("dlColor","color")+dl("dlTraffic","traffic")+dl("dlSource","source")+dl("dlTrader","trader")+dl("dlFrom","from")+dl("dlOffice","office")+
+    '<div class="err" id="fe"></div><button class="btn" data-act="save">حفظ</button>';
   openSheet(h);
+  FORM.pics.forEach(function(p){if(!IMGC[p.id])fetchImg(p.id)});
+  if(focusPoa){var el=$("#poaSect");if(el)el.scrollIntoView()}
 }
 function picThumbs(k){
-  return FORM.pics.filter(function(p){return p.k===k}).map(function(p){var i=FORM.pics.indexOf(p);return '<div class="pic">'+(p.t?'<img src="'+p.t+'" alt="">':'<div class="addpic">…</div>')+'<button type="button" data-act="rmpic" data-i="'+i+'">✕</button></div>'}).join("");
+  return FORM.pics.filter(function(p){return p.k===k}).map(function(p){var i=FORM.pics.indexOf(p);var src=p.t||(p.id&&IMGC[p.id]);return '<div class="pic">'+(src?'<img src="'+src+'" alt="">':'<div class="addpic">…</div>')+'<button type="button" data-act="rmpic" data-i="'+i+'">✕</button></div>'}).join("");
 }
 function picBlock(k){
   return '<div class="fld"><span>'+(k==="poa"?"📄 صورة التوكيل (كل الصفحات)":"🪪 صورة بطاقة اللي اتعمله التوكيل (وش وضهر)")+'</span><div class="pics"><span id="pl_'+k+'" style="display:contents">'+picThumbs(k)+'</span>'+
@@ -319,23 +350,25 @@ function fval(n){var e=$("#sheet [name='"+n+"']");return e?String(e.value||"").t
 async function save(btn){
   var F=FORM;if(!F)return;
   if(F.busy){toast("استنى الصور تخلص");return}
-  var d={to:fval("to"),phone:fval("phone"),date:fval("date")||today(),car:fval("car"),from:fval("from"),num:fval("num"),office:fval("office"),note:fval("note")};
+  var keys=["n","year","make","model","color","plate","traffic","licExp","fines","papers","source","trader","buyDate","sellDate","from","to","phone","num","office","note"],d={};
+  keys.forEach(function(k){d[k]=fval(k)});
   var er=$("#fe");
-  if(!d.to){er.textContent="اكتب اسم اللي اتعمله التوكيل";return}
-  if(!d.phone){er.textContent="اكتب رقم تليفونه";return}
-  if(!F.pics.some(function(p){return p.k==="poa"})&&!F.pics.some(function(p){return p.k==="id"})&&!confirm("مفيش ولا صورة. تحفظ من غير صور وتضيفها بعدين؟"))return;
+  if(!d.make&&!d.model&&!d.plate){er.textContent="اكتب الماركة أو الموديل أو اللوحة";return}
+  if(d.phone&&!d.to){er.textContent="اكتب اسم اللي اتعمله التوكيل";return}
+  if(d.to&&!d.phone){er.textContent="اكتب رقم تليفون اللي اتعمله التوكيل";return}
+  if(d.sellDate&&d.buyDate&&d.sellDate<d.buyDate){er.textContent="تاريخ البيع قبل تاريخ الشراء، راجعه";return}
   btn.disabled=true;btn.textContent="جاري الحفظ…";
-  var id=F.id||rid(),now=Date.now(),b=FS.batch(),imgs=[],thumbs=[];
+  var id=F.id||rid(),now=Date.now(),b=FS.batch(),imgs=[];
   F.pics.forEach(function(p){
-    if(!p.old){p.id=rid();b.set(imgDoc(p.id),{d:p.d,r:id,k:p.k,at:now})}
-    imgs.push({id:p.id,k:p.k});thumbs.push({id:p.id,t:p.t});
+    if(!p.old){p.id=rid();b.set(imgDoc(p.id),{d:p.d,r:id,k:p.k,at:now});IMGC[p.id]=p.d}
+    imgs.push({id:p.id,k:p.k});
   });
   F.removed.forEach(function(x){b.delete(imgDoc(x))});
-  d.imgs=imgs;d.thumbs=thumbs;d.updatedAt=now;d.dev=devName();
+  d.imgs=imgs;d.updatedAt=now;d.dev=devName();d.car=firebase.firestore.FieldValue.delete();d.thumbs=firebase.firestore.FieldValue.delete();d.date=firebase.firestore.FieldValue.delete();
   if(!F.id)d.createdAt=now;
   b.set(col().doc(id),d,{merge:true});
   var ok=await wait(b.commit().catch(function(e){toast(/permission/.test(code(e))?"مش مسموح بالحفظ، كلّم صاحب البرنامج":"الحفظ ماكملش، جرّب تاني")}),5000);
-  closeSheet();toast(ok?"اتحفظ ✔":"اتحفظ على الموبايل ⏳ وهيترفع أول ما النت يرجع");
+  closeSheet();renderList();toast(ok?"اتحفظ ✔":"اتحفظ على الموبايل ⏳ وهيترفع أول ما النت يرجع");
 }
 
 /* ---------- عرض التوكيل ---------- */
@@ -344,15 +377,23 @@ function openView(id){VIEW={id:id};renderView()}
 function renderView(){
   var r=(RECS||[]).find(function(x){return x.id===VIEW.id});if(!r){closeSheet();return}
   function kv(l,v){return v?'<div class="kv"><span>'+l+'</span><b>'+v+'</b></div>':""}
-  var w=waNum(r.phone);
-  var h=head("📄 "+esc(r.to||"توكيل"))+'<div class="card">'+
-    kv("اتعمل لـ",esc(r.to))+kv("تليفونه",r.phone?'<a href="tel:'+esc(r.phone)+'" class="num" style="color:inherit">📞 '+esc(r.phone)+'</a>'+(w?' · <a href="https://wa.me/'+w+'" target="_blank" rel="noopener" style="color:var(--good)">واتساب</a>':''):"")+
-    kv("التاريخ",fdate(r.date))+kv("العربية",esc(r.car))+kv("كان باسم",esc(r.from))+kv("رقم التوكيل",esc(r.num))+kv("الشهر العقاري",esc(r.office))+kv("ملاحظة",esc(r.note))+'</div>';
+  var w=waNum(r.phone),lx=daysTo(r.licExp);
+  var h=head("🚗 "+esc(carName(r))+(r.n?' <span class="sub">م '+esc(r.n)+'</span>':''))+
+    '<div class="card">'+kv("السنة",esc(r.year))+kv("الماركة",esc(r.make))+kv("الموديل",esc(r.model||(!r.make?r.car:"")))+kv("اللون",esc(r.color))+kv("اللوحة",esc(r.plate))+'</div>'+
+    '<div class="sect">📑 الورق</div><div class="card">'+kv("الورق",papersOk(r)?'<span class="good">تم استلام الورق ✔</span>':'<span class="warn">لسه ما استلمناش</span>')+kv("المرور",esc(r.traffic))+
+      kv("نهاية الترخيص",r.licExp?fdate(r.licExp)+(lx!==null&&lx<=30&&!r.sellDate?' <span class="warn">('+(lx<0?"خلص":"فاضل "+lx+" يوم")+')</span>':''):"")+kv("المخالفات",esc(r.fines))+'</div>'+
+    '<div class="sect">🤝 الشراء والبيع</div><div class="card">'+kv("المصدر",esc(r.source))+kv("التاجر",esc(r.trader))+kv("تاريخ الشراء",fdate(r.buyDate))+kv("تاريخ البيع",r.sellDate?fdate(r.sellDate):'<span class="sub">لسه في المعرض</span>')+'</div>';
+  h+='<div class="sect">📄 التوكيل</div>';
+  if(hasPoa(r))h+='<div class="card">'+kv("كان باسم",esc(r.from))+kv("اتعمل لـ",esc(r.to))+kv("تليفونه",r.phone?'<a href="tel:'+esc(r.phone)+'" class="num" style="color:inherit">📞 '+esc(r.phone)+'</a>'+(w?' · <a href="https://wa.me/'+w+'" target="_blank" rel="noopener" style="color:var(--good)">واتساب</a>':''):"")+
+    kv("رقم التوكيل",esc(r.num))+kv("الشهر العقاري",esc(r.office))+'</div>';
+  else h+='<div class="card"><div class="sub" style="margin-bottom:10px">'+(r.sellDate?"العربية اتباعت ولسه التوكيل ماتسجلش.":"لما العربية تتباع، سجّل التوكيل هنا بصورته وصورة البطاقة.")+'</div><button class="btn" data-act="poa" data-id="'+r.id+'">📄 سجّل التوكيل</button></div>';
   ["poa","id"].forEach(function(k){
     var L=(r.imgs||[]).filter(function(x){return x.k===k});
+    if(!L.length&&!hasPoa(r))return;
     h+='<div class="sect">'+KINDS[k]+' ('+L.length+')</div>';
     h+=L.length?'<div class="gal">'+L.map(function(x){return IMGC[x.id]?'<img src="'+IMGC[x.id]+'" data-act="full" data-id="'+x.id+'" alt="">':'<div class="ld" id="ld_'+x.id+'">جاري تحميل الصورة…</div>'}).join("")+'</div>':'<div class="empty" style="padding:10px">'+(k==="poa"?"مفيش صورة للتوكيل":"مفيش صورة للبطاقة")+'</div>';
   });
+  if(r.note)h+='<div class="card">'+kv("ملاحظة",esc(r.note))+'</div>';
   h+='<div class="row"><button class="btn sec" data-act="edit" data-id="'+r.id+'">✏️ تعديل / إضافة صور</button><button class="btn danger" data-act="del" data-id="'+r.id+'">🗑 مسح</button></div>';
   var keep=$("#ov").classList.contains("show")?$("#sheet").scrollTop:0;
   openSheet(h);$("#sheet").scrollTop=keep;
@@ -361,14 +402,14 @@ function renderView(){
 var fetching={};
 async function fetchImg(id){
   if(fetching[id])return;fetching[id]=1;
-  try{var d=await imgDoc(id).get();if(d.exists){IMGC[id]=d.data().d;var el=$("#ld_"+id);if(el)el.outerHTML='<img src="'+IMGC[id]+'" data-act="full" data-id="'+id+'" alt="">'}
+  try{var d=await imgDoc(id).get();if(d.exists){IMGC[id]=d.data().d;if(FORM)redrawPics();var el=$("#ld_"+id);if(el)el.outerHTML='<img src="'+IMGC[id]+'" data-act="full" data-id="'+id+'" alt="">'}
     else{var e2=$("#ld_"+id);if(e2)e2.textContent="الصورة لسه ماترفعتش"}}
   catch(e){var e3=$("#ld_"+id);if(e3)e3.textContent="مفيش نت، الصورة هتظهر لما النت يرجع"}
   fetching[id]=0;
 }
 async function delRec(id){
   var r=(RECS||[]).find(function(x){return x.id===id});if(!r)return;
-  if(!confirm("تمسح توكيل "+(r.to||"")+" بكل صوره؟ مش هينفع ترجّعه."))return;
+  if(!confirm("تمسح "+carName(r)+" من الدفتر بكل صورها؟ مش هينفع ترجّعها."))return;
   var b=FS.batch();(r.imgs||[]).forEach(function(x){b.delete(imgDoc(x.id))});b.delete(col().doc(id));
   var ok=await wait(b.commit().catch(function(){toast("مقدرناش نمسح")}),5000);closeSheet();toast(ok?"اتمسح":"اتمسح ⏳ هيتأكد لما النت يرجع");
 }
@@ -410,7 +451,8 @@ document.addEventListener("click",function(e){
   else if(a==="close"){closeSheet();renderList()}
   else if(a==="new")openForm();
   else if(a==="view")openView(id);
-  else if(a==="edit"){var r=(RECS||[]).find(function(x){return x.id===id});VIEW=null;openForm(r)}
+  else if(a==="edit"||a==="poa"){var r=(RECS||[]).find(function(x){return x.id===id});VIEW=null;openForm(r,a==="poa")}
+  else if(a==="flt"){FLT=id;renderList()}
   else if(a==="del")delRec(id);
   else if(a==="save")save(t);
   else if(a==="rmpic"){var i=+t.dataset.i,p=FORM&&FORM.pics[i];if(!p)return;if(p.old)FORM.removed.push(p.id);FORM.pics.splice(i,1);redrawPics()}
