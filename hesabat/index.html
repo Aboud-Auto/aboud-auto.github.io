@@ -1476,7 +1476,7 @@ async function claimInvite(code,username){
   b.set(FS.doc("members/"+u.uid),mem);
   await b.commit();lsSet(INV_KEY);
 }
-function inviteErr(iv){return !iv?"كود الدعوة غلط، اتأكد منه":iv.err?(/network|unavailable/.test(iv.err.code||"")?"مفيش نت، اتأكد من الاتصال":"مقدرناش نتأكد من الكود، جرّب تاني"):iv.used?"كود الدعوة ده اتستخدم قبل كده، اطلب كود جديد":""}
+function inviteErr(iv){return !iv?"كود الدعوة غلط، اتأكد منه":iv.err?(/network|unavailable/.test(iv.err.code||"")?"مفيش نت، اتأكد من الاتصال":"مقدرناش نتأكد من الكود، جرّب تاني"):iv.used?"كود الدعوة ده اتستخدم قبل كده، اطلب كود جديد":iv.kind==="tawkil"?"الكود ده لبرنامج التوكيلات، افتحه من لينك التوكيلات":""}
 /* ---------- subscription ---------- */
 var PLAN_NAMES={trial:"🎁 شهر مجاني",monthly:"شهري",yearly:"سنوي",lifetime:"مدى الحياة"};
 function isTrial(){return !!(S.mem&&S.mem.plan==="trial")}

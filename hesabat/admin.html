@@ -93,6 +93,7 @@ ol.steps{padding-inline-start:20px;margin:6px 0;font-size:14px}ol.steps li{margi
 "use strict";
 var APP_URL="https://aboud-auto.github.io/hesabat/";
 var OHDA_URL="https://aboud-auto.github.io/ohda/";
+var TAWKIL_URL="https://aboud-auto.github.io/tawkil/";
 var $=function(s){return document.querySelector(s)};
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function toast(t){var el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(function(){el.classList.remove("show")},2600)}
@@ -102,7 +103,10 @@ function waNum(p){var d=String(p||"").replace(/\D/g,"");if(d.indexOf("00")===0)d
 function waHref(phone,text){var n=waNum(phone);return "https://wa.me/"+(n||"")+"?text="+encodeURIComponent(text)}
 function newCode(){var A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",r=new Uint8Array(8),s="";crypto.getRandomValues(r);for(var i=0;i<8;i++)s+=A[r[i]%A.length];return s}
 function inviteLink(c){return APP_URL+"?inv="+c}
-function inviteMsg(iv){return "أهلاً "+(iv.name||"")+" 👋\nده لينك برنامج حسابات المعرض، إهداء من عبود أوتو:\n"+inviteLink(iv.code)+"\n\nكود الدعوة: "+iv.code+(iv.serial?"\nرقم السيريال بتاعك: "+serialStr(iv.serial):"")+(iv.plan==="trial"?"\n🎁 أول شهر مجاني، جرّبه براحتك ولو عجبك كمّل":iv.plan?"\nالاشتراك: "+planName(iv.plan):"")+"\nالكود ده ليك انت بس، وبيشتغل مرة واحدة."+"\n\n🧾 ولينك برنامج العهدة (للموظف اللي بيصرف على العربيات):\n"+OHDA_URL+"\nبيدخل عليه بنفس اسم المستخدم والباسورد بتوع حسابك بعد ما تعمله."}
+function tawkilLink(c){return TAWKIL_URL+"?inv="+c}
+function tawkilPart(c){return "📄 ولينك برنامج التوكيلات (للي مسؤولين عن الورق والتوكيلات عندك، بحساب لوحده خالص منفصل عن الحسابات):\n"+tawkilLink(c)+"\nكود التوكيلات: "+c+"\nبيعملوا بيه اسم دخول وباسورد خاص بيهم، وكل توكيل يتسجل بصورته وصورة بطاقة اللي اتعمله ورقم تليفونه."}
+function anyMsg(iv){return iv.kind==="tawkil"?"أهلاً "+(iv.name||"")+" 👋\n"+tawkilPart(iv.code)+"\nالكود ده بيشتغل مرة واحدة.":inviteMsg(iv)}
+function inviteMsg(iv){return "أهلاً "+(iv.name||"")+" 👋\nده لينك برنامج حسابات المعرض، إهداء من عبود أوتو:\n"+inviteLink(iv.code)+"\n\nكود الدعوة: "+iv.code+(iv.serial?"\nرقم السيريال بتاعك: "+serialStr(iv.serial):"")+(iv.plan==="trial"?"\n🎁 أول شهر مجاني، جرّبه براحتك ولو عجبك كمّل":iv.plan?"\nالاشتراك: "+planName(iv.plan):"")+"\nالكود ده ليك انت بس، وبيشتغل مرة واحدة."+"\n\n🧾 ولينك برنامج العهدة (للموظف اللي بيصرف على العربيات):\n"+OHDA_URL+"\nبيدخل عليه بنفس اسم المستخدم والباسورد بتوع حسابك بعد ما تعمله."+(iv.tcode?"\n\n"+tawkilPart(iv.tcode):"")}
 async function copy(t){try{await navigator.clipboard.writeText(t);toast("اتنسخ ✔")}catch(e){prompt("انسخ من هنا:",t)}}
 function openSheet(h){$("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=0}
 function closeSheet(){$("#ov").classList.remove("show")}
@@ -150,6 +154,10 @@ function rulesText(uid){return [
 "    function signedIn() { return request.auth != null; }",
 "    function isAdmin() { return signedIn() && request.auth.uid == '"+uid+"'; }",
 "    function memberPath(uid) { return /databases/$(database)/documents/members/$(uid); }",
+"    function tmemberPath(uid) { return /databases/$(database)/documents/tmembers/$(uid); }",
+"    function isTawkil() {",
+"      return exists(tmemberPath(request.auth.uid)) && get(tmemberPath(request.auth.uid)).data.active == true;",
+"    }",
 "    function isActive() {",
 "      return exists(memberPath(request.auth.uid)) && get(memberPath(request.auth.uid)).data.active == true;",
 "    }",
@@ -160,7 +168,8 @@ function rulesText(uid){return [
 "    }",
 "    // العميل الجديد بياخد السيريال والباقة من الدعوة بالظبط، ومايقدرش يطوّل المدة",
 "    function fromInvite(d, inv) {",
-"      return d.get('serial', null) == inv.get('serial', null)",
+"      return inv.get('kind', '') != 'tawkil'",
+"        && d.get('serial', null) == inv.get('serial', null)",
 "        && d.get('plan', null) == inv.get('plan', null)",
 "        && ((d.get('expiresAt', null) == null && inv.get('days', 0) == 0)",
 "          || (d.get('expiresAt', null) is number && inv.get('days', 0) > 0",
@@ -191,7 +200,7 @@ function rulesText(uid){return [
 "        && request.resource.data.used == true",
 "        && request.resource.data.usedBy == request.auth.uid",
 "        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used', 'usedBy', 'usedAt', 'username'])",
-"        && existsAfter(memberPath(request.auth.uid)));",
+"        && (existsAfter(memberPath(request.auth.uid)) || existsAfter(tmemberPath(request.auth.uid))));",
 "    }",
 "    match /members/{uid} {",
 "      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);",
@@ -214,6 +223,28 @@ function rulesText(uid){return [
 "      allow update: if signedIn() && resource.data.o == request.auth.uid && request.resource.data.o == request.auth.uid",
 "        && request.resource.data.keys().hasOnly(['o', 's', 'it', 'e', 'at']) && request.resource.data.e is string && request.resource.data.e.size() < 900000;",
 "      allow delete: if signedIn() && resource.data.o == request.auth.uid;",
+"    }",
+"    // برنامج التوكيلات: حساب منفصل لكل معرض، بياناته لصاحبه بس (حتى الأدمن مايقراهاش)",
+"    match /tawkil/{uid}/{rest=**} {",
+"      allow read, write: if signedIn() && request.auth.uid == uid && isTawkil();",
+"    }",
+"    match /tusernames/{k} {",
+"      allow get: if true;",
+"      allow list, delete: if isAdmin();",
+"      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;",
+"      allow update: if signedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;",
+"    }",
+"    match /tmembers/{uid} {",
+"      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);",
+"      allow create: if signedIn() && request.auth.uid == uid",
+"        && request.resource.data.active == true",
+"        && request.resource.data.invite is string",
+"        && request.resource.data.keys().hasOnly(['active', 'invite', 'username', 'email', 'shop', 'joinedAt', 'lastSeen', 'opens', 'count', 'device'])",
+"        && getAfter(/databases/$(database)/documents/invites/$(request.resource.data.invite)).data.usedBy == uid",
+"        && getAfter(/databases/$(database)/documents/invites/$(request.resource.data.invite)).data.get('kind', '') == 'tawkil';",
+"      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid",
+"        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen', 'opens', 'device', 'standalone', 'count']));",
+"      allow delete: if isAdmin();",
 "    }",
 "    match /config/{d} {",
 "      allow read: if true;",
@@ -299,11 +330,12 @@ function renderMembers(){
   });
   return h;
 }
+function kindTag(iv){return iv.kind==="tawkil"?'<span class="badge b-wait" style="margin-inline-start:6px">📄 توكيلات</span>':''}
 function invCard(iv){
-  if(iv.used){return '<div class="card"><div class="ch"><div class="nm">'+esc(iv.name||"—")+'</div><span class="badge b-on">اتستخدمت</span></div>'+kv("الكود",'<span class="code">'+esc(iv.code)+'</span>')+(iv.serial?kv("السيريال",'<span class="code" style="letter-spacing:1px">'+serialStr(iv.serial)+'</span>'):"")+kv("سجّل باسم",esc(iv.username||"—"))+kv("يوم",fdate(iv.usedAt))+'</div>'}
-  return '<div class="card"><div class="ch"><div><div class="nm">'+esc(iv.name||"—")+'</div>'+(iv.phone?'<div class="sub" dir="ltr" style="text-align:right">'+esc(iv.phone)+'</div>':'')+'</div><span class="badge b-wait">مستنية</span></div>'+
-    kv("الكود",'<span class="code">'+esc(iv.code)+'</span>')+(iv.serial?kv("السيريال",'<span class="code" style="letter-spacing:1px">'+serialStr(iv.serial)+'</span>'):"")+(iv.plan?kv("الاشتراك",planName(iv.plan)):"")+kv("اتعملت يوم",fdate(iv.createdAt))+
-    '<div class="row"><a class="btn small" target="_blank" rel="noopener" href="'+esc(waHref(iv.phone,inviteMsg(iv)))+'">💬 ابعتها واتساب</a><button class="btn small sec" data-act="copyInv" data-id="'+iv.code+'">📋 نسخ</button><button class="btn small danger" data-act="delInv" data-id="'+iv.code+'">إلغاء</button></div></div>';
+  if(iv.used){return '<div class="card"><div class="ch"><div class="nm">'+esc(iv.name||"—")+kindTag(iv)+'</div><span class="badge b-on">اتستخدمت</span></div>'+kv("الكود",'<span class="code">'+esc(iv.code)+'</span>')+(iv.serial?kv("السيريال",'<span class="code" style="letter-spacing:1px">'+serialStr(iv.serial)+'</span>'):"")+kv("سجّل باسم",esc(iv.username||"—"))+kv("يوم",fdate(iv.usedAt))+'</div>'}
+  return '<div class="card"><div class="ch"><div><div class="nm">'+esc(iv.name||"—")+kindTag(iv)+'</div>'+(iv.phone?'<div class="sub" dir="ltr" style="text-align:right">'+esc(iv.phone)+'</div>':'')+'</div><span class="badge b-wait">مستنية</span></div>'+
+    kv("الكود",'<span class="code">'+esc(iv.code)+'</span>')+(iv.serial?kv("السيريال",'<span class="code" style="letter-spacing:1px">'+serialStr(iv.serial)+'</span>'):"")+(iv.plan?kv("الاشتراك",planName(iv.plan)):"")+(iv.tcode?kv("كود التوكيلات",'<span class="code">'+esc(iv.tcode)+'</span>'):"")+kv("اتعملت يوم",fdate(iv.createdAt))+
+    '<div class="row"><a class="btn small" target="_blank" rel="noopener" href="'+esc(waHref(iv.phone,anyMsg(iv)))+'">💬 ابعتها واتساب</a><button class="btn small sec" data-act="copyInv" data-id="'+iv.code+'">📋 نسخ</button><button class="btn small danger" data-act="delInv" data-id="'+iv.code+'">إلغاء</button></div></div>';
 }
 function renderInvites(){
   var open=S.invites.filter(function(i){return !i.used}).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)});
@@ -312,6 +344,16 @@ function renderInvites(){
   h+='<div class="sect">مستنية العميل يسجّل ('+open.length+')</div>'+(open.length?open.map(invCard).join(""):'<div class="empty">مفيش دعوات مستنية</div>');
   if(used.length)h+='<div class="sect">اتستخدمت ('+used.length+')</div>'+used.map(invCard).join("");
   return h;
+}
+function renderTawkil(){
+  var L=(S.tmem||[]).slice().sort(function(a,b){return (b.lastSeen||0)-(a.lastSeen||0)});
+  var h=brandHead("حسابات التوكيلات","كل معرض ليه حساب توكيلات منفصل. انت بتشوف مين شغّال بس، مش التوكيلات نفسها")+rulesBanner()+
+    '<button class="btn" data-act="newTw">➕ دعوة توكيلات جديدة</button>';
+  if(S.tmemErr)h+='<div class="banner">مقدرناش نجيب الحسابات. ركّب القواعد الجديدة من «الإعدادات».</div>';
+  if(!L.length)return h+'<div class="empty">لسه محدش سجّل في برنامج التوكيلات</div>';
+  return h+L.map(function(m){return '<div class="card"><div class="ch"><div><div class="nm">'+esc(m.shop||m.username||"—")+'</div><div class="sub">👤 '+esc(m.username||"")+'</div></div><span class="badge '+(m.active?"b-on":"b-off")+'">'+(m.active?"شغّال":"متوقف")+'</span></div>'+
+    kv("عدد التوكيلات",String(m.count||0))+kv("سجّل يوم",fdate(m.joinedAt))+kv("آخر فتح",ago(m.lastSeen))+
+    '<div class="row">'+(m.active?'<button class="btn small danger" data-act="tStop" data-id="'+m.id+'">⛔ إيقاف</button>':'<button class="btn small good" data-act="tStart" data-id="'+m.id+'">✔ تفعيل</button>')+'</div></div>'}).join("");
 }
 function renderPending(){
   var h=brandHead("محتاجين تفعيل","حسابات اتعملت قبل نظام الدعوات، أو من غير كود")+rulesBanner();
@@ -339,14 +381,14 @@ function renderSettings(){
     '<div class="card">'+kv("داخل بـ",'<span dir="ltr">'+esc(ME.email||"")+'</span>')+'<button class="btn danger" style="margin-top:12px" data-act="logout">تسجيل خروج</button></div>';
 }
 function renderNav(){
-  var pc=S.pending&&S.pending.length,items=[["mem","👥","العملاء"],["inv","✉️","الدعوات"],["pend","🔑","التفعيل"],["set","⚙️","الإعدادات"]];
+  var pc=S.pending&&S.pending.length,items=[["mem","👥","العملاء"],["inv","✉️","الدعوات"],["tw","📄","التوكيلات"],["pend","🔑","التفعيل"],["set","⚙️","الإعدادات"]];
   $("#nav").style.display="flex";
   $("#nav").innerHTML=items.map(function(x){return '<button data-tab="'+x[0]+'" class="'+(S.tab===x[0]?"on":"")+'"><span class="i">'+x[1]+'</span>'+x[2]+(x[0]==="pend"&&pc?'<span class="dot">'+pc+'</span>':'')+'</button>'}).join("");
 }
 function render(){
   if(!ME)return renderLogin();
   var a=document.activeElement,qf=a&&a.id==="q",pos=qf?a.selectionStart:0;
-  $("#app").innerHTML=S.tab==="inv"?renderInvites():S.tab==="pend"?renderPending():S.tab==="set"?renderSettings():renderMembers();
+  $("#app").innerHTML=S.tab==="inv"?renderInvites():S.tab==="pend"?renderPending():S.tab==="tw"?renderTawkil():S.tab==="set"?renderSettings():renderMembers();
   renderNav();
   if(qf&&$("#q")){$("#q").focus();try{$("#q").setSelectionRange(pos,pos)}catch(e){}}
 }
@@ -364,26 +406,46 @@ function renderLogin(){
 
 /* ---------- actions ---------- */
 function planPick(sel){return '<div class="fld"><span>الاشتراك</span><div class="chips" style="margin:0">'+["trial","monthly","yearly","lifetime"].map(function(p){return '<button type="button" class="chip'+(sel===p?" on":"")+'" data-act="pickPlan" data-id="'+p+'">'+PLANS[p].name+'</button>'}).join("")+'</div></div>'}
-function openNewInvite(){
-  S.newPlan="trial";
-  openSheet(head("دعوة عميل جديد")+'<label class="fld"><span>اسم العميل</span><input id="nName" placeholder="مثلاً: معرض النور - أحمد"></label>'+
-    '<label class="fld"><span>رقم الواتساب بتاعه (اختياري)</span><input id="nPhone" inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx"></label>'+
+function openNewInvite(keep){
+  var nm=keep&&$("#nName")?$("#nName").value:"",ph=keep&&$("#nPhone")?$("#nPhone").value:"";
+  if(!keep){S.newPlan="trial";S.newKind="app"}
+  var tw=S.newKind==="tawkil";
+  openSheet(head("دعوة جديدة")+
+    '<div class="fld"><span>الدعوة لإيه</span><div class="chips" style="margin:0"><button type="button" class="chip'+(tw?"":" on")+'" data-act="pickKind" data-id="app">🚗 حسابات المعارض</button><button type="button" class="chip'+(tw?" on":"")+'" data-act="pickKind" data-id="tawkil">📄 التوكيلات بس</button></div></div>'+
+    '<label class="fld"><span>'+(tw?"اسم المعرض / صاحبه":"اسم العميل")+'</span><input id="nName" placeholder="مثلاً: معرض النور - أحمد" value="'+esc(nm)+'"></label>'+
+    '<label class="fld"><span>رقم الواتساب بتاعه (اختياري)</span><input id="nPhone" inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" value="'+esc(ph)+'"></label>'+
+    (tw?'<div class="sub" style="margin:-4px 0 12px">برنامج التوكيلات حساب منفصل خالص: اللي يسجّل بالكود ده يعمل اسم دخول وباسورد خاص بيه، ومايشوفش أي حسابات. مثلاً تعمل واحدة لمعرضك انت وتديها للمسؤول عن الورق.</div>':
     '<div id="nPlan">'+planPick(S.newPlan)+'</div><div class="sub" style="margin:-4px 0 12px">المدة بتبدأ من يوم ما العميل يسجّل. الشهر المجاني بيقفل لوحده لو ماجددش، والبيانات بتفضل محفوظة. تقدر تغيّرها بعدين من «تجديد».</div>'+
+    '<label class="fld" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="nTw" checked style="width:20px;height:20px"><span style="margin:0">ابعت معاها كود برنامج التوكيلات</span></label>')+
     '<div class="err" id="nErr"></div><button class="btn" data-act="createInv">اعمل الدعوة</button>');
-  setTimeout(function(){var i=$("#nName");if(i)i.focus()},150);
+  setTimeout(function(){var i=$("#nName");if(i&&!keep)i.focus()},150);
 }
 async function createInv(btn){
   var name=$("#nName").value.trim(),phone=$("#nPhone").value.trim(),plan=S.newPlan||"monthly";
   if(!name){$("#nErr").textContent="اكتب اسم العميل";return}
   btn.disabled=true;
+  if(S.newKind==="tawkil"){
+    var tv={code:newCode(),name:name,phone:phone,createdAt:Date.now(),used:false,kind:"tawkil"};
+    try{await FS.doc("invites/"+tv.code).set({name:tv.name,phone:tv.phone,createdAt:tv.createdAt,used:false,kind:"tawkil"})}
+    catch(e){btn.disabled=false;$("#nErr").textContent=/permission/.test(code(e))?"مش مسموح، اتأكد إن القواعد الجديدة متركّبة":"تعذر الحفظ، جرّب تاني";return}
+    S.lastInv=tv;
+    openSheet(head("دعوة التوكيلات جاهزة ✔")+'<div class="card" style="text-align:center"><div class="sub">كود التوكيلات لـ '+esc(name)+'</div><div class="code" style="font-size:30px;margin:6px 0">'+tv.code+'</div><div class="sub" dir="ltr" style="overflow-wrap:anywhere;margin-top:6px">'+esc(tawkilLink(tv.code))+'</div></div>'+
+      '<a class="btn" target="_blank" rel="noopener" href="'+esc(waHref(phone,anyMsg(tv)))+'">💬 ابعتها على واتساب</a>'+
+      '<button class="btn sec" style="margin-top:10px" data-act="copyMsg">📋 نسخ الرسالة</button>');
+    return;
+  }
   var iv={code:newCode(),name:name,phone:phone,createdAt:Date.now(),used:false,plan:plan,days:PLANS[plan].days};
-  try{iv.serial=await withSerial(function(t,n){t.set(FS.doc("invites/"+iv.code),{name:iv.name,phone:iv.phone,createdAt:iv.createdAt,used:false,plan:plan,days:iv.days,serial:n})})}
+  if($("#nTw")&&$("#nTw").checked)iv.tcode=newCode();
+  try{iv.serial=await withSerial(function(t,n){var d={name:iv.name,phone:iv.phone,createdAt:iv.createdAt,used:false,plan:plan,days:iv.days,serial:n};if(iv.tcode){d.tcode=iv.tcode;t.set(FS.doc("invites/"+iv.tcode),{name:iv.name,phone:iv.phone,createdAt:iv.createdAt,used:false,kind:"tawkil",for:iv.code})}t.set(FS.doc("invites/"+iv.code),d)})}
   catch(e){btn.disabled=false;$("#nErr").textContent=/permission/.test(code(e))?"مش مسموح، اتأكد إن القواعد متركّبة وإنك داخل بحساب الأدمن":"تعذر الحفظ، جرّب تاني";return}
   openSheet(head("الدعوة جاهزة ✔")+'<div class="card" style="text-align:center"><div class="sub">كود الدعوة لـ '+esc(name)+'</div><div class="code" style="font-size:30px;margin:6px 0">'+iv.code+'</div><div class="sub">السيريال: <span class="code" style="letter-spacing:1px">'+serialStr(iv.serial)+'</span> · '+planName(plan)+'</div><div class="sub" dir="ltr" style="overflow-wrap:anywhere;margin-top:6px">'+esc(inviteLink(iv.code))+'</div></div>'+
     '<a class="btn" target="_blank" rel="noopener" href="'+esc(waHref(phone,inviteMsg(iv)))+'">💬 ابعتها على واتساب</a>'+
     '<button class="btn sec" style="margin-top:10px" data-act="copyMsg" data-id="'+iv.code+'">📋 نسخ الرسالة</button>'+
     '<div class="sub" style="margin-top:12px">العميل يفتح اللينك ويعمل حسابه، والكود بيتقفل بعد أول استخدام.</div>');
   S.lastInv=iv;
+}
+async function setTActive(uid,on){
+  try{await FS.doc("tmembers/"+uid).update({active:on});toast(on?"اتفعّل ✔":"اتوقف")}catch(e){toast("تعذر الحفظ")}
 }
 async function setActive(uid,on){
   try{await FS.doc("members/"+uid).update({active:on});toast(on?"اتفعّل ✔":"اتوقف")}catch(e){toast("تعذر الحفظ")}
@@ -441,9 +503,13 @@ document.addEventListener("click",async function(e){
   var a=t.dataset.act,id=t.dataset.id;
   if(a==="close")closeSheet();
   else if(a==="newInv")openNewInvite();
+  else if(a==="newTw"){openNewInvite();S.newKind="tawkil";openNewInvite(true)}
   else if(a==="createInv")createInv(t);
-  else if(a==="copyMsg")copy(inviteMsg(S.lastInv));
-  else if(a==="copyInv"){var iv=S.invites.find(function(x){return x.code===id});if(iv)copy(inviteMsg(iv))}
+  else if(a==="copyMsg")copy(anyMsg(S.lastInv));
+  else if(a==="pickKind"){S.newKind=id;openNewInvite(true)}
+  else if(a==="tStop"){if(confirm("توقف حساب التوكيلات ده؟ مش هيقدر يفتحه لحد ما تفعّله تاني، والتوكيلات هتفضل محفوظة."))setTActive(id,false)}
+  else if(a==="tStart")setTActive(id,true);
+  else if(a==="copyInv"){var iv=S.invites.find(function(x){return x.code===id});if(iv)copy(anyMsg(iv))}
   else if(a==="delInv"){if(confirm("تلغي الدعوة دي؟ الكود مش هيشتغل تاني."))try{await FS.doc("invites/"+id).delete();toast("اتلغت")}catch(err){toast("تعذر الإلغاء")}}
   else if(a==="stop"){if(confirm("توقف الحساب ده؟ مش هيقدر يفتح البرنامج لحد ما تفعّله تاني، وبياناته هتفضل محفوظة."))setActive(id,false)}
   else if(a==="start")setActive(id,true);
@@ -478,6 +544,7 @@ FBA.auth().onAuthStateChanged(function(u){
   function onErr(e){S.err=e;render()}
   FS.collection("members").onSnapshot(function(s){S.err=null;S.members=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});S.loaded.members=true;fixSerials();loadSafety();
     if(S.pending)S.pending=S.pending.filter(function(p){return !S.members.some(function(m){return m.id===p.uid})});render()},onErr);
+  FS.collection("tmembers").onSnapshot(function(s){S.tmemErr=null;S.tmem=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});render()},function(e){S.tmemErr=e;render()});
   FS.collection("invites").onSnapshot(function(s){S.invites=s.docs.map(function(d){return Object.assign({code:d.id},d.data())});render()},onErr);
   FS.doc("config/public").get().then(function(d){S.cfg=d.exists?d.data():{};var w=S.cfg.whatsapp,f=waNum(w);if(w&&f&&f!==w){S.cfg.whatsapp=f;FS.doc("config/public").set({whatsapp:f},{merge:true}).catch(function(){})}render()}).catch(function(){});
   loadPending();
