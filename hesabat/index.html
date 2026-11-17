@@ -307,7 +307,7 @@ function flowsOf(cars,d,em){
   S.ext.forEach(function(x){if(!ok(x.date))return;var a=+x.amount||0,xi=x.how==="insta"?a:x.how==="both"?Math.min(a,Math.max(0,+x.insta||0)):0;put("cash",a-xi,"عمولة خارجية"+(x.note?" · "+x.note:""),x.date);put("insta",xi,"عمولة خارجية",x.date)});
   S.transfers.forEach(function(x){if(!ok(x.date))return;var a=+x.amount||0,ex=x.iid?{iid:x.iid}:null;if(x.dir==="toFund"){add(x.src,-a,"تحويل للعهدة",x.date);put("fund",a)}else if(x.dir==="fromFund"){put("fund",-a);add(x.src,a,"رجوع من العهدة",x.date)}else if(x.dir==="toInv"){add(x.src==="cash"?"cash":"insta",-a,"تحويل لمستثمر",x.date,ex)}else if(x.dir==="fromInv"){add(x.src==="cash"?"cash":"insta",a,"فلوس من مستثمر",x.date,ex)}else if(x.dir==="toInsta"){put("cash",-a,"نقل من الخزنة للإنستاباي",x.date,ex);put("insta",a,"نقل من الخزنة للإنستاباي",x.date,ex)}else{put("cash",a,"نقل من الإنستاباي للخزنة",x.date,ex);put("insta",-a,"نقل من الإنستاباي للخزنة",x.date,ex)}});
   S.ledger.forEach(function(x){if(x.kind==="spay"&&ids[x.carId]&&ok(x.date))add(x.src,-(+x.amount||0),"سداد باقي للبائع · "+cn[x.carId],x.date,{car:x.carId})});
-  S.invmov.forEach(function(x){if(!ok(x.date)||x.src==="held")return;var iv=invById(x.iid),nm=iv?iv.name:"مستثمر";if(x.kind==="dep")add(x.src==="insta"?"insta":"cash",+x.amount||0,"إيداع المستثمر "+nm,x.date,{iid:x.iid});else if(x.kind==="wd"||x.kind==="pwd")add(x.src==="insta"?"insta":"cash",-(+x.amount||0),(x.kind==="pwd"?"سحب أرباح المستثمر ":"سحب المستثمر ")+nm,x.date,{iid:x.iid})});
+  S.invmov.forEach(function(x){if(!ok(x.date)||x.src==="held")return;var iv=invById(x.iid),nm=iv?iv.name:"مستثمر";if(x.kind==="dep")add(x.src==="insta"?"insta":"cash",+x.amount||0,(x.adj?"تسوية رصيد الخزنة (زيادة) - ":"إيداع المستثمر ")+nm,x.date,{iid:x.iid});else if(x.kind==="wd"||x.kind==="pwd")add(x.src==="insta"?"insta":"cash",-(+x.amount||0),(x.adj?"تسوية رصيد الخزنة (نقص) - ":x.kind==="pwd"?"سحب أرباح المستثمر ":"سحب المستثمر ")+nm,x.date,{iid:x.iid})});
   var lm=lmapOf();
   S.ledger.forEach(function(x){if(ok(x.date)){var l=x.kind==="loan"?x:lm[x.loanId],who=l&&l.person?" · "+l.person:"";add(x.src,lsigned(x,lm),(x.kind==="loan"?(l.dir==="out"?"سلفة طلعت":"سلفة دخلت"):x.kind==="pay"?"سداد سلفة":"زيادة على سلفة")+who,x.date)}});
   return {cash:cash,insta:insta,fund:fund};
@@ -2836,7 +2836,7 @@ function invLossPrompt(cid){
 }
 
 /* investors tab */
-function invMoveLabel(x){return x.kind==="dep"?"➕ إيداع":x.kind==="wd"?"➖ سحب من رأس ماله":x.kind==="pwd"?"💵 سحب أرباح":"📉 سداد خسارة من أرباحه"}
+function invMoveLabel(x){if(x.adj&&(x.kind==="dep"||x.kind==="wd"))return x.kind==="dep"?"🔧 تسوية رصيد الخزنة (زيادة)":"🔧 تسوية رصيد الخزنة (نقص)";return x.kind==="dep"?"➕ إيداع":x.kind==="wd"?"➖ سحب من رأس ماله":x.kind==="pwd"?"💵 سحب أرباح":"📉 سداد خسارة من أرباحه"}
 function invCard(o){
   return '<div class="item car" data-act="inv" data-id="'+esc(o.id)+'" style="cursor:pointer"><div style="flex:1"><div class="t">💼 '+esc(o.name)+(o.lossRem>0.5?'<span class="ptag">📉 عليه خسارة</span>':'')+'</div>'+
     '<div class="d">'+(o.pct!=null?'نسبته '+o.pct+'% · ':'')+'كاش في الخزنة '+fmt(o.free)+' · في عربيات '+fmt(o.working)+(o.lent>0.5?' · في سلف '+fmt(o.lent):'')+(o.cdebt>0.5?' · عند عملاء '+fmt(o.cdebt):'')+'</div></div><span class="num '+(o.bal<0?"bad":"")+'" style="font-weight:700">'+fmt(o.bal)+'</span></div>';
@@ -2983,25 +2983,42 @@ async function instaAdjSave(){if(submitting)return;var T=calc(),r=val("iaReal");
     else ok=await create("capital",{kind:d<0?"withdraw":"addcap",src:"insta",amount:a,date:dt,note:nt,adj:true});
     if(ok){closeSheet();toast("اتظبط ✔")}}finally{submitting=false}}
 window.instaAdj=instaAdj;window.instaAdjSave=instaAdjSave;
-/* ---------- ظبط رصيد الخزنة (الكاش) من غير جرد ----------
-   الفرق بيتسجل capital {kind:"sadjin"|"sadjout",src:"cash",adj:true}: بيغيّر رصيد الخزنة بس،
-   ومالوش دعوة برأس المال الأساسي ولا الأرباح ولا المستثمرين ولا الشركاء ولا العربيات. يتمسح من سجل رأس المال. */
-function safeAdj(){var T=calc();modal={type:"safeadj"};
+/* ---------- ظبط رصيد الخزنة (الكاش) من غير جرد — مفصّل: خزنتي أو كاش مستثمر ----------
+   خزنتي: capital {kind:"sadjin"|"sadjout",src:"cash",adj:true}: بيغيّر رصيد الخزنة بس (الجزء بتاعك)،
+   ومالوش دعوة برأس المال الأساسي ولا الأرباح ولا المستثمرين ولا الشركاء ولا العربيات. يتمسح من سجل رأس المال.
+   مستثمر: invmoves {kind:"dep"|"wd",src:"cash",adj:true}: الكاش بتاعه في الخزنة ورصيده بيتظبطوا مع بعض، وخزنتك ما بتتلمسش. */
+function saBox(T,w){var B=scBoxes(T);if(!w||w==="me")return {k:"me",name:"خزنتي",sys:B.mine};
+  var o=(T.inv&&T.inv.list||[]).find(function(x){return x.id===w});if(!o)return {k:"me",name:"خزنتي",sys:B.mine};
+  var c=noInsta()?Math.max(0,o.free||0):invLoc(o).cash;return {k:"inv",iid:o.id,name:o.name||"مستثمر",sys:Math.round(c*100)/100,o:o}}
+function safeAdj(){var T=calc(),L=(T.inv&&T.inv.list)||[],B=scBoxes(T);modal={type:"safeadj"};
+  var who=L.length?fld("تظبط الجزء بتاع مين؟",'<select name="saWho"><option value="me">🧮 الجزء بتاعي (خزنتي) · '+fmt(B.mine)+'</option>'+L.map(function(o){var x=saBox(T,o.id);return '<option value="'+esc(o.id)+'">💼 '+esc(o.name||"مستثمر")+' · '+fmt(x.sys)+'</option>'}).join("")+'</select>'):'';
   openSheet(sheetHead("🔧 ظبط رصيد الخزنة")+
-    '<div class="preview" style="display:block">الكاش المتسجل في الخزنة: <b>'+m(T.safeBal)+'</b></div>'+
-    fld("الكاش الحقيقي اللي في الخزنة دلوقتي",minp("saReal"))+
+    '<div class="preview" style="display:block">الكاش المتسجل في الخزنة كلها: <b>'+m(T.safeBal)+'</b>'+(L.length?'<br><span class="sub">منهم بتاعك '+m(B.mine)+L.map(function(o){var x=saBox(T,o.id);return x.sys>=0.5?' · '+esc(x.name)+' '+m(x.sys):''}).join("")+'</span>':'')+'</div>'+
+    who+'<div class="preview" id="saSys" style="display:block"></div>'+
+    fld('<span id="saLbl">الكاش الحقيقي اللي في الخزنة دلوقتي</span>',minp("saReal"))+
     '<div class="two">'+fld("التاريخ",dinp("saDate"))+fld("السبب (اختياري)",'<input name="saNote" autocomplete="off">')+'</div>'+
     '<div class="preview" id="saPv" style="display:block"></div>'+
-    '<div class="sub" style="margin:0 0 10px">الفرق بيتسجل «تسوية رصيد الخزنة» وبيغيّر رقم الخزنة بس، من غير ما يلمس رأس المال أو الأرباح أو المستثمرين أو الشركاء أو العربيات. ولو عرفت السبب بعدين، امسح التسوية من سجل رأس المال وسجّل الحركة الصح.</div>'+
+    '<div class="sub" id="saInfo" style="margin:0 0 10px"></div>'+
     '<button class="btn" onclick="safeAdjSave()">حفظ</button><button class="btn sec" style="margin-top:8px" onclick="closeSheet()">إلغاء</button>');
   var sh=$("#sheet");sh.addEventListener("input",safeAdjPv);sh.addEventListener("change",safeAdjPv);safeAdjPv()}
-function safeAdjPv(){var el=$("#saPv");if(!el||!modal||modal.type!=="safeadj")return;var T=calc(),r=val("saReal");
-  if(r===""){el.innerHTML="اكتب الكاش الحقيقي وهيبانلك الفرق";return}
-  var d=parseNum(r)-T.safeBal;if(Math.abs(d)<0.5){el.innerHTML="الرصيد مظبوط، مفيش فرق";return}
-  el.innerHTML=(d<0?'الخزنة ناقصة <b class="bad">'+m(-d)+'</b>':'الخزنة زيادة <b class="good">'+m(d)+'</b>')+'<br>الخزنة بعد الظبط: <b>'+m(T.safeBal+d)+'</b>'}
-async function safeAdjSave(){if(submitting)return;var T=calc(),r=val("saReal");if(r==="")return toast("اكتب الكاش الحقيقي");
-  var d=Math.round((parseNum(r)-T.safeBal)*100)/100,a=Math.abs(d);if(a<0.5)return toast("الرصيد مظبوط، مفيش فرق");
-  submitting=true;try{if(await create("capital",{kind:d<0?"sadjout":"sadjin",src:"cash",amount:a,date:val("saDate")||todayStr(),note:val("saNote").trim(),adj:true})){closeSheet();toast("اتظبط ✔")}}finally{submitting=false}}
+function safeAdjPv(){var el=$("#saPv");if(!el||!modal||modal.type!=="safeadj")return;var T=calc(),r=val("saReal"),X=saBox(T,val("saWho")),me=X.k==="me",multi=!!$("#sheet [name='saWho']");
+  var sy=$("#saSys"),lb=$("#saLbl"),inf=$("#saInfo");
+  if(sy)sy.style.display=multi?"block":"none";
+  if(sy&&multi)sy.innerHTML=me?'الجزء بتاعك المتسجل في الخزنة: <b>'+m(X.sys)+'</b><br><span class="sub">(فلوسك + الشركاء + العرابين، من غير فلوس المستثمرين)</span>':'كاش '+esc(X.name)+' المتسجل في الخزنة: <b>'+m(X.sys)+'</b>';
+  if(lb)lb.textContent=!multi?"الكاش الحقيقي اللي في الخزنة دلوقتي":me?"الكاش الحقيقي بتاعك في الخزنة دلوقتي":"الكاش الحقيقي بتاع "+X.name+" دلوقتي";
+  if(inf)inf.innerHTML=me?'الفرق بيتسجل «تسوية رصيد الخزنة» وبيغيّر الجزء بتاعك من الخزنة بس، من غير ما يلمس رأس المال أو الأرباح أو المستثمرين أو الشركاء أو العربيات. ولو عرفت السبب بعدين، امسح التسوية من سجل رأس المال وسجّل الحركة الصح.':'الفرق بيتسجل في حساب '+esc(X.name)+' «تسوية رصيد الخزنة» (زيادة = إيداع، نقص = سحب من رأس ماله)، فرصيده والكاش بتاعه بيتظبطوا، والجزء بتاعك في الخزنة مش بيتغير. تقدر تمسحها من حسابه لو عرفت السبب.';
+  if(r===""){el.innerHTML=me&&!multi?"اكتب الكاش الحقيقي وهيبانلك الفرق":"اكتب الرقم الحقيقي وهيبانلك الفرق";return}
+  var d=parseNum(r)-X.sys;if(Math.abs(d)<0.5){el.innerHTML="الرصيد مظبوط، مفيش فرق";return}
+  var h=(d<0?(me?'الجزء بتاعك ناقص ':'كاش '+esc(X.name)+' ناقص ')+'<b class="bad">'+m(-d)+'</b>':(me?'الجزء بتاعك زيادة ':'كاش '+esc(X.name)+' زيادة ')+'<b class="good">'+m(d)+'</b>');
+  if(!multi)h=d<0?'الخزنة ناقصة <b class="bad">'+m(-d)+'</b>':'الخزنة زيادة <b class="good">'+m(d)+'</b>';
+  if(!me)h+='<br>رصيد '+esc(X.name)+' يبقى <b>'+m((X.o.bal||0)+d)+'</b> (الكاش بتاعه <b>'+m(X.sys+d)+'</b>)';
+  el.innerHTML=h+'<br>الخزنة كلها بعد الظبط: <b class="'+(T.safeBal+d<-0.5?"bad":"")+'">'+m(T.safeBal+d)+'</b>'}
+async function safeAdjSave(){if(submitting)return;var T=calc(),r=val("saReal");if(r==="")return toast("اكتب الرقم الحقيقي");
+  var X=saBox(T,val("saWho")),d=Math.round((parseNum(r)-X.sys)*100)/100,a=Math.abs(d),dt=val("saDate")||todayStr(),nt=val("saNote").trim();if(a<0.5)return toast("الرصيد مظبوط، مفيش فرق");
+  submitting=true;try{var ok;
+    if(X.k==="me")ok=await create("capital",{kind:d<0?"sadjout":"sadjin",src:"cash",amount:a,date:dt,note:nt,adj:true});
+    else ok=await create("invmoves",{iid:X.iid,kind:d<0?"wd":"dep",src:"cash",amount:a,date:dt,note:nt||"تسوية رصيد الخزنة",adj:true});
+    if(ok){closeSheet();toast("اتظبط ✔")}}finally{submitting=false}}
 window.safeAdj=safeAdj;window.safeAdjSave=safeAdjSave;
 
 /* ---------- عميل معيّن من غير إنستاباي خالص (بالسيريال) ----------
@@ -3351,7 +3368,7 @@ function rbInvestor(){
   var mv=o.moves.filter(function(x){return x.kind!=="lossrepay"}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")});
   if(mv.length){B.push({t:"sec",title:"الإيداعات والسحوبات وسحب الأرباح"});
     B.push({t:"table",cols:[{h:"البند",w:.5},{h:"التاريخ",w:.22},{h:"المبلغ",w:.28,k:"n",s:1}],
-      rows:mv.map(function(x){var a=+x.amount||0,d=x.kind==="dep";return [(d?"إيداع":x.kind==="pwd"?"سحب أرباح":"سحب من رأس ماله")+(x.src==="insta"?" (إنستاباي)":x.src==="held"?" (من اللي معاه)":"")+(viaTxt(x)?" - "+viaTxt(x):"")+(x.note?" - "+x.note:""),rfd(x.date),{v:d?a:-a,c:d?RK.good:RK.bad}]})})}
+      rows:mv.map(function(x){var a=+x.amount||0,d=x.kind==="dep";return [(x.adj?(d?"تسوية رصيد الخزنة (زيادة)":"تسوية رصيد الخزنة (نقص)"):d?"إيداع":x.kind==="pwd"?"سحب أرباح":"سحب من رأس ماله")+(x.src==="insta"?" (إنستاباي)":x.src==="held"?" (من اللي معاه)":"")+(viaTxt(x)?" - "+viaTxt(x):"")+(x.note?" - "+x.note:""),rfd(x.date),{v:d?a:-a,c:d?RK.good:RK.bad}]})})}
   var lr=o.moves.filter(function(x){return x.kind==="lossrepay"}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")});
   if(lr.length)B.push({t:"table",cols:[{h:"سداد الخسارة من أرباحه",w:.5},{h:"التاريخ",w:.22},{h:"المبلغ",w:.28,k:"n"}],rows:lr.map(function(x){return ["دفعة سداد",rfd(x.date),+x.amount||0]}).concat([{cells:["الإجمالي","",o.lr]}])});
   B.push({t:"sec",title:"الحساب"});
@@ -3636,7 +3653,7 @@ function rbPeriod(){
   caps.forEach(function(x){var ad=capIn(x.kind);mv.push([x.kind==="sadjin"||x.kind==="sadjout"?"تسوية رصيد الخزنة":x.kind==="pwithdraw"?"سحب أرباح":(x.kind==="jam"?"قسط جمعية"+(x.jname?" - "+x.jname:""):(ad?"زيادة رأس المال":"سحب من رأس المال")),rfd(x.date),{v:ad?(+x.amount||0):-(+x.amount||0),c:ad?RK.good:RK.bad}])});
   pays.forEach(function(x){if(x.roll)return;var c=carById(x.carId),p=c&&c.parts.find(function(q){return q.id===x.pid});mv.push(["تسليم "+(p?p.name:"شريك")+" - "+(c?c.name:"؟"),rfd(x.date),{v:-(+x.amount||0),c:RK.bad}])});
   spays.forEach(function(x){mv.push(["سداد للبايع - "+carNameById(x.carId),rfd(x.date),{v:-(+x.amount||0),c:RK.bad}])});
-  ims.forEach(function(x){var dp=x.kind==="dep";mv.push([(dp?"إيداع مستثمر - ":x.kind==="pwd"?"سحب أرباح لمستثمر - ":"سحب لمستثمر - ")+invName(x.iid),rfd(x.date),{v:dp?(+x.amount||0):-(+x.amount||0),c:dp?RK.good:RK.bad}])});
+  ims.forEach(function(x){var dp=x.kind==="dep";mv.push([(x.adj?(dp?"تسوية خزنة (زيادة) - ":"تسوية خزنة (نقص) - "):dp?"إيداع مستثمر - ":x.kind==="pwd"?"سحب أرباح لمستثمر - ":"سحب لمستثمر - ")+invName(x.iid),rfd(x.date),{v:dp?(+x.amount||0):-(+x.amount||0),c:dp?RK.good:RK.bad}])});
   if(mv.length){any=true;B.push({t:"sec",title:"سحوبات وتسليمات"});B.push({t:"table",cols:[{h:"البند",w:.54},{h:"التاريخ",w:.2},{h:"المبلغ",w:.26,k:"n",s:1}],rows:mv})}
   if(lds.length){any=true;B.push({t:"sec",title:"سلف وأمانات"});
     B.push({t:"table",cols:[{h:"البند",w:.54},{h:"التاريخ",w:.2},{h:"المبلغ",w:.26,k:"n",s:1}],
