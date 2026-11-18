@@ -3004,7 +3004,7 @@ function safeAdj(){var T=calc(),L=(T.inv&&T.inv.list)||[],B=scBoxes(T);modal={ty
 function safeAdjPv(){var el=$("#saPv");if(!el||!modal||modal.type!=="safeadj")return;var T=calc(),r=val("saReal"),X=saBox(T,val("saWho")),me=X.k==="me",multi=!!$("#sheet [name='saWho']");
   var sy=$("#saSys"),lb=$("#saLbl"),inf=$("#saInfo");
   if(sy)sy.style.display=multi?"block":"none";
-  if(sy&&multi)sy.innerHTML=me?'الجزء بتاعك المتسجل في الخزنة: <b>'+m(X.sys)+'</b><br><span class="sub">(فلوسك + الشركاء + العرابين، من غير فلوس المستثمرين)</span>':'كاش '+esc(X.name)+' المتسجل في الخزنة: <b>'+m(X.sys)+'</b>';
+  if(sy&&multi)sy.innerHTML=me?'الجزء بتاعك المتسجل في الخزنة: <b>'+m(X.sys)+'</b><br><span class="sub">(فلوسك + فلوس الشركاء اللي اتحصّلت + العرابين، من غير فلوس المستثمرين)</span>':'كاش '+esc(X.name)+' المتسجل في الخزنة: <b>'+m(X.sys)+'</b>';
   if(lb)lb.textContent=!multi?"الكاش الحقيقي اللي في الخزنة دلوقتي":me?"الكاش الحقيقي بتاعك في الخزنة دلوقتي":"الكاش الحقيقي بتاع "+X.name+" دلوقتي";
   if(inf)inf.innerHTML=me?'الفرق بيتسجل «تسوية رصيد الخزنة» وبيغيّر الجزء بتاعك من الخزنة بس، من غير ما يلمس رأس المال أو الأرباح أو المستثمرين أو الشركاء أو العربيات. ولو عرفت السبب بعدين، امسح التسوية من سجل رأس المال وسجّل الحركة الصح.':'الفرق بيتسجل في حساب '+esc(X.name)+' «تسوية رصيد الخزنة» (زيادة = إيداع، نقص = سحب من رأس ماله)، فرصيده والكاش بتاعه بيتظبطوا، والجزء بتاعك في الخزنة مش بيتغير. تقدر تمسحها من حسابه لو عرفت السبب.';
   if(r===""){el.innerHTML=me&&!multi?"اكتب الكاش الحقيقي وهيبانلك الفرق":"اكتب الرقم الحقيقي وهيبانلك الفرق";return}
@@ -3012,6 +3012,7 @@ function safeAdjPv(){var el=$("#saPv");if(!el||!modal||modal.type!=="safeadj")re
   var h=(d<0?(me?'الجزء بتاعك ناقص ':'كاش '+esc(X.name)+' ناقص ')+'<b class="bad">'+m(-d)+'</b>':(me?'الجزء بتاعك زيادة ':'كاش '+esc(X.name)+' زيادة ')+'<b class="good">'+m(d)+'</b>');
   if(!multi)h=d<0?'الخزنة ناقصة <b class="bad">'+m(-d)+'</b>':'الخزنة زيادة <b class="good">'+m(d)+'</b>';
   if(!me)h+='<br>رصيد '+esc(X.name)+' يبقى <b>'+m((X.o.bal||0)+d)+'</b> (الكاش بتاعه <b>'+m(X.sys+d)+'</b>)';
+  else{var co=cashOwn(T);if(co.pc>0.5)h+='<br>🙋 «الكاش بتاعك» في الرئيسية هيبقى <b>'+m(co.mine+d)+'</b> <span class="sub">(بعد خصم فلوس الشركاء اللي في الخزنة '+m(co.pc)+')</span>'}
   el.innerHTML=h+'<br>الخزنة كلها بعد الظبط: <b class="'+(T.safeBal+d<-0.5?"bad":"")+'">'+m(T.safeBal+d)+'</b>'}
 async function safeAdjSave(){if(submitting)return;var T=calc(),r=val("saReal");if(r==="")return toast("اكتب الرقم الحقيقي");
   var X=saBox(T,val("saWho")),d=Math.round((parseNum(r)-X.sys)*100)/100,a=Math.abs(d),dt=val("saDate")||todayStr(),nt=val("saNote").trim();if(a<0.5)return toast("الرصيد مظبوط، مفيش فرق");
@@ -3201,10 +3202,11 @@ function renderInvDetail(){
 
 /* ---------- الكاش بتاع مين ---------- */
 function cashOwn(T){
-  var pc=0,pw=0;
-  T.cars.forEach(function(c){c.parts.forEach(function(p){var r=Math.max(p.remaining,0);if(c.sold)pc+=r;else pw+=r})});
+  /* نصيب الشريك اللي لسه عند المشتري (debtLeft) مش في الخزنة، فمايتخصمش من الكاش بتاعك (pd = بره عند المشترين) */
+  var pc=0,pw=0,pd=0;
+  T.cars.forEach(function(c){c.parts.forEach(function(p){var r=Math.max(p.remaining,0);if(!c.sold){pw+=r;return}var dl=Math.min(r,Math.max(0,p.debtLeft||0));pd+=dl;pc+=r-dl})});
   var ic=Math.max(T.inv.free,0);
-  return {pc:pc,pw:pw,ic:ic,iw:T.inv.working,mine:T.cashNow-pc-ic,tot:T.cashNow};
+  return {pc:pc,pw:pw,pd:pd,ic:ic,iw:T.inv.working,mine:T.cashNow-pc-ic,tot:T.cashNow};
 }
 function cashSplit(T){
   var hasP=T.cars.some(function(c){return c.parts.length});
@@ -3213,11 +3215,12 @@ function cashSplit(T){
   var h='<div class="card"><div class="sect" style="margin-top:0">💵 الكاش بتاع مين؟</div>'+
     '<div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin:4px 0 10px;background:var(--line)"><div style="width:'+w(o.mine)+'%;background:var(--primary)"></div><div style="width:'+w(o.pc)+'%;background:var(--silver)"></div><div style="width:'+w(o.ic)+'%;background:#8a6d1f"></div></div>'+
     '<div class="kv"><span>💰 بتاعتك انت</span><b class="'+(o.mine<0?"bad":"")+'">'+m(o.mine)+'</b></div>'+
-    '<div class="kv"><span>🤝 بتاعة الشركاء <span class="sub">(فلوسهم وأرباحهم من عربيات اتباعت)</span></span><b>'+m(o.pc)+'</b></div>'+
+    '<div class="kv"><span>🤝 بتاعة الشركاء <span class="sub">(فلوسهم وأرباحهم من عربيات اتباعت واتحصّلت)</span></span><b>'+m(o.pc)+'</b></div>'+
     '<div class="kv"><span>💼 بتاعة المستثمرين <span class="sub">(الكاش بتاعهم)</span></span><b>'+m(o.ic)+'</b></div>'+
     '<div class="kv"><span>الإجمالي (كاش + إنستاباي)</span><b>'+m(o.tot)+'</b></div>';
   if(o.mine<-0.5)h+='<div class="banner" style="margin:10px 0 0">⚠️ انت صارف من فلوس الشركاء أو المستثمرين '+m(-o.mine)+'</div>';
   if(o.pw>0.5||o.iw>0.5)h+='<div class="sub" style="margin-top:8px">وبره الكاش، لسه شغال في عربيات: للشركاء '+m(o.pw)+' · للمستثمرين '+m(o.iw)+'</div>';
+  if(o.pd>0.5)h+='<div class="sub" style="margin-top:4px">ونصيب الشركاء اللي لسه عند المشترين (مش في الخزنة): '+m(o.pd)+'</div>';
   h+='<button class="btn sec small" style="margin-top:10px" data-act="jard">📋 تفاصيل كل شخص</button></div>';
   return h;
 }
@@ -3338,7 +3341,7 @@ function rbJardAll(){
   var B=[{t:"tiles",items:[{l:"إجمالي اللي ليهم عندي",v:rnum(owP+owI)+" ج",acc:true},{l:"عدد الناس",v:String(L.length)},
     {l:"مستحق للشركاء ("+np+")",v:rnum(owP)+" ج"},{l:"أرصدة المستثمرين ("+ni+")",v:rnum(owI)+" ج"},
     {l:"أرباح الشركاء",v:rnum(pP,true)+" ج",c:rcol(pP)},{l:"صافي أرباح المستثمرين",v:rnum(pI,true)+" ج",c:rcol(pI)}]}];
-  var CO=cashOwn(J.T);B[0].items.push({l:"منها في الخزنة",v:rnum(CO.pc+CO.ic)+" ج"},{l:"منها في عربيات",v:rnum(CO.pw+CO.iw)+" ج"});
+  var CO=cashOwn(J.T);B[0].items.push({l:"منها في الخزنة",v:rnum(CO.pc+CO.ic)+" ج"},{l:"منها في عربيات",v:rnum(CO.pw+CO.iw)+" ج"});if(CO.pd>0.5)B[0].items.push({l:"منها عند المشترين",v:rnum(CO.pd)+" ج"});
   B.push({t:"sec",title:"الكاش بتاع مين"});B.push({t:"kv",rows:[["بتاعتي انا",rnum(CO.mine)+" ج",CO.mine<0?RK.bad:RK.gold2],["بتاعة الشركاء",rnum(CO.pc)+" ج"],["بتاعة المستثمرين",rnum(CO.ic)+" ج"],["إجمالي الكاش",rnum(CO.tot)+" ج"]]});
   B.push({t:"sec",title:"الجرد"});
   var tc=0,tn=0,to=0,tt=0;
@@ -3999,7 +4002,7 @@ function safeCount(){var T=calc(),last=scLast(),B=scBoxes(T),multi=B.inv.length>
   if(multi){
     body='<div class="preview" style="display:block">كل خزنة بتتعدّ لوحدها، فلو فيه فرق هتعرف هو عندك ولا عند مين.<br><span class="sub">إجمالي الكاش المفروض في الخزنة: '+m(T.safeBal)+(featOn("fund")||T.fund>0.5?' (من غير العهدة)':'')+'</span>'+
       (last?'<br><span class="sub">آخر جرد: '+fdate(last.date)+'</span>':'')+'</div>'+
-      '<div class="sect">🧮 خزنتي</div><div class="card"><div class="sub" style="margin-bottom:8px">المفروض: <b>'+m(B.mine)+'</b><br>(فلوسك + الشركاء + العرابين، من غير فلوس المستثمرين)</div>'+
+      '<div class="sect">🧮 خزنتي</div><div class="card"><div class="sub" style="margin-bottom:8px">المفروض: <b>'+m(B.mine)+'</b><br>(فلوسك + فلوس الشركاء اللي اتحصّلت + العرابين، من غير فلوس المستثمرين)</div>'+
       fld("الكاش اللي عدّيته في خزنتك",minp("scReal"))+
       '<button class="btn sec small" style="margin:-4px 0 8px" onclick="scDenToggle()">💵 عد بالفئات (٢٠٠ / ١٠٠ / ٥٠ …)</button>'+
       '<div id="scDen" style="display:none">'+SC_DEN.map(function(v){return '<div class="kv" style="align-items:center"><span>فئة <b class="num">'+v+'</b> × </span><input name="scd'+v+'" inputmode="numeric" autocomplete="off" placeholder="عدد" style="max-width:110px;text-align:center"></div>'}).join("")+'</div>'+
