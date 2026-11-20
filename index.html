@@ -714,7 +714,7 @@ function heroTap(k,T){
       (T.recv>0.5?tkv("− سلف ادتها لناس",m(T.recv,"bad")):"")+(T.held>0.5?tkv("− إنستاباي في محافظ المستثمرين (من فلوسهم)",m(T.held,"bad")):"")+
       ttot("= المفروض يبقى معاك",m(T.cashNow));
     if(!T.check)h+='<div class="banner" style="margin:10px 0 0;cursor:pointer" onclick="healthCheck()">⚠️ في فرق في الحساب، اضغط هنا تعرف السبب ‹</div>';
-    h+='<div class="two" style="margin-top:12px"><button class="btn sec small" onclick="safeCount()">🧮 جرد الخزنة</button><button class="btn sec small" onclick="instaAdj()">🔧 ظبط الإنستاباي</button></div><button class="btn sec small" style="margin-top:8px;width:100%" onclick="healthCheck()">🩺 فحص الحسابات</button>';
+    h+='<div class="two" style="margin-top:12px"><button class="btn sec small" onclick="safeCount()">🧮 جرد الخزنة</button><button class="btn sec small" onclick="instaAdj()">🔧 ظبط الإنستاباي</button></div><button class="btn sec small" style="margin-top:8px;width:100%" onclick="trfList()">🔁 كل التحويلات بين الخزنة والإنستاباي</button><button class="btn sec small" style="margin-top:8px;width:100%" onclick="healthCheck()">🩺 فحص الحسابات</button>';
     h+='<div class="two" style="margin-top:12px"><button class="btn sec small" data-act="tinfo" data-k="stock">العربيات في المعرض</button><button class="btn sec small" data-act="tinfo" data-k="debts">مديونيات العملاء</button></div>';
   }else if(k==="hbase"){
     t="🏦 أصل رأس المال";
@@ -905,7 +905,7 @@ function renderDay(){
   D.trs.forEach(function(x){items.push({t:"🔁 تحويل "+(x.dir==="toInsta"?"من الخزنة لإنستاباي":"من إنستاباي للخزنة"),d:dline(esc(x.note||""),"(مش بيأثر على السيولة)"),a:0,info:+x.amount||0,del:["transfers",x.id]})});
   var list=items.length?items.map(function(i){
     var amt=i.info!=null?'<span class="num sub">'+fmt(i.info)+'</span>':'<span class="num '+(i.a>=0?"good":"bad")+'" style="font-weight:700">'+(i.a>0?"+":"")+fmt(i.a)+'</span>';
-    return '<div class="item"><div style="flex:1"><div class="t">'+i.t+'</div>'+(i.d?'<div class="d">'+i.d+'</div>':"")+'</div>'+amt+(i.go?'<button class="del" data-act="cons" data-id="'+esc(i.go)+'" aria-label="فتح">‹</button>':'<button class="del" data-act="delitem" data-coll="'+i.del[0]+'" data-id="'+i.del[1]+'" aria-label="حذف">🗑</button>')+'</div>';
+    return '<div class="item"><div style="flex:1"><div class="t">'+i.t+'</div>'+(i.d?'<div class="d">'+i.d+'</div>':"")+'</div>'+amt+(i.go?'<button class="del" data-act="cons" data-id="'+esc(i.go)+'" aria-label="فتح">‹</button>':'<button class="del" data-act="delitem" data-coll="'+i.del[0]+'" data-id="'+i.del[1]+'" aria-label="حذف">🗑</button>')+(i.del&&ED_ARR[i.del[0]]?edBtn(i.del[0],i.del[1]):"")+'</div>';
   }).join(""):'<div class="empty">مفيش حركة في اليوم ده</div>';
   return '<div class="top"><h1>تقفيل اليوم</h1></div>'+
     '<div class="daynav"><button data-act="dayprev">›</button><input type="date" id="dayin" value="'+S.day+'"><button data-act="daynext">‹</button></div>'+
@@ -1883,6 +1883,7 @@ function openForm(kind,o){
     if(ec==="collections")h+='<div class="two">'+fld("كاش",minp("cash",+ex.cash||0))+(false?'':fld("إنستاباي",minp("insta",+ex.insta||0)))+'</div>'+fld("التاريخ",dinp("date",ex.date));
     else if(skSp)h+=payFlds("المبلغ",ex)+fld("التاريخ",dinp("date",ex.date));
     else h+='<div class="two">'+fld("المبلغ",minp("amount",+ex.amount||0))+fld("التاريخ",dinp("date",ex.date))+'</div>';
+    if(ec==="transfers")h+=fld("اتجاه التحويل",'<select name="tdir"><option value="toInsta"'+(ex.dir==="toInsta"?" selected":"")+'>من الخزنة ← لإنستاباي</option><option value="toSafe"'+(ex.dir!=="toInsta"?" selected":"")+'>من إنستاباي ← للخزنة</option></select>');
     if(ec==="external")h+=fld("دخلت إزاي",'<select name="how">'+Object.keys(EXT_HOW).filter(function(k){return true}).map(function(k){return '<option value="'+k+'"'+((ex.how||"cash")===k?" selected":"")+'>'+EXT_HOW[k]+'</option>'}).join("")+'</select>')+fld("منها إنستاباي (لو كاش + إنستاباي)",minp("insta",+ex.insta||0));
     if(srcOk)h+=fld("طلعت / دخلت من",srcSel("src",ex.src));
     h+=fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off" value="'+esc(ex.note||"")+'">')+
@@ -2338,6 +2339,7 @@ async function submitForm(){QF=null;
       else if($('#sheet input[name="pcash"]')){var pv2=payVal();if(!pv2.ok)return toast("اكتب المبلغ");up.amount=pv2.amount;up.src=pv2.src;up.insta=pv2.insta}
       else{var a2=parseNum(val("amount"));if(a2<=0)return toast("اكتب المبلغ");up.amount=a2}
       if(ec2==="expenses")up.type=val("type");
+      if(ec2==="transfers")up.dir=val("tdir")==="toInsta"?"toInsta":"toSafe";
       if(ec2==="external"){var d2=val("desc").trim();if(!d2)return toast("اكتب الوصف");up.desc=d2;up.how=EXT_HOW[val("how")]?val("how"):"cash";up.insta=up.how==="both"?Math.min(up.amount,parseNum(val("insta"))):0}
       if(document.querySelector('#sheet select[name="src"]'))up.src=srcVal();
       var bad2=edCheck(ex2,up);if(bad2)return toast("مينفعش: "+bad2);
@@ -3026,6 +3028,21 @@ async function renderReport(spec){
   return cv;
 }
 
+
+/* ---------- كل التحويلات بين الخزنة والإنستاباي: عرض + تعديل + حذف ---------- */
+function trfList(){
+  var L=S.transfers.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"")||((b.at||0)-(a.at||0))}),tin=0,tout=0;
+  L.forEach(function(x){if(x.dir==="toInsta")tin+=+x.amount||0;else tout+=+x.amount||0});
+  modal={type:"trflist"};
+  var rows=L.length?L.map(function(x){var ti=x.dir==="toInsta";
+    return '<div class="item"><div style="flex:1"><div class="t">'+(ti?"🔁 من الخزنة ← لإنستاباي":"🔁 من إنستاباي ← للخزنة")+(x.adj?' <span class="sub">(ظبط)</span>':'')+'</div><div class="d">'+esc(rfd(x.date))+(x.note?" · "+esc(x.note):"")+'</div></div>'+
+      '<span class="num" style="font-weight:700">'+fmt(+x.amount||0)+'</span>'+
+      '<button class="del" data-act="delitem" data-coll="transfers" data-id="'+esc(x.id)+'" aria-label="حذف">🗑</button>'+edBtn("transfers",x.id)+'</div>'}).join(""):'<div class="empty">مفيش تحويلات</div>';
+  openSheet(sheetHead("🔁 التحويلات بين الخزنة والإنستاباي")+
+    '<div class="two" style="margin-bottom:10px"><div class="banner" style="margin:0">من الخزنة لإنستاباي<br><b class="num">'+fmt(tin)+'</b></div><div class="banner" style="margin:0">من إنستاباي للخزنة<br><b class="num">'+fmt(tout)+'</b></div></div>'+
+    '<div class="sub" style="margin-bottom:8px">اضغط ✏️ عشان تعدّل المبلغ أو التاريخ أو الاتجاه، أو 🗑 عشان تحذف. حركات «الظبط» بتتعدّل من جرد الخزنة / ظبط الإنستاباي.</div>'+rows);
+}
+window.trfList=trfList;
 /* ---------- أرباح العربيات: توزيع على كل واحد ---------- */
 function carsNet(T){var n=0;T.cars.forEach(function(c){if(c.sold)n+=c.profit||0});return n}
 function shareLine(c){var a=[];if(c.parts.length||c.invs.length)a.push("إنت "+fmt(Math.round(c.myProfit)));c.parts.forEach(function(p){a.push(esc(p.name)+" "+fmt(Math.round(p.profit||0)))});c.invs.forEach(function(v){a.push("💼 "+esc(v.name)+" "+fmt(Math.round(v.profit||0)))});return a.length?'<span class="sub">'+a.join(" · ")+'</span>':'<span class="sub">ليك لوحدك</span>'}
@@ -3126,6 +3143,8 @@ function rbPeriod(){
   spays.forEach(function(x){spT+=+x.amount||0});
   var ims=S.invmov.filter(function(x){return r(x.date)&&x.kind!=="lossrepay"}),imT=invNet(ims);
   var net=cashT+instaT+pInT-buyPd-spT-expT-wdT-pOutT+ldT+imT;
+  var tfs=S.transfers.filter(function(x){return r(x.date)}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")}),tfIn=0,tfOut=0;
+  tfs.forEach(function(x){if(x.dir==="toInsta")tfIn+=+x.amount||0;else tfOut+=+x.amount||0});
   var items=[{l:"صافي حركة السيولة",v:rnum(net,true)+" ج",acc:true},
     {l:"إجمالي المبيعات",v:rnum(salesT)+" ج"},{l:"إجمالي المشتريات",v:rnum(buyT)+" ج"},
     {l:"المصاريف",v:rnum(expT)+" ج"},{l:"أرباحك من المبيعات",v:rnum(profT,true)+" ج",c:rcol(profT)},
@@ -3142,6 +3161,8 @@ function rbPeriod(){
   var owT=0;buys.forEach(function(c){owT+=Math.max(0,c.owedSeller||0)});if(owT>0.5)items.push({l:"باقي للبايعين من مشتريات الفترة",v:rnum(owT)+" ج",c:RK.warn});
   if(ims.length)items.push({l:"حركة فلوس مستثمرين",v:rnum(imT,true)+" ج",c:rcol(imT)});
   if(Math.abs(ldT)>0.5)items.push({l:"حركة سلف وأمانات",v:rnum(ldT,true)+" ج",c:rcol(ldT)});
+  if(tfIn>0.5)items.push({l:"تحويل من الخزنة لإنستاباي",v:rnum(tfIn)+" ج"});
+  if(tfOut>0.5)items.push({l:"تحويل من إنستاباي للخزنة",v:rnum(tfOut)+" ج"});
   var xs=S.ext.filter(function(x){return r(x.date)}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")}),xT=0;xs.forEach(function(x){xT+=+x.amount||0});
   if(xT>0.5){items.push({l:"أرباح خارجية (عمولات)",v:rnum(xT)+" ج",c:RK.good})}
   var B=[{t:"tiles",items:items}],any=false;
@@ -3172,6 +3193,9 @@ function rbPeriod(){
         if(x.kind==="ladd")tt=lq&&lq.dir==="out"?"سلف زيادة لـ "+who:"استلام زيادة من "+who;
         else if(x.kind==="loan")tt=x.dir==="out"?"سلفة لـ "+who:"استلام من "+who;else tt=lq&&lq.dir==="out"?who+" رجّع فلوس":"سداد لـ "+who;
         return [tt,rfd(x.date),{v:sg,c:rcol(sg)}]})})}
+  if(tfs.length){any=true;B.push({t:"sec",title:"تحويلات بين الخزنة والإنستاباي ("+tfs.length+")"});
+    B.push({t:"table",cols:[{h:"التحويل",w:.54},{h:"التاريخ",w:.2},{h:"المبلغ",w:.26,k:"n"}],
+      rows:tfs.map(function(x){return [(x.dir==="toInsta"?"من الخزنة ← لإنستاباي":"من إنستاباي ← للخزنة")+(x.adj?" (ظبط)":"")+(x.note?" - "+x.note:""),rfd(x.date),+x.amount||0]})})}
   if(xs.length){any=true;B.push({t:"sec",title:"أرباح خارجية - عمولات ("+xs.length+")"});
     B.push({t:"table",cols:[{h:"العملية",w:.54},{h:"التاريخ",w:.2},{h:"العمولة",w:.26,k:"n"}],
       rows:xs.map(function(x){var pt=extParties(x);return [(x.desc||"عمولة")+(pt?" ("+pt+")":""),rfd(x.date),+x.amount||0]}).concat([{cells:["الإجمالي","",xT]}])})}
