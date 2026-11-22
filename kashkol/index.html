@@ -4839,7 +4839,30 @@ allLoaded=function(){return !!(S.loaded.kp&&S.loaded.ke)};
 bkBoot=function(){};cloudBackup=async function(){};ivwSync=function(){};needOnboard=function(){return false};
 renderNav=function(){var n=$("#nav");if(n){n.innerHTML="";n.className=""}};
 var __render=render;
-render=function(){if(S.auth!=="in"||S.noDb||!allLoaded()||(S.err&&!allLoaded()))return __render();kRender()};
+render=function(){
+  if(S.auth==="in"&&!S.noDb&&!allLoaded()&&!S.err){
+    if(!kLoadT)kLoadT=setTimeout(kFallback,6000);
+    if(S.kdiag){$("#app").innerHTML='<div class="banner">'+S.kdiag+'</div>';return}
+  }
+  if(S.auth!=="in"||S.noDb||!allLoaded()||(S.err&&!allLoaded())){
+    if(S.err&&S.auth==="in"&&!allLoaded()){$("#app").innerHTML='<div class="banner">حصلت مشكلة في تحميل الكشكول ('+esc(String(S.err.code||S.err.message||S.err))+'). اقفل الصفحة وافتحها تاني.</div>';return}
+    return __render();
+  }
+  try{kRender()}catch(e){$("#app").innerHTML='<div class="banner">حصلت مشكلة في عرض الكشكول: '+esc(String(e&&e.message||e))+'</div>'}
+};
+var kLoadT=null;
+/* لو التحميل اتأخر: نجيب الصفحات من السيرفر مباشرة مرة واحدة */
+async function kFallback(){
+  if(allLoaded()||!db)return;
+  async function one(coll,key){
+    if(S.loaded[key])return;
+    var snap=await db.collection(coll).get();
+    var arr=[];for(var i=0;i<snap.docs.length;i++){var d=snap.docs[i],pp=coll+"/"+d.id;try{var o=await readDoc(pp,d.data(),{});arr.push(Object.assign({id:d.id},o))}catch(e){}}
+    S[key]=arr;S.loaded[key]=true;
+  }
+  try{await one("kpages","kp");await one("kentries","ke");refresh()}
+  catch(e){S.kdiag="مش قادر أوصل للكشكول ("+esc(String(e&&e.code||e&&e.message||e))+"). اتأكد من النت واقفل الصفحة وافتحها تاني.";render()}
+}
 refresh=function(){try{encMigrate()}catch(e){}try{rcBoot()}catch(e){}render();if(modal&&modal.type==="kpages")kPages()};
 (function(){var st=document.createElement("style");st.textContent=
 '.kbar{position:sticky;top:0;z-index:5;background:linear-gradient(135deg,#e9c75a,#b8902a);color:#0a0804;border-radius:16px;padding:10px 12px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.35)}'+
