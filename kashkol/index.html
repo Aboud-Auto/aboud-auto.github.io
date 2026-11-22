@@ -4842,7 +4842,7 @@ var __render=render;
 render=function(){
   if(S.auth==="in"&&!S.noDb&&!allLoaded()&&!S.err){
     if(!kLoadT)kLoadT=setTimeout(kFallback,6000);
-    if(S.kdiag){$("#app").innerHTML='<div class="banner">'+S.kdiag+'</div>';return}
+    if(S.kdiag){$("#app").innerHTML='<div class="banner">'+S.kdiag+'</div><button class="btn danger" data-k="logout">🚪 تسجيل خروج</button>';return}
   }
   if(S.auth!=="in"||S.noDb||!allLoaded()||(S.err&&!allLoaded())){
     if(S.err&&S.auth==="in"&&!allLoaded()){$("#app").innerHTML='<div class="banner">حصلت مشكلة في تحميل الكشكول ('+esc(String(S.err.code||S.err.message||S.err))+'). اقفل الصفحة وافتحها تاني.</div>';return}
@@ -4895,7 +4895,7 @@ async function kDel(coll,id){try{await db.doc(coll+"/"+id).delete();return true}
 
 function kRender(){
   var app=$("#app");renderNav();
-  var head='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div><h1>📒 الكشكول</h1><div class="sub">'+esc(brandName())+' · '+fdate(todayStr())+'</div></div></div>';
+  var head='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div style="flex:1"><h1>📒 الكشكول</h1><div class="sub">'+esc(brandName())+' · '+fdate(todayStr())+'</div></div><button class="btn sec small" data-k="logout">🚪 خروج</button></div>';
   var P=kPagesSorted(),cur=kCurPage();
   if(!cur){
     app.innerHTML=head+'<div class="card" style="text-align:center;padding:26px 16px"><div style="font-size:44px">📒</div><h2 style="margin:6px 0">كشكول جديد</h2><div class="sub" style="margin-bottom:16px">سجّل فيه الداخل (مدين) والخارج (دائن) زي الكشكول الورق بالظبط. كل صفحة ليها إجماليها لوحدها.</div><button class="btn" data-k="newpage">ابدأ أول صفحة</button></div>';
@@ -4958,7 +4958,8 @@ function kNewPage(){
 document.addEventListener("click",async function(ev){
   var t=ev.target.closest("[data-k]");if(!t)return;
   var k=t.dataset.k,P=kPagesSorted(),cur=kCurPage(),i=cur?P.indexOf(cur):-1;
-  if(k==="newpage")kNewPage();
+  if(k==="logout")confirmBox("تسجيل خروج من الكشكول؟",function(){lsSet("hb_name");lsSet("hb_logo");lsSet("hb_user");keyDel(S.user&&S.user.uid).then(function(){return FBA.auth().signOut()}).then(function(){location.reload()},function(){location.reload()})});
+  else if(k==="newpage")kNewPage();
   else if(k==="add")kForm(t.dataset.side);
   else if(k==="edit"){var e=S.ke.find(function(x){return x.id===t.dataset.id});if(e)kForm(e.side,e)}
   else if(k==="side"){var h=$("#sheet [name='kside']");if(h)h.value=t.dataset.side;document.querySelectorAll("#sheet [data-k='side']").forEach(function(b){b.classList.toggle("on",b===t)})}
