@@ -4851,9 +4851,20 @@ render=function(){
   try{kRender()}catch(e){$("#app").innerHTML='<div class="banner">حصلت مشكلة في عرض الكشكول: '+esc(String(e&&e.message||e))+'</div>'}
 };
 var kLoadT=null;
+/* الدخول التجريبي: كشكول فاضي في الذاكرة بس، مفيش حاجة بتتحفظ */
+startDemo=function(){
+  DEMO=true;S.auth="in";S.err=null;S.noDb=false;S.brand={name:"تجربة"};S.brandLoaded=true;
+  S.kp=[];S.ke=[];S.loaded.kp=true;S.loaded.ke=true;
+  db={doc:function(path){var a=path.split("/"),key=a[0]==="kpages"?"kp":"ke";return {
+    set:async function(d){var arr=S[key],i=arr.findIndex(function(x){return x.id===a[1]});var o=Object.assign({id:a[1]},d);if(i>=0)arr[i]=o;else arr.push(o);setTimeout(refresh,5)},
+    delete:async function(){S[key]=S[key].filter(function(x){return x.id!==a[1]});setTimeout(refresh,5)}}},
+    collection:function(){return {get:async function(){return {docs:[]}}}}};
+  try{applyBrand()}catch(e){}
+  render();window.scrollTo(0,0);
+};
 /* لو التحميل اتأخر: نجيب الصفحات من السيرفر مباشرة مرة واحدة */
 async function kFallback(){
-  if(allLoaded()||!db)return;
+  if(DEMO||allLoaded()||!db)return;
   async function one(coll,key){
     if(S.loaded[key])return;
     var snap=await db.collection(coll).get();
@@ -4896,6 +4907,7 @@ async function kDel(coll,id){try{await db.doc(coll+"/"+id).delete();return true}
 function kRender(){
   var app=$("#app");renderNav();
   var head='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div style="flex:1"><h1>📒 الكشكول</h1><div class="sub">'+esc(brandName())+' · '+fdate(todayStr())+'</div></div><button class="btn sec small" data-k="logout">🚪 خروج</button></div>';
+  if(DEMO)head='<div class="banner" style="margin-bottom:10px">👀 دي نسخة تجريبية: جرّب براحتك، مفيش حاجة هتتحفظ. <button class="btn small" data-k="demoexit">خروج من التجربة</button></div>'+head.replace('data-k="logout"','data-k="demoexit"');
   var P=kPagesSorted(),cur=kCurPage();
   if(!cur){
     app.innerHTML=head+'<div class="card" style="text-align:center;padding:26px 16px"><div style="font-size:44px">📒</div><h2 style="margin:6px 0">كشكول جديد</h2><div class="sub" style="margin-bottom:16px">سجّل فيه الداخل (مدين) والخارج (دائن) زي الكشكول الورق بالظبط. كل صفحة ليها إجماليها لوحدها.</div><button class="btn" data-k="newpage">ابدأ أول صفحة</button></div>';
@@ -4958,6 +4970,7 @@ function kNewPage(){
 document.addEventListener("click",async function(ev){
   var t=ev.target.closest("[data-k]");if(!t)return;
   var k=t.dataset.k,P=kPagesSorted(),cur=kCurPage(),i=cur?P.indexOf(cur):-1;
+  if(k==="demoexit"){location.reload();return}
   if(k==="logout")confirmBox("تسجيل خروج من الكشكول؟",function(){lsSet("hb_name");lsSet("hb_logo");lsSet("hb_user");keyDel(S.user&&S.user.uid).then(function(){return FBA.auth().signOut()}).then(function(){location.reload()},function(){location.reload()})});
   else if(k==="newpage")kNewPage();
   else if(k==="add")kForm(t.dataset.side);
