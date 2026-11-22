@@ -431,7 +431,7 @@ function srcVal(){var v=val("src");return v==="insta"?"insta":v==="fund"?"fund":
    المفتاح نفسه محفوظ متشفر مرتين: مرة بالباسورد، ومرة بكود الاسترجاع اللي مع العميل.
    مفيش نسخة من المفتاح مقروءة على السيرفر، فصاحب البرنامج مايقدرش يقرا البيانات من لوحة Firebase. */
 var ENC={key:null,on:false,doc:null,uid:null};
-var ENC_COLLS={kpages:1,kentries:1,cars:1,expenses:1,collections:1,capital:1,payouts:1,transfers:1,ledger:1,external:1,investors:1,invmoves:1};
+var ENC_COLLS={kpages:1,kentries:1,ksettings:1,cars:1,expenses:1,collections:1,capital:1,payouts:1,transfers:1,ledger:1,external:1,investors:1,invmoves:1};
 function encPath(p){var a=String(p).split("/");return !!((a.length===2&&ENC_COLLS[a[0]])||p==="settings/main"||p==="settings/safecount")}
 var PLAIN={},NEEDENC={},COMPACT={};
 /* كل تعديل بيتحفظ كحقل متشفر لوحده جوه المستند (_p…) من غير ما يعيد كتابة المستند كله،
@@ -4809,6 +4809,7 @@ async function boot(){
     },function(err){S.err=err;refresh()});
   }
   sub("kpages","kp");sub("kentries","ke");
+  (function(){var kc={};db.doc("ksettings/main").onSnapshot(async function(snap){var o=null;if(snap.exists){try{o=await readDoc("ksettings/main",snap.data(),kc)}catch(e){o=null}}S.kcap=o||{};refresh()},function(){})})();
   db.doc("settings/brand").onSnapshot(function(snap){
     S.brand=snap.exists?snap.data():null;S.brandLoaded=true;lsSet("hb_name",S.brand&&S.brand.name);
     if(mem&&S.brand&&S.brand.name&&mem.shop!==S.brand.name){mem.shop=S.brand.name;memRef.update({shop:S.brand.name}).catch(function(){})}lsSet("hb_logo",S.brand&&S.brand.logo);applyBrand();refresh();
@@ -4854,8 +4855,8 @@ var kLoadT=null;
 /* الدخول التجريبي: كشكول فاضي في الذاكرة بس، مفيش حاجة بتتحفظ */
 startDemo=function(){
   DEMO=true;S.auth="in";S.err=null;S.noDb=false;S.brand={name:"تجربة"};S.brandLoaded=true;
-  S.kp=[];S.ke=[];S.loaded.kp=true;S.loaded.ke=true;
-  db={doc:function(path){var a=path.split("/"),key=a[0]==="kpages"?"kp":"ke";return {
+  S.kp=[];S.ke=[];S.kcap={};S.loaded.kp=true;S.loaded.ke=true;
+  db={doc:function(path){var a=path.split("/"),key=a[0]==="kpages"?"kp":"ke";if(a[0]==="ksettings")return {set:async function(d){S.kcap=d;setTimeout(refresh,5)}};return {
     set:async function(d){var arr=S[key],i=arr.findIndex(function(x){return x.id===a[1]});var o=Object.assign({id:a[1]},d);if(i>=0)arr[i]=o;else arr.push(o);setTimeout(refresh,5)},
     delete:async function(){S[key]=S[key].filter(function(x){return x.id!==a[1]});setTimeout(refresh,5)}}},
     collection:function(){return {get:async function(){return {docs:[]}}}}};
@@ -4907,6 +4908,9 @@ async function kDel(coll,id){try{await db.doc(coll+"/"+id).delete();return true}
 function kRender(){
   var app=$("#app");renderNav();
   var head='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div style="flex:1"><h1>📒 الكشكول</h1><div class="sub">'+esc(brandName())+' · '+fdate(todayStr())+'</div></div><button class="btn sec small" data-k="logout">🚪 خروج</button></div>';
+  var KC=S.kcap||{},kcp=+KC.capital||0,kcf=+KC.custody||0;
+  head+='<div class="card" data-k="cap" style="cursor:pointer;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>🏦 أصل رأس المال</b><span class="sub">اضغط للتعديل ✏️</span></div>'+
+    (kcp||kcf?'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center"><div><div class="sub">رأس المال</div><b class="num" style="font-size:17px">'+fmt(kcp)+'</b></div><div><div class="sub">منه عهدة</div><b class="num" style="font-size:17px;color:var(--warn)">'+fmt(kcf)+'</b></div><div><div class="sub">الباقي للشغل</div><b class="num" style="font-size:17px;color:var(--primary)">'+fmt(kcp-kcf)+'</b></div></div>':'<div class="sub">لسه ماحددتش رأس المال والعهدة — اضغط هنا وحددهم</div>')+'</div>';
   if(DEMO)head='<div class="banner" style="margin-bottom:10px">👀 دي نسخة تجريبية: جرّب براحتك، مفيش حاجة هتتحفظ. <button class="btn small" data-k="demoexit">خروج من التجربة</button></div>'+head.replace('data-k="logout"','data-k="demoexit"');
   var P=kPagesSorted(),cur=kCurPage();
   if(!cur){
@@ -4948,6 +4952,20 @@ async function kSave(){
   kSave.busy=true;var ok=await kPut("kentries",id||kRid(),data);kSave.busy=false;
   if(ok){closeSheet();toast(old?"اتعدّلت ✔":"اتسجّلت ✔")}
 }
+function kCapForm(){
+  var KC=S.kcap||{};modal={type:"kcap"};
+  openSheet(sheetHead("🏦 أصل رأس المال")+
+    fld("رأس المال الأصلي",minp("kcapv",KC.capital||""))+
+    fld("منه عهدة (مع الموظف)",minp("kcustv",KC.custody||""))+
+    '<div class="sub" style="margin:-4px 2px 12px">الرقمين دول ثابتين ومش بيتأثروا بحركات الكشكول. بيتغيروا بس لما انت تعدّلهم من هنا (زيادة رأس مال، سحب، أو زيادة/رجوع عهدة).</div>'+
+    '<button class="btn" data-k="capsave">حفظ</button>');
+}
+async function kCapSave(){
+  var c=parseNum(val("kcapv")),f=parseNum(val("kcustv"));
+  if(c<0||f<0)return toast("اكتب الأرقام صح");
+  if(f>c)return toast("العهدة أكبر من رأس المال");
+  var p="ksettings/main";try{await db.doc(p).set(await toStore(p,{capital:c,custody:f,at:Date.now()}));closeSheet();toast("اتحفظ ✔")}catch(e){if(!e||e.code!=="expired")toast("تعذر الحفظ، جرّب تاني")}
+}
 function kPages(){
   var P=kPagesSorted(),cur=kCurPage();
   modal={type:"kpages"};
@@ -4972,6 +4990,8 @@ document.addEventListener("click",async function(ev){
   var k=t.dataset.k,P=kPagesSorted(),cur=kCurPage(),i=cur?P.indexOf(cur):-1;
   if(k==="demoexit"){location.reload();return}
   if(k==="logout")confirmBox("تسجيل خروج من الكشكول؟",function(){lsSet("hb_name");lsSet("hb_logo");lsSet("hb_user");keyDel(S.user&&S.user.uid).then(function(){return FBA.auth().signOut()}).then(function(){location.reload()},function(){location.reload()})});
+  else if(k==="cap")kCapForm();
+  else if(k==="capsave")kCapSave();
   else if(k==="newpage")kNewPage();
   else if(k==="add")kForm(t.dataset.side);
   else if(k==="edit"){var e=S.ke.find(function(x){return x.id===t.dataset.id});if(e)kForm(e.side,e)}
