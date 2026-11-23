@@ -4903,7 +4903,7 @@ refresh=function(){try{encMigrate()}catch(e){}try{rcBoot()}catch(e){}render();if
 '.kbk .sr>div{padding:6px 3px;display:flex;align-items:center;font-size:13px;line-height:1.3;color:#1d3f8f;word-break:break-word}'+
 '.kbk .sr>div.c{cursor:pointer}.kbk .sr>div.c:active{background:#efe5c4}'+
 '.kbk .sr .n{justify-content:center;font-weight:800;direction:ltr;font-size:13px}'+
-'.kbk .sr .x{font-size:10px;color:#7a6c45;display:block}'+
+'.kbk .sr .kx{font-size:10px;color:#7a6c45;display:block;direction:ltr;text-align:right}'+
 '.kbk .st{border-top:2px solid #1b1608;font-weight:800;background:#f3ecd6}.kbk .st div{padding:8px 3px;text-align:center;direction:ltr;font-size:13.5px}'+
 '.kbk .st .in{color:#0d7a3e}.kbk .st .out{color:#b3261e}.kbk .st .lb{direction:rtl;font-size:11.5px;color:#5a4d2a}'+
 '.kbk .rem{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-top:2px solid #1b1608;font-weight:800;font-size:15px}'+
@@ -4938,7 +4938,7 @@ function kRender(){
   var i=P.indexOf(cur),T=kTot(cur.id),E=kEntries(cur.id),last=i===P.length-1;
   var pd=cur.date||"",ED=E.filter(function(e){return e.side==="d"}),EC=E.filter(function(e){return e.side!=="d"}),nr=Math.max(ED.length,EC.length,8);
   function kCell(e){if(!e)return '<div></div><div></div>';var at=' class="c" data-k="edit" data-id="'+esc(e.id)+'"';
-    return '<div'+at.replace('class="c"','class="c n"')+'>'+fmt(e.amount)+'</div><div'+at+'><span>'+(esc(e.desc||"")||"—")+(e.date&&e.date!==pd?'<span class="x">'+fdate(e.date)+'</span>':'')+'</span></div>'}
+    return '<div'+at.replace('class="c"','class="c n"')+'>'+fmt(e.amount)+'</div><div'+at+'><span>'+(esc(e.desc||"")||"—")+'</span></div>'}
   var body="";for(var q=0;q<nr;q++)body+='<div class="sr">'+kCell(ED[q])+kCell(EC[q])+'</div>';
   var rows='<div class="kbk"><div class="top"><span>اليوم / التاريخ</span><span class="dt">'+fdate(pd)+'</span></div>'+
     '<div class="sh"><div class="in">المبلغ</div><div class="in">الداخل</div><div class="out">المبلغ</div><div class="out">الخارج</div></div>'+body+
