@@ -4810,6 +4810,7 @@ async function boot(){
   }
   sub("kpages","kp");sub("kentries","ke");
   (function(){var kc={};db.doc("ksettings/main").onSnapshot(async function(snap){var o=null;if(snap.exists){try{o=await readDoc("ksettings/main",snap.data(),kc)}catch(e){o=null}}S.kcap=o||{};refresh()},function(){})})();
+  (function(){var kc={};db.doc("ksettings/books").onSnapshot(async function(snap){var o=null;if(snap.exists){try{o=await readDoc("ksettings/books",snap.data(),kc)}catch(e){o=null}}S.kbooks=(o&&o.list)||[];refresh()},function(){})})();
   db.doc("settings/brand").onSnapshot(function(snap){
     S.brand=snap.exists?snap.data():null;S.brandLoaded=true;lsSet("hb_name",S.brand&&S.brand.name);
     if(mem&&S.brand&&S.brand.name&&mem.shop!==S.brand.name){mem.shop=S.brand.name;memRef.update({shop:S.brand.name}).catch(function(){})}lsSet("hb_logo",S.brand&&S.brand.logo);applyBrand();refresh();
@@ -4836,7 +4837,7 @@ async function boot(){
    - كل صفحة جديدة بيترحّل فيها باقي الصفحة اللي قبلها كأول بند (carry:true)،
      ولو اتعدّل حاجة في الصفحة القديمة الرقم المرحّل بيتعدّل لوحده. الصفحات القديمة بتفضل موجودة
    ===================================================================== */
-S.kp=[];S.ke=[];S.kcur=null;
+S.kp=[];S.ke=[];S.kcur=null;S.kbooks=[];S.kbook=lsGet("k_book")||"";
 allLoaded=function(){return !!(S.loaded.kp&&S.loaded.ke)};
 bkBoot=function(){};cloudBackup=async function(){};ivwSync=function(){};needOnboard=function(){return false};
 renderNav=function(){var n=$("#nav");if(n){n.innerHTML="";n.className=""}};
@@ -4856,8 +4857,8 @@ var kLoadT=null;
 /* الدخول التجريبي: كشكول فاضي في الذاكرة بس، مفيش حاجة بتتحفظ */
 startDemo=function(){
   DEMO=true;S.auth="in";S.err=null;S.noDb=false;S.brand={name:"تجربة"};S.brandLoaded=true;
-  S.kp=[];S.ke=[];S.kcap={};S.loaded.kp=true;S.loaded.ke=true;
-  db={doc:function(path){var a=path.split("/"),key=a[0]==="kpages"?"kp":"ke";if(a[0]==="ksettings")return {set:async function(d){S.kcap=d;setTimeout(refresh,5)}};return {
+  S.kp=[];S.ke=[];S.kcap={};S.kbooks=[];S.kbook="";S.loaded.kp=true;S.loaded.ke=true;
+  db={doc:function(path){var a=path.split("/"),key=a[0]==="kpages"?"kp":"ke";if(a[0]==="ksettings")return {set:async function(d){if(a[1]==="books")S.kbooks=d.list||[];else S.kcap=d;setTimeout(refresh,5)}};return {
     set:async function(d){var arr=S[key],i=arr.findIndex(function(x){return x.id===a[1]});var o=Object.assign({id:a[1]},d);if(i>=0)arr[i]=o;else arr.push(o);setTimeout(refresh,5)},
     delete:async function(){S[key]=S[key].filter(function(x){return x.id!==a[1]});setTimeout(refresh,5)}}},
     collection:function(){return {get:async function(){return {docs:[]}}}}};
@@ -4916,10 +4917,15 @@ refresh=function(){try{encMigrate()}catch(e){}try{rcBoot()}catch(e){}render();if
 '.kpl .it{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer}.kpl .it.on{color:var(--primary)}';
 document.head.appendChild(st)})();
 
-function kPagesSorted(){return S.kp.slice().sort(function(a,b){return (+a.no||0)-(+b.no||0)||(a.at||0)-(b.at||0)})}
+/* كشكول لكل مستثمر: كل صفحة عليها book (فاضي = كشكولي أنا)، والمستثمرين متسجلين في ksettings/books */
+function kBook(){var b=S.kbook||"";if(b&&!S.kbooks.some(function(x){return x.id===b}))b="";return b}
+function kBookObj(){var b=kBook();return b?S.kbooks.find(function(x){return x.id===b}):null}
+function kSetBook(b){S.kbook=b||"";S.kcur=null;lsSet("k_book",S.kbook||null);render();window.scrollTo(0,0)}
+async function kSaveBooks(list){var p="ksettings/books";try{await db.doc(p).set(await toStore(p,{list:list,at:Date.now()}));S.kbooks=list;return true}catch(e){if(!e||e.code!=="expired")toast("تعذر الحفظ، جرّب تاني");return false}}
+function kPagesSorted(book){var b=book===undefined?kBook():book;return S.kp.filter(function(p){return (p.book||"")===b}).sort(function(a,b){return (+a.no||0)-(+b.no||0)||(a.at||0)-(b.at||0)})}
 function kCurPage(){var P=kPagesSorted();if(!P.length)return null;var c=P.find(function(p){return p.id===S.kcur});return c||P[P.length-1]}
 function kEntries(pid){return S.ke.filter(function(e){return e.page===pid}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")||(a.at||0)-(b.at||0)})}
-function kCarry(pid,depth){var P=kPagesSorted(),i=P.findIndex(function(p){return p.id===pid});if(i<=0||!P[i].carry||(depth||0)>400)return 0;return kTot(P[i-1].id,(depth||0)+1).r}
+function kCarry(pid,depth){var pg=S.kp.find(function(p){return p.id===pid});if(!pg)return 0;var P=kPagesSorted(pg.book||""),i=P.findIndex(function(p){return p.id===pid});if(i<=0||!P[i].carry||(depth||0)>400)return 0;return kTot(P[i-1].id,(depth||0)+1).r}
 function kTot(pid,depth){var d=0,c=0,cr=kCarry(pid,depth);if(cr>0)d+=cr;else c+=-cr;kEntries(pid).forEach(function(e){if(e.side==="d")d+=+e.amount||0;else c+=+e.amount||0});return {d:d,c:c,r:d-c,carry:cr}}
 function kRid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 async function kPut(coll,id,data){var p=coll+"/"+id;try{await db.doc(p).set(await toStore(p,data));return true}catch(e){if(!e||e.code!=="expired")toast("تعذر الحفظ، جرّب تاني");return false}}
@@ -4928,13 +4934,19 @@ async function kDel(coll,id){try{await db.doc(coll+"/"+id).delete();return true}
 function kRender(){
   var app=$("#app");renderNav();
   var head='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div style="flex:1"><h1>📒 الكشكول</h1><div class="sub">'+esc(brandName())+' · '+fdate(todayStr())+'</div></div><button class="btn sec small" data-k="logout">🚪 خروج</button></div>';
-  var KC=S.kcap||{},kcp=+KC.capital||0,kcf=+KC.custody||0;
-  head+='<div class="card" data-k="cap" style="cursor:pointer;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>🏦 أصل رأس المال</b><span class="sub">اضغط للتعديل ✏️</span></div>'+
+  var BO=kBookObj(),KC=BO||S.kcap||{},kcp=+KC.capital||0,kcf=+KC.custody||0;
+  var tabs='<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;-webkit-overflow-scrolling:touch">'+
+    [{id:"",name:"كشكولي"}].concat(S.kbooks).map(function(b){var on=(b.id||"")===kBook();
+      return '<button data-k="kbsel" data-id="'+esc(b.id||"")+'" style="flex:none;border:1px solid '+(on?"var(--primary)":"var(--line)")+';background:'+(on?"var(--primary)":"var(--card)")+';color:'+(on?"#0a0804":"var(--text)")+';border-radius:99px;padding:8px 14px;font-weight:800;font-size:14px;font-family:inherit;cursor:pointer">'+(b.id?"👤 ":"📒 ")+esc(b.name)+'</button>'}).join("")+
+    '<button data-k="kbadd" style="flex:none;border:1px dashed var(--primary);background:none;color:var(--primary);border-radius:99px;padding:8px 14px;font-weight:800;font-size:14px;font-family:inherit;cursor:pointer">➕ مستثمر</button></div>';
+  head+=tabs;
+  if(BO)head+='<div class="card" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:10px 12px"><div style="flex:1"><b>👤 كشكول '+esc(BO.name)+'</b><div class="sub">كشكول منفصل للمستثمر، مالوش دعوة بكشكولك</div></div><button class="btn sec small" data-k="kbedit">✏️ تعديل</button></div>';
+  head+='<div class="card" data-k="cap" style="cursor:pointer;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>🏦 '+(BO?"فلوس "+esc(BO.name):"أصل رأس المال")+'</b><span class="sub">اضغط للتعديل ✏️</span></div>'+
     (kcp||kcf?'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center"><div><div class="sub">رأس المال</div><b class="num" style="font-size:17px">'+fmt(kcp)+'</b></div><div><div class="sub">منه عهدة</div><b class="num" style="font-size:17px;color:var(--warn)">'+fmt(kcf)+'</b></div><div><div class="sub">الباقي للشغل</div><b class="num" style="font-size:17px;color:var(--primary)">'+fmt(kcp-kcf)+'</b></div></div>':'<div class="sub">لسه ماحددتش رأس المال والعهدة — اضغط هنا وحددهم</div>')+'</div>';
   if(DEMO)head='<div class="banner" style="margin-bottom:10px">👀 دي نسخة تجريبية: جرّب براحتك، مفيش حاجة هتتحفظ. <button class="btn small" data-k="demoexit">خروج من التجربة</button></div>'+head.replace('data-k="logout"','data-k="demoexit"');
   var P=kPagesSorted(),cur=kCurPage();
   if(!cur){
-    app.innerHTML=head+'<div class="card" style="text-align:center;padding:26px 16px"><div style="font-size:44px">📒</div><h2 style="margin:6px 0">كشكول جديد</h2><div class="sub" style="margin-bottom:16px">سجّل فيه الداخل (مدين) والخارج (دائن) زي الكشكول الورق بالظبط. كل صفحة ليها إجماليها لوحدها.</div><button class="btn" data-k="newpage">ابدأ أول صفحة</button></div>';
+    app.innerHTML=head+'<div class="card" style="text-align:center;padding:26px 16px"><div style="font-size:44px">📒</div><h2 style="margin:6px 0">كشكول جديد</h2><div class="sub" style="margin-bottom:16px">'+(BO?"ده كشكول <b>"+esc(BO.name)+"</b> لوحده. ":"")+'سجّل فيه الداخل (مدين) والخارج (دائن) زي الكشكول الورق بالظبط. كل صفحة ليها إجماليها لوحدها.</div><button class="btn" data-k="newpage">ابدأ أول صفحة</button></div>';
     return;
   }
   var i=P.indexOf(cur),T=kTot(cur.id),E=kEntries(cur.id),last=i===P.length-1;
@@ -4984,8 +4996,8 @@ async function kSave(){
   if(ok){closeSheet();toast(old?"اتعدّلت ✔":"اتسجّلت ✔")}
 }
 function kCapForm(){
-  var KC=S.kcap||{};modal={type:"kcap"};
-  openSheet(sheetHead("🏦 أصل رأس المال")+
+  var BO=kBookObj(),KC=BO||S.kcap||{};modal={type:"kcap"};
+  openSheet(sheetHead("🏦 "+(BO?"فلوس "+esc(BO.name):"أصل رأس المال"))+
     fld("رأس المال الأصلي",minp("kcapv",KC.capital||""))+
     fld("منه عهدة (مع الموظف)",minp("kcustv",KC.custody||""))+
     '<div class="sub" style="margin:-4px 2px 12px">الرقمين دول ثابتين ومش بيتأثروا بحركات الكشكول. بيتغيروا بس لما انت تعدّلهم من هنا (زيادة رأس مال، سحب، أو زيادة/رجوع عهدة).</div>'+
@@ -4995,12 +5007,14 @@ async function kCapSave(){
   var c=parseNum(val("kcapv")),f=parseNum(val("kcustv"));
   if(c<0||f<0)return toast("اكتب الأرقام صح");
   if(f>c)return toast("العهدة أكبر من رأس المال");
+  var BO=kBookObj();
+  if(BO){var L=S.kbooks.map(function(x){return x.id===BO.id?Object.assign({},x,{capital:c,custody:f}):x});if(await kSaveBooks(L)){closeSheet();toast("اتحفظ ✔");render()}return}
   var p="ksettings/main";try{await db.doc(p).set(await toStore(p,{capital:c,custody:f,at:Date.now()}));closeSheet();toast("اتحفظ ✔")}catch(e){if(!e||e.code!=="expired")toast("تعذر الحفظ، جرّب تاني")}
 }
 function kPages(){
   var P=kPagesSorted(),cur=kCurPage();
   modal={type:"kpages"};
-  openSheet(sheetHead("📚 صفحات الكشكول")+'<div class="kpl">'+P.slice().reverse().map(function(p){var T=kTot(p.id),n=kEntries(p.id).length;
+  openSheet(sheetHead("📚 صفحات "+(kBookObj()?"كشكول "+esc(kBookObj().name):"الكشكول"))+'<div class="kpl">'+P.slice().reverse().map(function(p){var T=kTot(p.id),n=kEntries(p.id).length;
     return '<div class="it'+(cur&&p.id===cur.id?" on":"")+'" data-k="open" data-id="'+esc(p.id)+'"><div style="flex:1"><b>صفحة '+fmt(p.no)+(p.title?' · '+esc(p.title):'')+'</b><div class="sub">'+fmt(n)+' حركة · بدأت '+fdate(p.date||"")+'</div></div><div style="text-align:left;font-size:13px"><div class="good num">'+fmt(T.d)+'</div><div class="bad num">'+fmt(T.c)+'</div></div><button class="del" data-k="pedit" data-id="'+esc(p.id)+'" aria-label="تعديل">✏️</button></div>'}).join("")+'</div>');
 }
 function kPageEdit(pid){
@@ -5013,9 +5027,34 @@ function kPageEdit(pid){
     '<button class="btn" data-k="psave">حفظ</button>'+
     '<button class="btn danger" style="margin-top:10px" data-k="pdel" data-id="'+esc(p.id)+'">🗑 حذف الصفحة وكل اللي فيها</button>');
 }
+function kBookForm(b){
+  modal={type:"kbook",id:b?b.id:null};
+  openSheet(sheetHead(b?"✏️ "+esc(b.name):"➕ مستثمر جديد")+
+    fld("اسم المستثمر",'<input name="kbname" autocomplete="off" placeholder="مثال: الحاج محمود" value="'+esc(b?b.name:"")+'">')+
+    (b?'':'<div class="sub" style="margin:-4px 2px 12px">هيتعمله كشكول لوحده بنفس شكل كشكولك: صفحات، داخل وخارج، والباقي بيترحّل من صفحة للتانية.</div>')+
+    '<button class="btn" data-k="kbsave">حفظ</button>'+
+    (b?'<button class="btn danger" style="margin-top:10px" data-k="kbdel">🗑 حذف المستثمر وكشكوله كله</button>':''));
+  setTimeout(function(){var a=$("#sheet [name='kbname']");if(a&&!b)a.focus()},60);
+}
+async function kBookSave(){
+  var n=val("kbname").trim();if(!n)return toast("اكتب اسم المستثمر");
+  var id=modal&&modal.id,L;
+  if(id)L=S.kbooks.map(function(x){return x.id===id?Object.assign({},x,{name:n}):x});
+  else{id="b"+kRid();L=S.kbooks.concat([{id:id,name:n,capital:0,custody:0,at:Date.now()}])}
+  if(await kSaveBooks(L)){closeSheet();toast("اتحفظ ✔");kSetBook(id)}
+}
+function kBookDel(){
+  var id=modal&&modal.id,b=S.kbooks.find(function(x){return x.id===id});if(!b)return;
+  var pg=S.kp.filter(function(p){return p.book===id}),ids={};pg.forEach(function(p){ids[p.id]=1});
+  var en=S.ke.filter(function(e){return ids[e.page]});
+  confirmBox("حذف <b>"+esc(b.name)+"</b> وكشكوله كله ("+fmt(pg.length)+" صفحة، "+fmt(en.length)+" حركة)؟ مش هينفع ترجع.",async function(){
+    for(var q=0;q<en.length;q++)await kDel("kentries",en[q].id);
+    for(var w=0;w<pg.length;w++)await kDel("kpages",pg[w].id);
+    if(await kSaveBooks(S.kbooks.filter(function(x){return x.id!==id}))){closeSheet();toast("اتحذف");kSetBook("")}});
+}
 function kNewPage(){
   var P=kPagesSorted(),no=P.length?Math.max.apply(null,P.map(function(p){return +p.no||0}))+1:1;
-  var go=async function(){var id=kRid();if(await kPut("kpages",id,{no:no,title:"",date:todayStr(),at:Date.now(),carry:P.length>0})){S.kcur=id;closeSheet();toast("صفحة "+fmt(no)+" ✔");render()}};
+  var go=async function(){var id=kRid();if(await kPut("kpages",id,{no:no,title:"",date:todayStr(),at:Date.now(),carry:P.length>0,book:kBook()})){S.kcur=id;closeSheet();toast("صفحة "+fmt(no)+" ✔");render()}};
   if(!P.length)return go();
   var last=P[P.length-1],R=kTot(last.id).r;
   confirmBox("هتبدأ <b>صفحة "+fmt(no)+"</b> جديدة.<br>باقي الصفحة اللي فاتت <b class='num'>"+(R<0?"−":"")+fmt(Math.abs(R))+"</b> هيترحّل كأول بند في "+(R<0?"الخارج":"الداخل")+".<br><span class='sub'>الصفحة القديمة هتفضل موجودة، ولو عدّلت فيها الرقم المرحّل بيتظبط لوحده.</span>",go);
@@ -5026,6 +5065,11 @@ document.addEventListener("click",async function(ev){
   if(k==="demoexit"){location.reload();return}
   if(k==="logout")confirmBox("تسجيل خروج من الكشكول؟",function(){lsSet("hb_name");lsSet("hb_logo");lsSet("hb_user");keyDel(S.user&&S.user.uid).then(function(){return FBA.auth().signOut()}).then(function(){location.reload()},function(){location.reload()})});
   else if(k==="cap")kCapForm();
+  else if(k==="kbsel")kSetBook(t.dataset.id);
+  else if(k==="kbadd")kBookForm(null);
+  else if(k==="kbedit"){var bo=kBookObj();if(bo)kBookForm(bo)}
+  else if(k==="kbsave")kBookSave();
+  else if(k==="kbdel")kBookDel();
   else if(k==="capsave")kCapSave();
   else if(k==="newpage")kNewPage();
   else if(k==="add")kForm(t.dataset.side);
@@ -5046,7 +5090,7 @@ document.addEventListener("click",async function(ev){
       for(var q=0;q<ents.length;q++)await kDel("kentries",ents[q].id);
       if(await kDel("kpages",pd)){if(S.kcur===pd)S.kcur=null;closeSheet();toast("اتحذفت الصفحة")}})}
 });
-document.addEventListener("keydown",function(ev){if(ev.key==="Enter"&&modal&&modal.type==="kform"&&ev.target&&ev.target.name!=="kdate"){ev.preventDefault();kSave()}});
+document.addEventListener("keydown",function(ev){if(ev.key==="Enter"&&modal&&modal.type==="kform"&&ev.target&&ev.target.name!=="kdate"){ev.preventDefault();kSave()}else if(ev.key==="Enter"&&modal&&modal.type==="kbook"){ev.preventDefault();kBookSave()}});
 
 boot();
 })();
