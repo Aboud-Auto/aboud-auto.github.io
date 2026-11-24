@@ -4979,7 +4979,8 @@ function kRender(){
     (cur.locked?'<div class="banner" style="margin-bottom:10px;cursor:pointer" data-k="golast">🔒 الصفحة دي اتقفلت لما اتنقلت لصفحة جديدة · للعرض بس<br><b>اضغط هنا عشان ترجع لآخر صفحة</b></div>':(last?'':'<div class="banner" style="margin-bottom:10px;cursor:pointer" data-k="golast">دي صفحة قديمة · اضغط هنا عشان ترجع لآخر صفحة</div>'))+
     rows+
     '<div class="sub" style="text-align:center;margin-top:8px">'+(cur.locked?"🔒 صفحة مقفولة — للعرض بس":"✏️ اضغط على أي بند عشان تعدّله أو تحذفه")+'</div>'+
-    '<div class="two" style="margin:10px 0 90px"><button class="btn sec" data-k="pages">📚 كل الصفحات</button><button class="btn sec" data-k="newpage">➕ صفحة جديدة</button></div>'+
+    '<div class="two" style="margin:10px 0 '+(last&&P.length>1?"10px":"90px")+'"><button class="btn sec" data-k="pages">📚 كل الصفحات</button><button class="btn sec" data-k="newpage">➕ صفحة جديدة</button></div>'+
+    (last&&P.length>1?'<button class="btn sec small" style="display:block;margin:0 auto 90px;color:var(--bad)" data-k="pdel" data-id="'+esc(cur.id)+'">🗑 مسح الصفحة دي (اتفتحت بالغلط)</button>':'')+
     (cur.locked?'':'<div class="kfab"><button class="in" data-k="add" data-side="d">＋ داخل</button><button class="out" data-k="add" data-side="c">－ خارج</button></div>');
 }
 
@@ -5064,6 +5065,17 @@ function kBookDel(){
     for(var w=0;w<pg.length;w++)await kDel("kpages",pg[w].id);
     if(await kSaveBooks(S.kbooks.filter(function(x){return x.id!==id}))){closeSheet();toast("اتحذف");kSetBook("")}});
 }
+/* مسح صفحة (مثلاً اتفتحت بالغلط): بتتمسح هي وبنودها، ولو كانت آخر صفحة والصفحة اللي قبلها اتقفلت بسببها بترجع مفتوحة */
+function kDelPage(pd){
+  var pg=S.kp.find(function(x){return x.id===pd});if(!pg)return;
+  var P=kPagesSorted(pg.book||""),i=P.indexOf(pg),prev=i>0?P[i-1]:null,isLast=i===P.length-1,ents=S.ke.filter(function(x){return x.page===pd});
+  var reopen=isLast&&prev&&prev.locked;
+  confirmBox("مسح <b>صفحة "+fmt(pg.no)+"</b> وكل اللي فيها ("+fmt(ents.length)+" بند)؟ مش هينفع ترجع."+(reopen?"<br>و<b>صفحة "+fmt(prev.no)+"</b> هترجع مفتوحة تكمّل فيها عادي.":""),async function(){
+    await Promise.all(ents.map(function(e){return kDel("kentries",e.id)}));
+    if(!(await kDel("kpages",pd)))return;
+    if(reopen){var d=Object.assign({},prev);delete d.id;d.locked=false;delete d.lockedAt;await kPut("kpages",prev.id,d)}
+    if(S.kcur===pd)S.kcur=null;closeSheet();toast("اتمسحت الصفحة");render();window.scrollTo(0,0)});
+}
 /* تحويل صفحة قديمة (carry/copy) للطريقة الجديدة: بنود الصفحة اللي قبلها تتنسخ فيها بنود حقيقية، والقديمة تتقفل */
 async function kConvert(pg){
   var P=kPagesSorted(pg.book||""),i=P.findIndex(function(x){return x.id===pg.id}),prev=i>0?P[i-1]:null;if(!prev)return;
@@ -5124,10 +5136,7 @@ document.addEventListener("click",async function(ev){
   else if(k==="open"){if(ev.target.closest("[data-k='pedit']"))return;S.kcur=t.dataset.id;closeSheet();render();window.scrollTo(0,0)}
   else if(k==="pedit"){ev.stopPropagation();kPageEdit(t.dataset.id)}
   else if(k==="psave"){var pid=modal&&modal.id,p=S.kp.find(function(x){return x.id===pid});if(!p)return;var d=Object.assign({},p);delete d.id;d.title=val("ktitle").trim();d.date=val("kpdate")||d.date||todayStr();var md=$("#sheet [name='kpmode']");if(md){d.copy=md.value==="copy";d.carry=md.value==="carry"}if(await kPut("kpages",pid,d)){closeSheet();toast("اتحفظت ✔")}}
-  else if(k==="pdel"){var pd=t.dataset.id,pg=S.kp.find(function(x){return x.id===pd}),ents=S.ke.filter(function(x){return x.page===pd});
-    confirmBox("حذف <b>صفحة "+fmt(pg?pg.no:"")+"</b> وكل الحركات اللي فيها ("+fmt(ents.length)+")؟ مش هينفع ترجع.",async function(){
-      for(var q=0;q<ents.length;q++)await kDel("kentries",ents[q].id);
-      if(await kDel("kpages",pd)){if(S.kcur===pd)S.kcur=null;closeSheet();toast("اتحذفت الصفحة")}})}
+  else if(k==="pdel")kDelPage(t.dataset.id);
 });
 document.addEventListener("keydown",function(ev){if(ev.key==="Enter"&&modal&&modal.type==="kform"&&ev.target&&ev.target.name!=="kdate"){ev.preventDefault();kSave()}else if(ev.key==="Enter"&&modal&&modal.type==="kbook"){ev.preventDefault();kBookSave()}});
 
