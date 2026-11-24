@@ -4833,7 +4833,8 @@ async function boot(){
    الكشكول: مدين ودائن بس، منفصل عن حسابات البرنامج
    - مدين (يمين) = فلوس داخلة · دائن (شمال) = فلوس خارجة
    - إجماليات الصفحة في الشريط الأصفر فوق
-   - كل صفحة جديدة بتبدأ فاضية، والصفحات القديمة بتفضل موجودة
+   - كل صفحة جديدة بيترحّل فيها باقي الصفحة اللي قبلها كأول بند (carry:true)،
+     ولو اتعدّل حاجة في الصفحة القديمة الرقم المرحّل بيتعدّل لوحده. الصفحات القديمة بتفضل موجودة
    ===================================================================== */
 S.kp=[];S.ke=[];S.kcur=null;
 allLoaded=function(){return !!(S.loaded.kp&&S.loaded.ke)};
@@ -4918,7 +4919,8 @@ document.head.appendChild(st)})();
 function kPagesSorted(){return S.kp.slice().sort(function(a,b){return (+a.no||0)-(+b.no||0)||(a.at||0)-(b.at||0)})}
 function kCurPage(){var P=kPagesSorted();if(!P.length)return null;var c=P.find(function(p){return p.id===S.kcur});return c||P[P.length-1]}
 function kEntries(pid){return S.ke.filter(function(e){return e.page===pid}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")||(a.at||0)-(b.at||0)})}
-function kTot(pid){var d=0,c=0;kEntries(pid).forEach(function(e){if(e.side==="d")d+=+e.amount||0;else c+=+e.amount||0});return {d:d,c:c,r:d-c}}
+function kCarry(pid,depth){var P=kPagesSorted(),i=P.findIndex(function(p){return p.id===pid});if(i<=0||!P[i].carry||(depth||0)>400)return 0;return kTot(P[i-1].id,(depth||0)+1).r}
+function kTot(pid,depth){var d=0,c=0,cr=kCarry(pid,depth);if(cr>0)d+=cr;else c+=-cr;kEntries(pid).forEach(function(e){if(e.side==="d")d+=+e.amount||0;else c+=+e.amount||0});return {d:d,c:c,r:d-c,carry:cr}}
 function kRid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 async function kPut(coll,id,data){var p=coll+"/"+id;try{await db.doc(p).set(await toStore(p,data));return true}catch(e){if(!e||e.code!=="expired")toast("تعذر الحفظ، جرّب تاني");return false}}
 async function kDel(coll,id){try{await db.doc(coll+"/"+id).delete();return true}catch(e){if(!e||e.code!=="expired")toast("تعذر الحذف، جرّب تاني");return false}}
@@ -4936,9 +4938,13 @@ function kRender(){
     return;
   }
   var i=P.indexOf(cur),T=kTot(cur.id),E=kEntries(cur.id),last=i===P.length-1;
-  var pd=cur.date||"",ED=E.filter(function(e){return e.side==="d"}),EC=E.filter(function(e){return e.side!=="d"}),nr=Math.max(ED.length,EC.length,8);
-  function kCell(e){if(!e)return '<div></div><div></div>';var at=' class="c" data-k="edit" data-id="'+esc(e.id)+'"';
-    return '<div'+at.replace('class="c"','class="c n"')+'>'+fmt(e.amount)+'</div><div'+at+'><span>'+(esc(e.desc||"")||"—")+'</span></div>'}
+  var pd=cur.date||"",ED=E.filter(function(e){return e.side==="d"}),EC=E.filter(function(e){return e.side!=="d"});
+  if(T.carry){var pv=P[i-1],ce={carry:1,amount:Math.abs(T.carry),desc:"باقي صفحة "+fmt(pv&&pv.no||i)+" (مرحّل)"};if(T.carry>0)ED.unshift(ce);else EC.unshift(ce)}
+  var nr=Math.max(ED.length,EC.length,8);
+  function kCell(e){if(!e)return '<div></div><div></div>';
+    if(e.carry)return '<div class="c n" data-k="carryinfo" style="background:#efe5c4">'+fmt(e.amount)+'</div><div class="c" data-k="carryinfo" style="background:#efe5c4"><span><b>'+esc(e.desc)+'</b></span></div>';
+    var at=' class="c" data-k="edit" data-id="'+esc(e.id)+'"';
+    return '<div'+at.replace('class="c"','class="c n"')+'>'+fmt(e.amount)+'</div><div'+at+' style="justify-content:space-between;gap:4px"><span>'+(esc(e.desc||"")||"—")+'</span><span aria-label="تعديل" style="font-size:12px;opacity:.6;flex:none">✏️</span></div>'}
   var body="";for(var q=0;q<nr;q++)body+='<div class="sr">'+kCell(ED[q])+kCell(EC[q])+'</div>';
   var rows='<div class="kbk"><div class="top"><span>اليوم / التاريخ</span><span class="dt">'+fdate(pd)+'</span></div>'+
     '<div class="sh"><div class="in">المبلغ</div><div class="in">الداخل</div><div class="out">المبلغ</div><div class="out">الخارج</div></div>'+body+
@@ -4949,7 +4955,8 @@ function kRender(){
     '<div class="kpg"><button data-k="prev" '+(i>0?"":'style="opacity:.3"')+' aria-label="الصفحة اللي قبل">›</button><div class="t" data-k="pages" style="cursor:pointer">صفحة '+fmt(cur.no||i+1)+(cur.title?' · '+esc(cur.title):'')+' <span class="sub">('+fmt(i+1)+' من '+fmt(P.length)+')</span></div><button data-k="next" '+(last?'style="opacity:.3"':"")+' aria-label="الصفحة اللي بعد">‹</button></div>'+
     (last?'':'<div class="banner" style="margin-bottom:10px;cursor:pointer" data-k="golast">دي صفحة قديمة · اضغط هنا عشان ترجع لآخر صفحة</div>')+
     rows+
-    '<div class="two" style="margin:14px 0 90px"><button class="btn sec" data-k="pages">📚 كل الصفحات</button><button class="btn sec" data-k="newpage">➕ صفحة جديدة</button></div>'+
+    '<div class="sub" style="text-align:center;margin-top:8px">✏️ اضغط على أي بند عشان تعدّله أو تحذفه</div>'+
+    '<div class="two" style="margin:10px 0 90px"><button class="btn sec" data-k="pages">📚 كل الصفحات</button><button class="btn sec" data-k="newpage">➕ صفحة جديدة</button></div>'+
     '<div class="kfab"><button class="in" data-k="add" data-side="d">＋ داخل</button><button class="out" data-k="add" data-side="c">－ خارج</button></div>';
 }
 
@@ -4999,15 +5006,19 @@ function kPages(){
 function kPageEdit(pid){
   var p=S.kp.find(function(x){return x.id===pid});if(!p)return;
   modal={type:"kpedit",id:pid};
+  var first=kPagesSorted()[0]===p;
   openSheet(sheetHead("✏️ صفحة "+fmt(p.no))+fld("اسم للصفحة (اختياري)",'<input name="ktitle" autocomplete="off" placeholder="مثال: شهر 11" value="'+esc(p.title||"")+'">')+
+    fld("تاريخ الصفحة",dinp("kpdate",p.date||todayStr()))+
+    (first?'':'<label style="display:flex;gap:8px;align-items:center;margin:0 2px 12px;cursor:pointer"><input type="checkbox" name="kpcarry" '+(p.carry?"checked":"")+' style="width:20px;height:20px"> رحّل باقي الصفحة اللي قبلها لأول الصفحة دي</label>')+
     '<button class="btn" data-k="psave">حفظ</button>'+
     '<button class="btn danger" style="margin-top:10px" data-k="pdel" data-id="'+esc(p.id)+'">🗑 حذف الصفحة وكل اللي فيها</button>');
 }
 function kNewPage(){
   var P=kPagesSorted(),no=P.length?Math.max.apply(null,P.map(function(p){return +p.no||0}))+1:1;
-  var go=async function(){var id=kRid();if(await kPut("kpages",id,{no:no,title:"",date:todayStr(),at:Date.now()})){S.kcur=id;closeSheet();toast("صفحة "+fmt(no)+" ✔");render()}};
+  var go=async function(){var id=kRid();if(await kPut("kpages",id,{no:no,title:"",date:todayStr(),at:Date.now(),carry:P.length>0})){S.kcur=id;closeSheet();toast("صفحة "+fmt(no)+" ✔");render()}};
   if(!P.length)return go();
-  confirmBox("هتبدأ <b>صفحة "+fmt(no)+"</b> جديدة فاضية.<br><span class='sub'>الصفحة الحالية هتفضل موجودة وتقدر ترجعلها من «كل الصفحات».</span>",go);
+  var last=P[P.length-1],R=kTot(last.id).r;
+  confirmBox("هتبدأ <b>صفحة "+fmt(no)+"</b> جديدة.<br>باقي الصفحة اللي فاتت <b class='num'>"+(R<0?"−":"")+fmt(Math.abs(R))+"</b> هيترحّل كأول بند في "+(R<0?"الخارج":"الداخل")+".<br><span class='sub'>الصفحة القديمة هتفضل موجودة، ولو عدّلت فيها الرقم المرحّل بيتظبط لوحده.</span>",go);
 }
 document.addEventListener("click",async function(ev){
   var t=ev.target.closest("[data-k]");if(!t)return;
@@ -5021,6 +5032,7 @@ document.addEventListener("click",async function(ev){
   else if(k==="edit"){var e=S.ke.find(function(x){return x.id===t.dataset.id});if(e)kForm(e.side,e)}
   else if(k==="side"){var h=$("#sheet [name='kside']");if(h)h.value=t.dataset.side;document.querySelectorAll("#sheet [data-k='side']").forEach(function(b){b.classList.toggle("on",b===t)})}
   else if(k==="save")kSave();
+  else if(k==="carryinfo"){var pv=P[i-1];confirmBox("ده باقي <b>صفحة "+fmt(pv?pv.no:"")+"</b> مترحّل أوتوماتيك.<br><span class='sub'>عشان تغيّره عدّل البنود في الصفحة اللي قبلها، والرقم هنا هيتظبط لوحده. تروح لها؟</span>",function(){if(pv){S.kcur=pv.id;closeSheet();render();window.scrollTo(0,0)}})}
   else if(k==="del"){var id=t.dataset.id;confirmBox("حذف الحركة دي؟",async function(){if(await kDel("kentries",id)){closeSheet();toast("اتحذفت")}})}
   else if(k==="prev"){if(i>0){S.kcur=P[i-1].id;render();window.scrollTo(0,0)}}
   else if(k==="next"){if(i>=0&&i<P.length-1){S.kcur=P[i+1].id;render();window.scrollTo(0,0)}}
@@ -5028,7 +5040,7 @@ document.addEventListener("click",async function(ev){
   else if(k==="pages")kPages();
   else if(k==="open"){if(ev.target.closest("[data-k='pedit']"))return;S.kcur=t.dataset.id;closeSheet();render();window.scrollTo(0,0)}
   else if(k==="pedit"){ev.stopPropagation();kPageEdit(t.dataset.id)}
-  else if(k==="psave"){var pid=modal&&modal.id,p=S.kp.find(function(x){return x.id===pid});if(!p)return;var d=Object.assign({},p);delete d.id;d.title=val("ktitle").trim();if(await kPut("kpages",pid,d)){closeSheet();toast("اتحفظت ✔")}}
+  else if(k==="psave"){var pid=modal&&modal.id,p=S.kp.find(function(x){return x.id===pid});if(!p)return;var d=Object.assign({},p);delete d.id;d.title=val("ktitle").trim();d.date=val("kpdate")||d.date||todayStr();var cb=$("#sheet [name='kpcarry']");if(cb)d.carry=cb.checked;if(await kPut("kpages",pid,d)){closeSheet();toast("اتحفظت ✔")}}
   else if(k==="pdel"){var pd=t.dataset.id,pg=S.kp.find(function(x){return x.id===pd}),ents=S.ke.filter(function(x){return x.page===pd});
     confirmBox("حذف <b>صفحة "+fmt(pg?pg.no:"")+"</b> وكل الحركات اللي فيها ("+fmt(ents.length)+")؟ مش هينفع ترجع.",async function(){
       for(var q=0;q<ents.length;q++)await kDel("kentries",ents[q].id);
