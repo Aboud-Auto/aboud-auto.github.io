@@ -4924,7 +4924,7 @@ function kSetBook(b){S.kbook=b||"";S.kcur=null;lsSet("k_book",S.kbook||null);ren
 async function kSaveBooks(list){var p="ksettings/books";try{await db.doc(p).set(await toStore(p,{list:list,at:Date.now()}));S.kbooks=list;return true}catch(e){if(!e||e.code!=="expired")toast("تعذر الحفظ، جرّب تاني");return false}}
 function kPagesSorted(book){var b=book===undefined?kBook():book;return S.kp.filter(function(p){return (p.book||"")===b}).sort(function(a,b){return (+a.no||0)-(+b.no||0)||(a.at||0)-(b.at||0)})}
 function kCurPage(){var P=kPagesSorted();if(!P.length)return null;var c=P.find(function(p){return p.id===S.kcur});return c||P[P.length-1]}
-function kEntries(pid){return S.ke.filter(function(e){return e.page===pid}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")||(a.at||0)-(b.at||0)})}
+function kEntries(pid){return S.ke.filter(function(e){return e.page===pid}).sort(function(a,b){return ((b.copied?1:0)-(a.copied?1:0))||(a.copied&&b.copied?(a.at||0)-(b.at||0):0)||(a.date||"").localeCompare(b.date||"")||(a.at||0)-(b.at||0)})}
 /* بنود الصفحة زي ما بتتعرض: لو الصفحة copy = كل بنود الصفحة اللي قبلها (لايف، أي تعديل فيها بيبان هنا) وبعدها بنودها هي،
    لو carry = سطر بباقي الصفحة اللي قبلها وبعدها بنودها */
 function kPrev(pid){var pg=S.kp.find(function(p){return p.id===pid});if(!pg)return null;var P=kPagesSorted(pg.book||""),i=P.findIndex(function(p){return p.id===pid});return {pg:pg,prev:i>0?P[i-1]:null}}
@@ -4975,6 +4975,7 @@ function kRender(){
   app.innerHTML=head+
     '<div class="kbar"><div><div class="l">الداخل</div><div class="v num">'+fmt(T.d)+'</div></div><div><div class="l">الخارج</div><div class="v num">'+fmt(T.c)+'</div></div><div><div class="l">الباقي</div><div class="v num">'+(T.r<0?"−":"")+fmt(Math.abs(T.r))+'</div></div></div>'+
     '<div class="kpg"><button data-k="prev" '+(i>0?"":'style="opacity:.3"')+' aria-label="الصفحة اللي قبل">›</button><div class="t" data-k="pages" style="cursor:pointer">صفحة '+fmt(cur.no||i+1)+(cur.title?' · '+esc(cur.title):'')+' <span class="sub">('+fmt(i+1)+' من '+fmt(P.length)+')</span></div><button data-k="next" '+(last?'style="opacity:.3"':"")+' aria-label="الصفحة اللي بعد">‹</button></div>'+
+    (!cur.locked&&i>0&&(cur.copy||cur.carry)?'<div class="banner" style="margin-bottom:10px;cursor:pointer;border:1.5px solid var(--primary)" data-k="kconv">📋 الصفحة دي اتعملت بالطريقة القديمة ('+(cur.copy?"بنود مربوطة":"الباقي بس")+').<br><b>اضغط هنا عشان كل بنود صفحة '+fmt(P[i-1].no)+' تتنسخ فيها وصفحة '+fmt(P[i-1].no)+' تتقفل 🔒</b></div>':'')+
     (cur.locked?'<div class="banner" style="margin-bottom:10px;cursor:pointer" data-k="golast">🔒 الصفحة دي اتقفلت لما اتنقلت لصفحة جديدة · للعرض بس<br><b>اضغط هنا عشان ترجع لآخر صفحة</b></div>':(last?'':'<div class="banner" style="margin-bottom:10px;cursor:pointer" data-k="golast">دي صفحة قديمة · اضغط هنا عشان ترجع لآخر صفحة</div>'))+
     rows+
     '<div class="sub" style="text-align:center;margin-top:8px">'+(cur.locked?"🔒 صفحة مقفولة — للعرض بس":"✏️ اضغط على أي بند عشان تعدّله أو تحذفه")+'</div>'+
@@ -5002,7 +5003,7 @@ async function kSave(){
   var cur=kCurPage();if(!cur)return;
   var id=modal&&modal.id,old=id?S.ke.find(function(x){return x.id===id}):null;
   var tp=S.kp.find(function(x){return x.id===(old?old.page:cur.id)});if(tp&&tp.locked)return toast("الصفحة دي مقفولة 🔒");
-  var data={page:old?old.page:cur.id,side:side,amount:amt,desc:desc,date:date,at:old?(old.at||Date.now()):Date.now()};
+  var data={page:old?old.page:cur.id,side:side,amount:amt,desc:desc,date:date,at:old?(old.at||Date.now()):Date.now()};if(old&&old.copied)data.copied=1;
   kSave.busy=true;var ok=await kPut("kentries",id||kRid(),data);kSave.busy=false;
   if(ok){closeSheet();toast(old?"اتعدّلت ✔":"اتسجّلت ✔")}
 }
@@ -5063,6 +5064,17 @@ function kBookDel(){
     for(var w=0;w<pg.length;w++)await kDel("kpages",pg[w].id);
     if(await kSaveBooks(S.kbooks.filter(function(x){return x.id!==id}))){closeSheet();toast("اتحذف");kSetBook("")}});
 }
+/* تحويل صفحة قديمة (carry/copy) للطريقة الجديدة: بنود الصفحة اللي قبلها تتنسخ فيها بنود حقيقية، والقديمة تتقفل */
+async function kConvert(pg){
+  var P=kPagesSorted(pg.book||""),i=P.findIndex(function(x){return x.id===pg.id}),prev=i>0?P[i-1]:null;if(!prev)return;
+  if(prev.copy||prev.carry)if(P.indexOf(prev)>0)return toast("حوّل صفحة "+fmt(prev.no)+" الأول");
+  var R=kRows(prev.id),own=kEntries(pg.id),now=Date.now(),base=Math.min.apply(null,own.map(function(e){return e.at||now}).concat([now]))-100000;
+  var all=R.D.map(function(e){return [e,"d"]}).concat(R.C.map(function(e){return [e,"c"]}));
+  await Promise.all(all.map(function(x,q){var e=x[0];return kPut("kentries",kRid()+q,{page:pg.id,side:x[1],amount:+e.amount||0,desc:e.desc||"",date:"",at:base+q,copied:1})}));
+  var d=Object.assign({},pg);delete d.id;d.copy=false;d.carry=false;d.snap=true;await kPut("kpages",pg.id,d);
+  var dp=Object.assign({},prev);delete dp.id;dp.locked=true;dp.lockedAt=now;await kPut("kpages",prev.id,dp);
+  toast("اتنسخت ✔");render();
+}
 /* صفحة جديدة = نسخة حقيقية من كل بنود الصفحة اللي قبلها (بنود مستقلة، تعديلها مش بيلمس القديم)،
    والصفحة القديمة بتتقفل (locked) وتفضل موجودة للعرض بس */
 function kNewPage(){
@@ -5090,6 +5102,7 @@ document.addEventListener("click",async function(ev){
   if(k==="demoexit"){location.reload();return}
   if(k==="logout")confirmBox("تسجيل خروج من الكشكول؟",function(){lsSet("hb_name");lsSet("hb_logo");lsSet("hb_user");keyDel(S.user&&S.user.uid).then(function(){return FBA.auth().signOut()}).then(function(){location.reload()},function(){location.reload()})});
   else if(k==="cap")kCapForm();
+  else if(k==="kconv"){if(!cur||i<1)return;var pv0=P[i-1];confirmBox("كل بنود <b>صفحة "+fmt(pv0.no)+"</b> هتتنسخ في <b>صفحة "+fmt(cur.no)+"</b> فوق البنود اللي فيها، وسطر «الباقي المرحّل» هيتشال.<br>و<b>صفحة "+fmt(pv0.no)+"</b> هتتقفل 🔒 للعرض بس.",function(){closeSheet();kConvert(cur)})}
   else if(k==="kbsel")kSetBook(t.dataset.id);
   else if(k==="kbadd")kBookForm(null);
   else if(k==="kbedit"){var bo=kBookObj();if(bo)kBookForm(bo)}
