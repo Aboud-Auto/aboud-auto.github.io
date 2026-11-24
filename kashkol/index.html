@@ -4925,8 +4925,19 @@ async function kSaveBooks(list){var p="ksettings/books";try{await db.doc(p).set(
 function kPagesSorted(book){var b=book===undefined?kBook():book;return S.kp.filter(function(p){return (p.book||"")===b}).sort(function(a,b){return (+a.no||0)-(+b.no||0)||(a.at||0)-(b.at||0)})}
 function kCurPage(){var P=kPagesSorted();if(!P.length)return null;var c=P.find(function(p){return p.id===S.kcur});return c||P[P.length-1]}
 function kEntries(pid){return S.ke.filter(function(e){return e.page===pid}).sort(function(a,b){return (a.date||"").localeCompare(b.date||"")||(a.at||0)-(b.at||0)})}
-function kCarry(pid,depth){var pg=S.kp.find(function(p){return p.id===pid});if(!pg)return 0;var P=kPagesSorted(pg.book||""),i=P.findIndex(function(p){return p.id===pid});if(i<=0||!P[i].carry||(depth||0)>400)return 0;return kTot(P[i-1].id,(depth||0)+1).r}
-function kTot(pid,depth){var d=0,c=0,cr=kCarry(pid,depth);if(cr>0)d+=cr;else c+=-cr;kEntries(pid).forEach(function(e){if(e.side==="d")d+=+e.amount||0;else c+=+e.amount||0});return {d:d,c:c,r:d-c,carry:cr}}
+/* بنود الصفحة زي ما بتتعرض: لو الصفحة copy = كل بنود الصفحة اللي قبلها (لايف، أي تعديل فيها بيبان هنا) وبعدها بنودها هي،
+   لو carry = سطر بباقي الصفحة اللي قبلها وبعدها بنودها */
+function kPrev(pid){var pg=S.kp.find(function(p){return p.id===pid});if(!pg)return null;var P=kPagesSorted(pg.book||""),i=P.findIndex(function(p){return p.id===pid});return {pg:pg,prev:i>0?P[i-1]:null}}
+function kRows(pid,depth){
+  var o=kPrev(pid),D=[],C=[];if(!o)return {D:D,C:C};depth=depth||0;
+  if(o.prev&&depth<400){
+    if(o.pg.copy){var R=kRows(o.prev.id,depth+1);D=R.D.map(function(e){return Object.assign({inh:1},e)});C=R.C.map(function(e){return Object.assign({inh:1},e)})}
+    else if(o.pg.carry){var T=kTot(o.prev.id,depth+1),ce={carry:1,from:o.prev.id,amount:Math.abs(T.r),desc:"باقي صفحة "+fmt(o.prev.no||"")+" (مرحّل)"};if(T.r>0)D.push(ce);else if(T.r<0)C.push(ce)}
+  }
+  kEntries(pid).forEach(function(e){if(e.side==="d")D.push(e);else C.push(e)});
+  return {D:D,C:C};
+}
+function kTot(pid,depth){var R=kRows(pid,depth),d=0,c=0;R.D.forEach(function(e){d+=+e.amount||0});R.C.forEach(function(e){c+=+e.amount||0});return {d:d,c:c,r:d-c}}
 function kRid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 async function kPut(coll,id,data){var p=coll+"/"+id;try{await db.doc(p).set(await toStore(p,data));return true}catch(e){if(!e||e.code!=="expired")toast("تعذر الحفظ، جرّب تاني");return false}}
 async function kDel(coll,id){try{await db.doc(coll+"/"+id).delete();return true}catch(e){if(!e||e.code!=="expired")toast("تعذر الحذف، جرّب تاني");return false}}
@@ -4950,13 +4961,12 @@ function kRender(){
     return;
   }
   var i=P.indexOf(cur),T=kTot(cur.id),E=kEntries(cur.id),last=i===P.length-1;
-  var pd=cur.date||"",ED=E.filter(function(e){return e.side==="d"}),EC=E.filter(function(e){return e.side!=="d"});
-  if(T.carry){var pv=P[i-1],ce={carry:1,amount:Math.abs(T.carry),desc:"باقي صفحة "+fmt(pv&&pv.no||i)+" (مرحّل)"};if(T.carry>0)ED.unshift(ce);else EC.unshift(ce)}
+  var pd=cur.date||"",RR=kRows(cur.id),ED=RR.D,EC=RR.C;
   var nr=Math.max(ED.length,EC.length,8);
   function kCell(e){if(!e)return '<div></div><div></div>';
-    if(e.carry)return '<div class="c n" data-k="carryinfo" style="background:#efe5c4">'+fmt(e.amount)+'</div><div class="c" data-k="carryinfo" style="background:#efe5c4"><span><b>'+esc(e.desc)+'</b></span></div>';
-    var at=' class="c" data-k="edit" data-id="'+esc(e.id)+'"';
-    return '<div'+at.replace('class="c"','class="c n"')+'>'+fmt(e.amount)+'</div><div'+at+' style="justify-content:space-between;gap:4px"><span>'+(esc(e.desc||"")||"—")+'</span><span aria-label="تعديل" style="font-size:12px;opacity:.6;flex:none">✏️</span></div>'}
+    if(e.carry)return '<div class="c n" data-k="carryinfo" data-from="'+esc(e.from)+'" style="background:#efe5c4">'+fmt(e.amount)+'</div><div class="c" data-k="carryinfo" data-from="'+esc(e.from)+'" style="background:#efe5c4"><span><b>'+esc(e.desc)+'</b></span></div>';
+    var bg=e.inh?"background:#f1ead2;":"",at=' data-k="edit" data-id="'+esc(e.id)+'"';
+    return '<div class="c n"'+at+' style="'+bg+'">'+fmt(e.amount)+'</div><div class="c"'+at+' style="'+bg+'justify-content:space-between;gap:4px"><span>'+(esc(e.desc||"")||"—")+'</span><span aria-label="تعديل" style="font-size:12px;opacity:.6;flex:none">✏️</span></div>'}
   var body="";for(var q=0;q<nr;q++)body+='<div class="sr">'+kCell(ED[q])+kCell(EC[q])+'</div>';
   var rows='<div class="kbk"><div class="top"><span>اليوم / التاريخ</span><span class="dt">'+fdate(pd)+'</span></div>'+
     '<div class="sh"><div class="in">المبلغ</div><div class="in">الداخل</div><div class="out">المبلغ</div><div class="out">الخارج</div></div>'+body+
@@ -5023,7 +5033,7 @@ function kPageEdit(pid){
   var first=kPagesSorted()[0]===p;
   openSheet(sheetHead("✏️ صفحة "+fmt(p.no))+fld("اسم للصفحة (اختياري)",'<input name="ktitle" autocomplete="off" placeholder="مثال: شهر 11" value="'+esc(p.title||"")+'">')+
     fld("تاريخ الصفحة",dinp("kpdate",p.date||todayStr()))+
-    (first?'':'<label style="display:flex;gap:8px;align-items:center;margin:0 2px 12px;cursor:pointer"><input type="checkbox" name="kpcarry" '+(p.carry?"checked":"")+' style="width:20px;height:20px"> رحّل باقي الصفحة اللي قبلها لأول الصفحة دي</label>')+
+    (first?'':fld("الصفحة اللي قبلها",'<select name="kpmode"><option value="copy"'+(p.copy?" selected":"")+'>انسخ كل بنودها هنا وكمّل تحتها</option><option value="carry"'+(!p.copy&&p.carry?" selected":"")+'>رحّل الباقي بس في سطر واحد</option><option value="none"'+(!p.copy&&!p.carry?" selected":"")+'>صفحة فاضية (من غير حاجة من اللي قبلها)</option></select>'))+
     '<button class="btn" data-k="psave">حفظ</button>'+
     '<button class="btn danger" style="margin-top:10px" data-k="pdel" data-id="'+esc(p.id)+'">🗑 حذف الصفحة وكل اللي فيها</button>');
 }
@@ -5054,10 +5064,10 @@ function kBookDel(){
 }
 function kNewPage(){
   var P=kPagesSorted(),no=P.length?Math.max.apply(null,P.map(function(p){return +p.no||0}))+1:1;
-  var go=async function(){var id=kRid();if(await kPut("kpages",id,{no:no,title:"",date:todayStr(),at:Date.now(),carry:P.length>0,book:kBook()})){S.kcur=id;closeSheet();toast("صفحة "+fmt(no)+" ✔");render()}};
+  var go=async function(){var id=kRid();if(await kPut("kpages",id,{no:no,title:"",date:todayStr(),at:Date.now(),copy:P.length>0,carry:false,book:kBook()})){S.kcur=id;closeSheet();toast("صفحة "+fmt(no)+" ✔");render()}};
   if(!P.length)return go();
-  var last=P[P.length-1],R=kTot(last.id).r;
-  confirmBox("هتبدأ <b>صفحة "+fmt(no)+"</b> جديدة.<br>باقي الصفحة اللي فاتت <b class='num'>"+(R<0?"−":"")+fmt(Math.abs(R))+"</b> هيترحّل كأول بند في "+(R<0?"الخارج":"الداخل")+".<br><span class='sub'>الصفحة القديمة هتفضل موجودة، ولو عدّلت فيها الرقم المرحّل بيتظبط لوحده.</span>",go);
+  var last=P[P.length-1],T=kTot(last.id);
+  confirmBox("هتبدأ <b>صفحة "+fmt(no)+"</b> جديدة.<br>كل بنود <b>صفحة "+fmt(last.no)+"</b> هتتنسخ فيها، وتكمّل شغلك تحتها.<br><span class='sub'>البنود المنسوخة لو عدّلت أي واحد فيها بيتعدّل في الصفحتين. الصفحة القديمة هتفضل موجودة زي ما هي.</span>",go);
 }
 document.addEventListener("click",async function(ev){
   var t=ev.target.closest("[data-k]");if(!t)return;
@@ -5076,7 +5086,7 @@ document.addEventListener("click",async function(ev){
   else if(k==="edit"){var e=S.ke.find(function(x){return x.id===t.dataset.id});if(e)kForm(e.side,e)}
   else if(k==="side"){var h=$("#sheet [name='kside']");if(h)h.value=t.dataset.side;document.querySelectorAll("#sheet [data-k='side']").forEach(function(b){b.classList.toggle("on",b===t)})}
   else if(k==="save")kSave();
-  else if(k==="carryinfo"){var pv=P[i-1];confirmBox("ده باقي <b>صفحة "+fmt(pv?pv.no:"")+"</b> مترحّل أوتوماتيك.<br><span class='sub'>عشان تغيّره عدّل البنود في الصفحة اللي قبلها، والرقم هنا هيتظبط لوحده. تروح لها؟</span>",function(){if(pv){S.kcur=pv.id;closeSheet();render();window.scrollTo(0,0)}})}
+  else if(k==="carryinfo"){var pv=S.kp.find(function(x){return x.id===t.dataset.from});confirmBox("ده باقي <b>صفحة "+fmt(pv?pv.no:"")+"</b> مترحّل أوتوماتيك.<br><span class='sub'>عشان تغيّره عدّل البنود في الصفحة اللي قبلها، والرقم هنا هيتظبط لوحده. تروح لها؟</span>",function(){if(pv){S.kcur=pv.id;closeSheet();render();window.scrollTo(0,0)}})}
   else if(k==="del"){var id=t.dataset.id;confirmBox("حذف الحركة دي؟",async function(){if(await kDel("kentries",id)){closeSheet();toast("اتحذفت")}})}
   else if(k==="prev"){if(i>0){S.kcur=P[i-1].id;render();window.scrollTo(0,0)}}
   else if(k==="next"){if(i>=0&&i<P.length-1){S.kcur=P[i+1].id;render();window.scrollTo(0,0)}}
@@ -5084,7 +5094,7 @@ document.addEventListener("click",async function(ev){
   else if(k==="pages")kPages();
   else if(k==="open"){if(ev.target.closest("[data-k='pedit']"))return;S.kcur=t.dataset.id;closeSheet();render();window.scrollTo(0,0)}
   else if(k==="pedit"){ev.stopPropagation();kPageEdit(t.dataset.id)}
-  else if(k==="psave"){var pid=modal&&modal.id,p=S.kp.find(function(x){return x.id===pid});if(!p)return;var d=Object.assign({},p);delete d.id;d.title=val("ktitle").trim();d.date=val("kpdate")||d.date||todayStr();var cb=$("#sheet [name='kpcarry']");if(cb)d.carry=cb.checked;if(await kPut("kpages",pid,d)){closeSheet();toast("اتحفظت ✔")}}
+  else if(k==="psave"){var pid=modal&&modal.id,p=S.kp.find(function(x){return x.id===pid});if(!p)return;var d=Object.assign({},p);delete d.id;d.title=val("ktitle").trim();d.date=val("kpdate")||d.date||todayStr();var md=$("#sheet [name='kpmode']");if(md){d.copy=md.value==="copy";d.carry=md.value==="carry"}if(await kPut("kpages",pid,d)){closeSheet();toast("اتحفظت ✔")}}
   else if(k==="pdel"){var pd=t.dataset.id,pg=S.kp.find(function(x){return x.id===pd}),ents=S.ke.filter(function(x){return x.page===pd});
     confirmBox("حذف <b>صفحة "+fmt(pg?pg.no:"")+"</b> وكل الحركات اللي فيها ("+fmt(ents.length)+")؟ مش هينفع ترجع.",async function(){
       for(var q=0;q<ents.length;q++)await kDel("kentries",ents[q].id);
