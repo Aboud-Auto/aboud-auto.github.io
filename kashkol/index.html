@@ -431,7 +431,7 @@ function srcVal(){var v=val("src");return v==="insta"?"insta":v==="fund"?"fund":
    المفتاح نفسه محفوظ متشفر مرتين: مرة بالباسورد، ومرة بكود الاسترجاع اللي مع العميل.
    مفيش نسخة من المفتاح مقروءة على السيرفر، فصاحب البرنامج مايقدرش يقرا البيانات من لوحة Firebase. */
 var ENC={key:null,on:false,doc:null,uid:null};
-var ENC_COLLS={kpages:1,kentries:1,ksettings:1,cars:1,expenses:1,collections:1,capital:1,payouts:1,transfers:1,ledger:1,external:1,investors:1,invmoves:1};
+var ENC_COLLS={kpages:1,kcars:1,kentries:1,ksettings:1,cars:1,expenses:1,collections:1,capital:1,payouts:1,transfers:1,ledger:1,external:1,investors:1,invmoves:1};
 function encPath(p){var a=String(p).split("/");return !!((a.length===2&&ENC_COLLS[a[0]])||p==="settings/main"||p==="settings/safecount")}
 var PLAIN={},NEEDENC={},COMPACT={};
 /* كل تعديل بيتحفظ كحقل متشفر لوحده جوه المستند (_p…) من غير ما يعيد كتابة المستند كله،
@@ -4808,7 +4808,7 @@ async function boot(){
       S[key]=arr.filter(Boolean);S.loaded[key]=true;refresh();
     },function(err){S.err=err;refresh()});
   }
-  sub("kpages","kp");sub("kentries","ke");
+  sub("kpages","kp");sub("kentries","ke");sub("kcars","kc");
   (function(){var kc={};db.doc("ksettings/main").onSnapshot(async function(snap){var o=null;if(snap.exists){try{o=await readDoc("ksettings/main",snap.data(),kc)}catch(e){o=null}}S.kcap=o||{};refresh()},function(){})})();
   (function(){var kc={};db.doc("ksettings/books").onSnapshot(async function(snap){var o=null;if(snap.exists){try{o=await readDoc("ksettings/books",snap.data(),kc)}catch(e){o=null}}S.kbooks=(o&&o.list)||[];refresh()},function(){})})();
   db.doc("settings/brand").onSnapshot(function(snap){
@@ -4857,8 +4857,8 @@ var kLoadT=null;
 /* الدخول التجريبي: كشكول فاضي في الذاكرة بس، مفيش حاجة بتتحفظ */
 startDemo=function(){
   DEMO=true;S.auth="in";S.err=null;S.noDb=false;S.brand={name:"تجربة"};S.brandLoaded=true;
-  S.kp=[];S.ke=[];S.kcap={};S.kbooks=[];S.kbook="";S.loaded.kp=true;S.loaded.ke=true;
-  db={doc:function(path){var a=path.split("/"),key=a[0]==="kpages"?"kp":"ke";if(a[0]==="ksettings")return {set:async function(d){if(a[1]==="books")S.kbooks=d.list||[];else S.kcap=d;setTimeout(refresh,5)}};return {
+  S.kp=[];S.ke=[];S.kc=[];S.kcap={};S.kbooks=[];S.kbook="";S.loaded.kp=true;S.loaded.ke=true;
+  db={doc:function(path){var a=path.split("/"),key={kpages:"kp",kentries:"ke",kcars:"kc"}[a[0]]||"ke";if(a[0]==="ksettings")return {set:async function(d){if(a[1]==="books")S.kbooks=d.list||[];else S.kcap=d;setTimeout(refresh,5)}};return {
     set:async function(d){var arr=S[key],i=arr.findIndex(function(x){return x.id===a[1]});var o=Object.assign({id:a[1]},d);if(i>=0)arr[i]=o;else arr.push(o);setTimeout(refresh,5)},
     delete:async function(){S[key]=S[key].filter(function(x){return x.id!==a[1]});setTimeout(refresh,5)}}},
     collection:function(){return {get:async function(){return {docs:[]}}}}};
@@ -4877,7 +4877,7 @@ async function kFallback(){
   try{await one("kpages","kp");await one("kentries","ke");refresh()}
   catch(e){S.kdiag="مش قادر أوصل للكشكول ("+esc(String(e&&e.code||e&&e.message||e))+"). اتأكد من النت واقفل الصفحة وافتحها تاني.";render()}
 }
-refresh=function(){try{encMigrate()}catch(e){}try{rcBoot()}catch(e){}render();if(modal&&modal.type==="kpages")kPages()};
+refresh=function(){try{encMigrate()}catch(e){}try{rcBoot()}catch(e){}render();if(modal&&modal.type==="kpages")kPages();else if(modal&&modal.type==="kcview")kcView(modal.id)};
 (function(){var st=document.createElement("style");st.textContent=
 '.kbar{position:sticky;top:0;z-index:5;background:linear-gradient(135deg,#e9c75a,#b8902a);color:#0a0804;border-radius:16px;padding:10px 12px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.35)}'+
 '.kbar .l{font-size:12px;font-weight:700;opacity:.8}.kbar .v{font-size:18px;font-weight:800}'+
@@ -4943,6 +4943,7 @@ async function kPut(coll,id,data){var p=coll+"/"+id;try{await db.doc(p).set(awai
 async function kDel(coll,id){try{await db.doc(coll+"/"+id).delete();return true}catch(e){if(!e||e.code!=="expired")toast("تعذر الحذف، جرّب تاني");return false}}
 
 function kRender(){
+  if(S.kview==="cars")return kcRender();
   var app=$("#app");renderNav();
   var head='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div style="flex:1"><h1>📒 الكشكول</h1><div class="sub">'+esc(brandName())+' · '+fdate(todayStr())+'</div></div><button class="btn sec small" data-k="logout">🚪 خروج</button></div>';
   var BO=kBookObj(),KC=BO||S.kcap||{},kcp=+KC.capital||0,kcf=+KC.custody||0;
@@ -4951,6 +4952,7 @@ function kRender(){
       return '<button data-k="kbsel" data-id="'+esc(b.id||"")+'" style="flex:none;border:1px solid '+(on?"var(--primary)":"var(--line)")+';background:'+(on?"var(--primary)":"var(--card)")+';color:'+(on?"#0a0804":"var(--text)")+';border-radius:99px;padding:8px 14px;font-weight:800;font-size:14px;font-family:inherit;cursor:pointer">'+(b.id?"👤 ":"📒 ")+esc(b.name)+'</button>'}).join("")+
     '<button data-k="kbadd" style="flex:none;border:1px dashed var(--primary);background:none;color:var(--primary);border-radius:99px;padding:8px 14px;font-weight:800;font-size:14px;font-family:inherit;cursor:pointer">➕ مستثمر</button></div>';
   head+=tabs;
+  head+='<button class="kcbtn" data-k="kcars"><span class="ic">🚗</span><span><b>تقفيل سيارات</b><span class="sub">اشترينا بكام · مصاريف · بعنا بكام · الشركاء ← التقفيلة</span></span><span class="go">‹</span></button>';
   if(BO)head+='<div class="card" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:10px 12px"><div style="flex:1"><b>👤 كشكول '+esc(BO.name)+'</b><div class="sub">كشكول منفصل للمستثمر، مالوش دعوة بكشكولك</div></div><button class="btn sec small" data-k="kbedit">✏️ تعديل</button></div>';
   head+='<div class="card" data-k="cap" style="cursor:pointer;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>🏦 '+(BO?"فلوس "+esc(BO.name):"أصل رأس المال")+'</b><span class="sub">اضغط للتعديل ✏️</span></div>'+
     (kcp||kcf?'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center"><div><div class="sub">رأس المال</div><b class="num" style="font-size:17px">'+fmt(kcp)+'</b></div><div><div class="sub">منه عهدة</div><b class="num" style="font-size:17px;color:var(--warn)">'+fmt(kcf)+'</b></div><div><div class="sub">الباقي للشغل</div><b class="num" style="font-size:17px;color:var(--primary)">'+fmt(kcp-kcf)+'</b></div></div>':'<div class="sub">لسه ماحددتش رأس المال والعهدة — اضغط هنا وحددهم</div>')+'</div>';
@@ -5108,6 +5110,156 @@ function kNewPage(){
   var T=kTot(last.id),n=kRows(last.id);n=n.D.length+n.C.length;
   confirmBox("هتبدأ <b>صفحة "+fmt(no)+"</b> جديدة.<br>كل بنود <b>صفحة "+fmt(last.no)+"</b> ("+fmt(n)+" بند) هتتنسخ فيها، وتكمّل شغلك تحتها وتعدّل فيها براحتك.<br>و<b>صفحة "+fmt(last.no)+"</b> هتتقفل 🔒 — تقدر تفتحها وتتفرج عليها بس، مش هتتعدّل.",go);
 }
+/* =====================================================================
+   🚗 تقفيل سيارات: كل عربية لوحدها — اشترينا بكام، مصاريفها، بعنا بكام، والشركاء بنسبهم
+   - المصاريف بيدفعها صاحب المعرض وبتتخصم من الربح قبل التقسيم، وبترجعله في التقفيلة
+   - كل شريك: نسبة من الربح (أو الخسارة) + اللي دفعه في الشراء (اختياري) = يرجعله كام
+   - منفصلة تمامًا عن صفحات الكشكول، ومحفوظة في kcars (متشفرة زي باقي الكشكول)
+   ===================================================================== */
+S.kc=S.kc||[];S.kview="";S.kcf="all";
+(function(){var st=document.createElement("style");st.textContent=
+'.kcbtn{display:flex;align-items:center;gap:12px;width:100%;border:1.5px solid var(--primary);background:var(--soft);color:var(--text);border-radius:16px;padding:12px 14px;margin-bottom:10px;cursor:pointer;font-family:inherit;text-align:right}'+
+'.kcbtn .ic{font-size:30px;line-height:1}.kcbtn b{color:var(--primary);font-size:17px;display:block}.kcbtn .go{margin-inline-start:auto;color:var(--primary);font-size:22px;font-weight:800}'+
+'.kcx,.kcq{display:grid;gap:6px;margin-bottom:8px;align-items:center}.kcx{grid-template-columns:1.6fr 1fr 34px}.kcq{grid-template-columns:1.3fr .65fr 1fr 34px}'+
+'.kcx input,.kcq input{width:100%;min-width:0;border:1px solid var(--line);border-radius:12px;padding:11px 9px;background:var(--card)}'+
+'.kcsec{display:flex;justify-content:space-between;align-items:center;margin:14px 2px 8px;font-weight:800}'+
+'.kccard .nm{font-weight:800;font-size:16px}.kccard .ln{color:var(--muted);font-size:13px;margin-top:4px}'+
+'.kcfab{position:fixed;left:0;right:0;bottom:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,var(--bg) 35%);max-width:640px;margin:0 auto;z-index:6}'+
+'.kcfab button{width:100%;border:0;border-radius:14px;padding:14px;font-weight:800;font-size:17px;cursor:pointer;background:var(--primary);color:var(--primary-ink);font-family:inherit}'+
+'.kcres{border:1.5px solid var(--primary);border-radius:14px;padding:4px 12px;margin-top:10px}.kcres .kv .sub{font-size:12px}';
+document.head.appendChild(st)})();
+
+function kcP(n){return (Math.round((+n||0)*100)/100)+"%"}
+function kcPh(n){return '<bdi dir="ltr">'+kcP(n)+'</bdi>'}
+function kcCalc(c){
+  var buy=+c.buy||0,sell=+c.sell||0,exps=c.exps||[],parts=c.parts||[],exp=0,pp=0,paid=0;
+  exps.forEach(function(e){exp+=+e.a||0});
+  parts.forEach(function(p){pp+=+p.p||0;paid+=+p.paid||0});
+  var sold=sell>0,cost=buy+exp,profit=sold?sell-cost:0;
+  var rows=parts.map(function(p){var r={n:p.n||"شريك",p:+p.p||0,paid:+p.paid||0};r.share=profit*r.p/100;r.due=r.paid+r.share;return r});
+  var me={n:"أنا",p:100-pp,paid:buy-paid,exp:exp};me.share=profit*me.p/100;me.due=me.paid+exp+me.share;
+  return {buy:buy,sell:sell,exp:exp,cost:cost,sold:sold,profit:profit,pp:pp,paid:paid,rows:rows,me:me};
+}
+function kcSorted(){return S.kc.slice().sort(function(a,b){var sa=+a.sell>0?1:0,sb=+b.sell>0?1:0;return (sa-sb)||((b.sellDate||b.buyDate||"").localeCompare(a.sellDate||a.buyDate||""))||((b.at||0)-(a.at||0))})}
+function kcMoney(n){return (n<0?"−":"")+fmt(Math.abs(n))}
+
+function kcRender(){
+  var app=$("#app");renderNav();
+  var all=kcSorted(),stock=0,sold=0,myP=0,totP=0;
+  all.forEach(function(c){var x=kcCalc(c);if(x.sold){sold++;myP+=x.me.share;totP+=x.profit}else stock++});
+  var L=all.filter(function(c){return S.kcf==="all"||(S.kcf==="sold"?+c.sell>0:!(+c.sell>0))});
+  var head='<div class="brand"><button class="btn sec small" data-k="kcback" style="flex:none">› الكشكول</button><div style="flex:1"><h1>🚗 تقفيل سيارات</h1><div class="sub">'+esc(brandName())+'</div></div></div>';
+  if(DEMO)head='<div class="banner" style="margin-bottom:10px">👀 دي نسخة تجريبية: مفيش حاجة هتتحفظ. <button class="btn small" data-k="demoexit">خروج من التجربة</button></div>'+head;
+  var bar='<div class="kbar"><div><div class="l">في المعرض</div><div class="v num">'+fmt(stock)+'</div></div><div><div class="l">اتباعت</div><div class="v num">'+fmt(sold)+'</div></div><div><div class="l">ربحي من المتباع</div><div class="v num">'+kcMoney(myP)+'</div></div></div>';
+  var chips='<div class="chips">'+[["all","الكل"],["stock","في المعرض"],["sold","اتباعت"]].map(function(f){return '<button class="chip'+(S.kcf===f[0]?" on":"")+'" data-k="kcf" data-f="'+f[0]+'">'+f[1]+'</button>'}).join("")+'</div>';
+  var list=L.length?L.map(function(c){var x=kcCalc(c);
+    var names=(c.parts||[]).map(function(p){return esc(p.n||"شريك")+" "+kcPh(p.p)}).join("، ");
+    return '<div class="card kccard" data-k="kcopen" data-id="'+esc(c.id)+'" style="cursor:pointer"><div class="row"><span class="nm">'+esc(c.name||"عربية")+'</span><span class="badge '+(x.sold?"b-paid":"b-stock")+'">'+(x.sold?"اتباعت":"في المعرض")+'</span></div>'+
+      '<div class="ln">شراء <b class="num">'+fmt(x.buy)+'</b> · مصاريف <b class="num">'+fmt(x.exp)+'</b>'+(x.sold?' · بيع <b class="num">'+fmt(x.sell)+'</b>':'')+'</div>'+
+      (names?'<div class="ln">🤝 '+names+'</div>':'')+
+      (x.sold?'<div class="row" style="margin-top:6px"><span class="sub">'+(x.profit<0?"الخسارة":"الربح")+' · نصيبي '+kcMoney(x.me.share)+'</span><b class="num '+(x.profit<0?"bad":"good")+'" style="font-size:18px">'+kcMoney(x.profit)+'</b></div>':'<div class="ln">التكلفة لحد دلوقتي <b class="num">'+fmt(x.cost)+'</b></div>')+
+      '</div>'}).join(""):'<div class="empty">'+(all.length?"مفيش عربيات هنا":"لسه مفيش عربيات · دوس «عربية جديدة» تحت وسجّل أول عربية")+'</div>';
+  var tot=sold?'<div class="sub" style="text-align:center;margin:4px 0 8px">إجمالي ربح العربيات المتباعة (بالشركاء): <b class="num">'+kcMoney(totP)+'</b></div>':'';
+  app.innerHTML=head+bar+tot+chips+list+'<div style="height:90px"></div><div class="kcfab"><button data-k="kcnew">＋ عربية جديدة</button></div>';
+}
+
+function kcExpRow(e){e=e||{};return '<div class="kcx"><input class="kced" autocomplete="off" placeholder="البيان (سمكرة، توكيل، عمولة…)" value="'+esc(e.d||"")+'"><input class="kcea" data-money="1" inputmode="numeric" autocomplete="off" placeholder="المبلغ" value="'+(e.a?esc(fmtIn(e.a)):"")+'"><button type="button" class="del" data-k="kcrm" aria-label="مسح">✕</button></div>'}
+function kcPartRow(p){p=p||{};return '<div class="kcq"><input class="kcpn" autocomplete="off" placeholder="اسم الشريك" value="'+esc(p.n||"")+'"><input class="kcpp" inputmode="decimal" autocomplete="off" placeholder="%" value="'+(p.p?esc(p.p):"")+'"><input class="kcpm" data-money="1" inputmode="numeric" autocomplete="off" placeholder="دفع كام (اختياري)" value="'+(p.paid?esc(fmtIn(p.paid)):"")+'"><button type="button" class="del" data-k="kcrm" aria-label="مسح">✕</button></div>'}
+function kcForm(c){
+  modal={type:"kcar",id:c?c.id:null};
+  openSheet(sheetHead(c?"✏️ "+esc(c.name||"عربية"):"🚗 عربية جديدة")+
+    fld("اسم العربية",'<input name="kcname" autocomplete="off" placeholder="مثال: كيا سيراتو 2020 أبيض" value="'+esc(c?c.name||"":"")+'">')+
+    '<div class="two">'+fld("اشترينا بكام",minp("kcbuy",c?c.buy:""))+fld("تاريخ الشراء",dinp("kcbd",c?c.buyDate:""))+'</div>'+
+    '<div class="two">'+fld("بعنا بكام",minp("kcsell",c&&+c.sell>0?c.sell:"","سيبه فاضي لو لسه"))+fld("تاريخ البيع",dinp("kcsd",c?c.sellDate:""))+'</div>'+
+    '<div class="kcsec"><span>🧾 المصاريف</span><button type="button" class="btn sec small" data-k="kcaddx">＋ مصروف</button></div>'+
+    '<div id="kcxs">'+((c&&c.exps&&c.exps.length?c.exps:[{}]).map(kcExpRow).join(""))+'</div>'+
+    '<div class="sub" style="margin:-2px 2px 6px">المصاريف عليّا وبتتخصم من الربح قبل ما يتقسم، وبترجعلي في التقفيلة.</div>'+
+    '<div class="kcsec"><span>🤝 الشركاء</span><button type="button" class="btn sec small" data-k="kcaddp">＋ شريك</button></div>'+
+    '<div id="kcps">'+((c&&c.parts||[]).map(kcPartRow).join(""))+'</div>'+
+    '<div class="sub" style="margin:-2px 2px 12px">اكتب نسبة كل شريك من الربح، والباقي ليك. «دفع كام» = اللي حطه في تمن العربية عشان يرجعله مع ربحه.</div>'+
+    fld("ملاحظات (اختياري)",'<input name="kcnote" autocomplete="off" value="'+esc(c?c.note||"":"")+'">')+
+    '<div class="preview" id="kcpv"></div>'+
+    '<button class="btn" data-k="kcsave">حفظ</button>');
+  if(!c||!(+c.sell>0)){var sd=$("#sheet [name='kcsd']");if(sd)sd.value=""}
+  kcPv();
+  setTimeout(function(){var a=$("#sheet [name='kcname']");if(a&&!c)a.focus()},60);
+}
+function kcRead(){
+  var exps=[],parts=[];
+  document.querySelectorAll("#kcxs .kcx").forEach(function(r){var d=r.querySelector(".kced").value.trim(),a=parseNum(r.querySelector(".kcea").value);if(a||d)exps.push({d:d,a:a})});
+  document.querySelectorAll("#kcps .kcq").forEach(function(r){var n=r.querySelector(".kcpn").value.trim(),p=parseNum(r.querySelector(".kcpp").value),m=parseNum(r.querySelector(".kcpm").value);if(n||p||m)parts.push({n:n,p:p,paid:m})});
+  var sell=parseNum(val("kcsell"));
+  return {name:val("kcname").trim(),buy:parseNum(val("kcbuy")),sell:sell>0?sell:0,buyDate:val("kcbd")||"",sellDate:sell>0?(val("kcsd")||todayStr()):"",exps:exps,parts:parts,note:val("kcnote").trim()};
+}
+function kcResHtml(x){
+  var h='<div class="kv"><span>اشترينا</span><b class="num">'+fmt(x.buy)+'</b></div><div class="kv"><span>المصاريف</span><b class="num">'+fmt(x.exp)+'</b></div><div class="kv"><span>التكلفة الكلية</span><b class="num">'+fmt(x.cost)+'</b></div>';
+  if(!x.sold)return h+'<div class="kv"><span>الحالة</span><b>لسه في المعرض</b></div>';
+  h+='<div class="kv"><span>بعنا</span><b class="num">'+fmt(x.sell)+'</b></div><div class="kv"><span>'+(x.profit<0?"الخسارة":"صافي الربح")+'</span><b class="num '+(x.profit<0?"bad":"good")+'">'+kcMoney(x.profit)+'</b></div>';
+  h+='<div class="kcres"><div class="kv"><span><b>التقفيلة</b></span><span class="sub">نسبة · ربح · يرجعله</span></div>';
+  h+='<div class="kv"><span>👑 أنا ('+kcPh(x.me.p)+')<div class="sub">دفعت '+fmt(x.me.paid)+(x.me.exp?' + مصاريف '+fmt(x.me.exp):'')+' · '+(x.me.share<0?"خسارة ":"ربح ")+kcMoney(x.me.share)+'</div></span><b class="num">'+kcMoney(x.me.due)+'</b></div>';
+  x.rows.forEach(function(r){h+='<div class="kv"><span>🤝 '+esc(r.n)+' ('+kcPh(r.p)+')<div class="sub">'+(r.paid?'دفع '+fmt(r.paid)+' · ':'')+(r.share<0?"خسارة ":"ربح ")+kcMoney(r.share)+'</div></span><b class="num">'+kcMoney(r.due)+'</b></div>'});
+  return h+'</div>';
+}
+function kcPv(){
+  var el=$("#kcpv");if(!el)return;var c=kcRead(),x=kcCalc(c),w="";
+  if(x.pp>100)w='<div class="bad" style="font-weight:700;margin-bottom:6px">⚠️ نسب الشركاء أكتر من 100%</div>';
+  else if(x.paid>x.buy&&x.buy>0)w='<div class="bad" style="font-weight:700;margin-bottom:6px">⚠️ اللي دفعه الشركاء أكتر من تمن الشراء</div>';
+  el.innerHTML=x.buy>0?w+kcResHtml(x):"";
+}
+async function kcSave(){
+  if(kcSave.busy)return;
+  var c=kcRead(),x=kcCalc(c);
+  if(!c.name)return toast("اكتب اسم العربية");
+  if(!(c.buy>0))return toast("اكتب سعر الشراء");
+  if(x.pp>100)return toast("نسب الشركاء أكتر من 100%");
+  if(x.paid>c.buy)return toast("اللي دفعه الشركاء أكتر من تمن الشراء");
+  if(c.parts.some(function(p){return !p.n}))return toast("اكتب اسم كل شريك");
+  if(c.exps.some(function(e){return !(e.a>0)}))return toast("اكتب مبلغ كل مصروف");
+  var id=modal&&modal.id,old=id?S.kc.find(function(q){return q.id===id}):null;
+  c.at=old?(old.at||Date.now()):Date.now();c.upd=Date.now();
+  kcSave.busy=true;var ok=await kPut("kcars",id||kRid(),c);kcSave.busy=false;
+  if(ok){closeSheet();toast(old?"اتعدّلت ✔":"اتسجّلت ✔");if(!old&&S.kcf==="sold"&&!c.sell)S.kcf="all";render()}
+}
+function kcView(id){
+  var c=S.kc.find(function(q){return q.id===id});if(!c){closeSheet();return}
+  var x=kcCalc(c);modal={type:"kcview",id:id};
+  var ex=(c.exps||[]).length?'<div class="sect">🧾 تفاصيل المصاريف</div><div class="pcard">'+c.exps.map(function(e){return '<div class="kv"><span>'+(esc(e.d)||"—")+'</span><b class="num">'+fmt(e.a)+'</b></div>'}).join("")+'</div>':'';
+  openSheet(sheetHead("🚗 "+esc(c.name||"عربية"))+
+    '<div class="sub" style="margin-bottom:6px">'+(c.buyDate?'اشتريناها '+fdate(c.buyDate):'')+(x.sold&&c.sellDate?' · اتباعت '+fdate(c.sellDate):'')+'</div>'+
+    '<div class="pcard">'+kcResHtml(x)+'</div>'+ex+
+    (c.note?'<div class="sub" style="margin-top:10px">📝 '+esc(c.note)+'</div>':'')+
+    '<div class="two" style="margin-top:14px"><button class="btn" data-k="kcedit" data-id="'+esc(id)+'">'+(x.sold?"✏️ تعديل":"💰 بيع / تعديل")+'</button><button class="btn sec" data-k="kcwa" data-id="'+esc(id)+'">📤 واتساب</button></div>'+
+    '<button class="btn danger" style="margin-top:10px" data-k="kcdel" data-id="'+esc(id)+'">🗑 حذف العربية</button>');
+}
+function kcText(c){
+  var x=kcCalc(c),L=["🚗 تقفيل: "+(c.name||"عربية")];
+  if(c.buyDate)L.push("تاريخ الشراء: "+c.buyDate.split("-").reverse().join("/"));
+  L.push("اشترينا: "+fmt(x.buy));
+  (c.exps||[]).forEach(function(e){L.push("  - "+(e.d||"مصروف")+": "+fmt(e.a))});
+  L.push("المصاريف: "+fmt(x.exp),"التكلفة الكلية: "+fmt(x.cost));
+  if(!x.sold){L.push("الحالة: لسه في المعرض");return L.join("\n")}
+  if(c.sellDate)L.push("تاريخ البيع: "+c.sellDate.split("-").reverse().join("/"));
+  L.push("بعنا: "+fmt(x.sell),(x.profit<0?"الخسارة: ":"صافي الربح: ")+kcMoney(x.profit),"— التقفيلة —");
+  L.push("أنا ("+kcP(x.me.p)+"): دفعت "+fmt(x.me.paid)+(x.me.exp?" + مصاريف "+fmt(x.me.exp):"")+" + "+(x.me.share<0?"خسارة ":"ربح ")+kcMoney(x.me.share)+" = "+kcMoney(x.me.due));
+  x.rows.forEach(function(r){L.push(r.n+" ("+kcP(r.p)+"): "+(r.paid?"دفع "+fmt(r.paid)+" + ":"")+(r.share<0?"خسارة ":"ربح ")+kcMoney(r.share)+" = "+kcMoney(r.due))});
+  return L.join("\n");
+}
+document.addEventListener("click",function(ev){
+  var t=ev.target.closest("[data-k]");if(!t)return;var k=t.dataset.k;if(k.indexOf("kc")!==0)return;
+  if(k==="kcars"){S.kview="cars";render();window.scrollTo(0,0)}
+  else if(k==="kcback"){S.kview="";render();window.scrollTo(0,0)}
+  else if(k==="kcf"){S.kcf=t.dataset.f;render()}
+  else if(k==="kcnew")kcForm(null);
+  else if(k==="kcopen")kcView(t.dataset.id);
+  else if(k==="kcedit"){var c=S.kc.find(function(q){return q.id===t.dataset.id});if(c)kcForm(c)}
+  else if(k==="kcaddx"){var bx=$("#kcxs");bx.insertAdjacentHTML("beforeend",kcExpRow());var ins=bx.querySelectorAll(".kced");ins[ins.length-1].focus()}
+  else if(k==="kcaddp"){var bp=$("#kcps");bp.insertAdjacentHTML("beforeend",kcPartRow());var inp=bp.querySelectorAll(".kcpn");inp[inp.length-1].focus()}
+  else if(k==="kcrm"){var r=t.closest(".kcx,.kcq");if(r)r.remove();kcPv()}
+  else if(k==="kcsave")kcSave();
+  else if(k==="kcwa"){var cw=S.kc.find(function(q){return q.id===t.dataset.id});if(cw)window.open("https://wa.me/?text="+encodeURIComponent(kcText(cw)),"_blank")}
+  else if(k==="kcdel"){var id=t.dataset.id,cd=S.kc.find(function(q){return q.id===id});confirmBox("حذف <b>"+esc(cd?cd.name:"العربية")+"</b> وتقفيلتها؟ مش هينفع ترجع.",async function(){if(await kDel("kcars",id)){closeSheet();toast("اتحذفت");render()}})}
+});
+document.addEventListener("input",function(){if(modal&&modal.type==="kcar")kcPv()});
 document.addEventListener("click",async function(ev){
   var t=ev.target.closest("[data-k]");if(!t)return;
   var k=t.dataset.k,P=kPagesSorted(),cur=kCurPage(),i=cur?P.indexOf(cur):-1;
