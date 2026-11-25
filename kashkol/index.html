@@ -1472,7 +1472,7 @@ function renderSet(){
 async function userEmail(u){if(u.indexOf("@")>=0)return u.trim().toLowerCase();var h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("hesabat-user|"+u.trim().toLowerCase()));return Array.from(new Uint8Array(h)).slice(0,16).map(function(b){return b.toString(16).padStart(2,"0")}).join("")+"@hesabat.app"}
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{if(v)localStorage.setItem(k,v);else localStorage.removeItem(k)}catch(e){}}
-function brandName(){return (S.brand&&S.brand.name)||lsGet("hb_name")||"حسابات المعرض"}
+function brandName(){return (S.brand&&S.brand.name)||lsGet("hb_name")||"الكشكول"}
 function brandLogo(){return (S.brand&&S.brand.logo)||lsGet("hb_logo")||"icon-180.png"}
 function applyBrand(){
   document.title=brandName();
@@ -1558,10 +1558,10 @@ function renderLogin(){
     '<div class="err" id="loginErr"></div><button class="btn" type="submit">دخول</button>'+
     '<button class="linkbtn" type="button" id="fpBtn">نسيت الباسورد؟</button>'+
     '<button class="btn sec" type="button" id="modeBtn" style="margin-top:10px">أول مرة؟ معاك كود دعوة؟ اعمل حسابك</button><div id="askInv"></div></form>'+
-    '<div class="demo-or"><span>أو</span></div><button class="btn sec" type="button" id="demoBtn">👀 جرّب البرنامج الأول من غير تسجيل</button><div class="sub" style="margin-top:8px">هتبدأ بحساب فاضي، حط رأس مالك وجرّب بنفسك، ومفيش حاجة هتتحفظ</div></div>';
+    '<div class="demo-or"><span>أو</span></div><button class="btn sec" type="button" id="demoBtn">👀 جرّب البرنامج الأول من غير تسجيل</button><div class="sub" style="margin-top:8px">هتبدأ بكشكول فاضي، سجّل الداخل والخارج وجرّب بنفسك، ومفيش حاجة هتتحفظ</div></div>';
   var signup=false;
   function lbl(){return signup?"إنشاء الحساب":"دخول"}
-  $("#modeBtn").onclick=function(){signup=!signup;$("#pw2").style.display=$("#mailF").style.display=$("#invF").style.display=signup?"block":"none";if(signup){checkInv();contactBtn($("#askInv"),"السلام عليكم، عايز كود دعوة لبرنامج حسابات المعرض")}else $("#askInv").innerHTML="";
+  $("#modeBtn").onclick=function(){signup=!signup;$("#pw2").style.display=$("#mailF").style.display=$("#invF").style.display=signup?"block":"none";if(signup){checkInv();contactBtn($("#askInv"),"السلام عليكم، عايز كود دعوة لبرنامج الكشكول")}else $("#askInv").innerHTML="";
     $("#loginForm button[type=submit]").textContent=lbl();
     $("#loginSub").textContent=signup?"التسجيل بكود دعوة بس. اكتب الكود اللي وصلك، واختار اسم مستخدم وباسورد تدخلوا بيهم انت واللي شغالين معاك":"ادخل باسم المستخدم والباسورد";
     $("#fpBtn").style.display=signup?"none":"block";
@@ -5162,7 +5162,7 @@ if("serviceWorker" in navigator){
 <script>
 /* زرار «نزّل البرنامج» — يظهر لما حد يفتح اللينك من المتصفح (مش من البرنامج المتنزّل) */
 (function(){
-  var APP="حسابات المعرض", KEY="instHideHes";
+  var APP="الكشكول", KEY="instHideHes";
   var dp=null, box=null, ua=navigator.userAgent||"";
   var isIOS=/iPhone|iPad|iPod/i.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
   var isAndroid=/Android/i.test(ua);

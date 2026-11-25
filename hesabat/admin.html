@@ -94,6 +94,7 @@ ol.steps{padding-inline-start:20px;margin:6px 0;font-size:14px}ol.steps li{margi
 var APP_URL="https://aboud-auto.github.io/hesabat/";
 var OHDA_URL="https://aboud-auto.github.io/ohda/";
 var TAWKIL_URL="https://aboud-auto.github.io/tawkil/";
+var KASHKOL_URL="https://aboud-auto.github.io/kashkol/";
 var $=function(s){return document.querySelector(s)};
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function toast(t){var el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(function(){el.classList.remove("show")},2600)}
@@ -105,7 +106,9 @@ function newCode(){var A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",r=new Uint8Array(8),
 function inviteLink(c){return APP_URL+"?inv="+c}
 function tawkilLink(c){return TAWKIL_URL+"?inv="+c}
 function tawkilPart(c){return "📄 ولينك برنامج التوكيلات (للي مسؤولين عن الورق والتوكيلات عندك، بحساب لوحده خالص منفصل عن الحسابات):\n"+tawkilLink(c)+"\nكود التوكيلات: "+c+"\nبيعملوا بيه اسم دخول وباسورد خاص بيهم، وكل توكيل يتسجل بصورته وصورة بطاقة اللي اتعمله ورقم تليفونه."}
-function anyMsg(iv){return iv.kind==="tawkil"?"أهلاً "+(iv.name||"")+" 👋\n"+tawkilPart(iv.code)+"\nالكود ده بيشتغل مرة واحدة.":inviteMsg(iv)}
+function kashkolLink(c){return KASHKOL_URL+"?inv="+c}
+function kashkolMsg(iv){return "أهلاً "+(iv.name||"")+" 👋\nده لينك برنامج الكشكول 📒 (مدين ودائن زي الكشكول الورق بالظبط):\n"+kashkolLink(iv.code)+"\n\nكود الدعوة: "+iv.code+(iv.serial?"\nرقم السيريال بتاعك: "+serialStr(iv.serial):"")+(iv.plan==="trial"?"\n🎁 أول شهر مجاني، جرّبه براحتك ولو عجبك كمّل":iv.plan?"\nالاشتراك: "+planName(iv.plan):"")+"\nافتح اللينك واعمل حسابك باسم مستخدم وباسورد، والجيميل عشان لو نسيت الباسورد.\nالكود ده ليك انت بس، وبيشتغل مرة واحدة."}
+function anyMsg(iv){return iv.app==="kashkol"?kashkolMsg(iv):iv.kind==="tawkil"?"أهلاً "+(iv.name||"")+" 👋\n"+tawkilPart(iv.code)+"\nالكود ده بيشتغل مرة واحدة.":inviteMsg(iv)}
 function inviteMsg(iv){return "أهلاً "+(iv.name||"")+" 👋\nده لينك برنامج حسابات المعرض، إهداء من عبود أوتو:\n"+inviteLink(iv.code)+"\n\nكود الدعوة: "+iv.code+(iv.serial?"\nرقم السيريال بتاعك: "+serialStr(iv.serial):"")+(iv.plan==="trial"?"\n🎁 أول شهر مجاني، جرّبه براحتك ولو عجبك كمّل":iv.plan?"\nالاشتراك: "+planName(iv.plan):"")+"\nالكود ده ليك انت بس، وبيشتغل مرة واحدة."+"\n\n🧾 ولينك برنامج العهدة (للموظف اللي بيصرف على العربيات):\n"+OHDA_URL+"\nبيدخل عليه بنفس اسم المستخدم والباسورد بتوع حسابك بعد ما تعمله."+(iv.tcode?"\n\n"+tawkilPart(iv.tcode):"")}
 async function copy(t){try{await navigator.clipboard.writeText(t);toast("اتنسخ ✔")}catch(e){prompt("انسخ من هنا:",t)}}
 function openSheet(h){$("#sheet").innerHTML=h;$("#ov").classList.add("show");$("#sheet").scrollTop=0}
@@ -330,7 +333,7 @@ function renderMembers(){
   });
   return h;
 }
-function kindTag(iv){return iv.kind==="tawkil"?'<span class="badge b-wait" style="margin-inline-start:6px">📄 توكيلات</span>':''}
+function kindTag(iv){return iv.kind==="tawkil"?'<span class="badge b-wait" style="margin-inline-start:6px">📄 توكيلات</span>':iv.app==="kashkol"?'<span class="badge b-wait" style="margin-inline-start:6px">📒 كشكول</span>':''}
 function invCard(iv){
   if(iv.used){return '<div class="card"><div class="ch"><div class="nm">'+esc(iv.name||"—")+kindTag(iv)+'</div><span class="badge b-on">اتستخدمت</span></div>'+kv("الكود",'<span class="code">'+esc(iv.code)+'</span>')+(iv.serial?kv("السيريال",'<span class="code" style="letter-spacing:1px">'+serialStr(iv.serial)+'</span>'):"")+kv("سجّل باسم",esc(iv.username||"—"))+kv("يوم",fdate(iv.usedAt))+'</div>'}
   return '<div class="card"><div class="ch"><div><div class="nm">'+esc(iv.name||"—")+kindTag(iv)+'</div>'+(iv.phone?'<div class="sub" dir="ltr" style="text-align:right">'+esc(iv.phone)+'</div>':'')+'</div><span class="badge b-wait">مستنية</span></div>'+
@@ -409,14 +412,14 @@ function planPick(sel){return '<div class="fld"><span>الاشتراك</span><di
 function openNewInvite(keep){
   var nm=keep&&$("#nName")?$("#nName").value:"",ph=keep&&$("#nPhone")?$("#nPhone").value:"";
   if(!keep){S.newPlan="trial";S.newKind="app"}
-  var tw=S.newKind==="tawkil";
+  var tw=S.newKind==="tawkil",kk=S.newKind==="kashkol";
   openSheet(head("دعوة جديدة")+
-    '<div class="fld"><span>الدعوة لإيه</span><div class="chips" style="margin:0"><button type="button" class="chip'+(tw?"":" on")+'" data-act="pickKind" data-id="app">🚗 حسابات المعارض</button><button type="button" class="chip'+(tw?" on":"")+'" data-act="pickKind" data-id="tawkil">📄 التوكيلات بس</button></div></div>'+
+    '<div class="fld"><span>الدعوة لإيه</span><div class="chips" style="margin:0"><button type="button" class="chip'+(tw||kk?"":" on")+'" data-act="pickKind" data-id="app">🚗 حسابات المعارض</button><button type="button" class="chip'+(kk?" on":"")+'" data-act="pickKind" data-id="kashkol">📒 الكشكول بس</button><button type="button" class="chip'+(tw?" on":"")+'" data-act="pickKind" data-id="tawkil">📄 التوكيلات بس</button></div></div>'+
     '<label class="fld"><span>'+(tw?"اسم المعرض / صاحبه":"اسم العميل")+'</span><input id="nName" placeholder="مثلاً: معرض النور - أحمد" value="'+esc(nm)+'"></label>'+
     '<label class="fld"><span>رقم الواتساب بتاعه (اختياري)</span><input id="nPhone" inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" value="'+esc(ph)+'"></label>'+
     (tw?'<div class="sub" style="margin:-4px 0 12px">برنامج التوكيلات حساب منفصل خالص: اللي يسجّل بالكود ده يعمل اسم دخول وباسورد خاص بيه، ومايشوفش أي حسابات. مثلاً تعمل واحدة لمعرضك انت وتديها للمسؤول عن الورق.</div>':
     '<div id="nPlan">'+planPick(S.newPlan)+'</div><div class="sub" style="margin:-4px 0 12px">المدة بتبدأ من يوم ما العميل يسجّل. الشهر المجاني بيقفل لوحده لو ماجددش، والبيانات بتفضل محفوظة. تقدر تغيّرها بعدين من «تجديد».</div>'+
-    '<label class="fld" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="nTw" checked style="width:20px;height:20px"><span style="margin:0">ابعت معاها كود برنامج التوكيلات</span></label>')+
+    (kk?'<div class="sub" style="margin:-4px 0 12px">دعوة الكشكول بس: العميل بياخد لينك الكشكول لوحده، من غير لينك حسابات المعارض ولا العهدة ولا التوكيلات.</div>':'<label class="fld" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="nTw" checked style="width:20px;height:20px"><span style="margin:0">ابعت معاها كود برنامج التوكيلات</span></label>'))+
     '<div class="err" id="nErr"></div><button class="btn" data-act="createInv">اعمل الدعوة</button>');
   setTimeout(function(){var i=$("#nName");if(i&&!keep)i.focus()},150);
 }
@@ -434,12 +437,14 @@ async function createInv(btn){
       '<button class="btn sec" style="margin-top:10px" data-act="copyMsg">📋 نسخ الرسالة</button>');
     return;
   }
+  var kk=S.newKind==="kashkol";
   var iv={code:newCode(),name:name,phone:phone,createdAt:Date.now(),used:false,plan:plan,days:PLANS[plan].days};
-  if($("#nTw")&&$("#nTw").checked)iv.tcode=newCode();
-  try{iv.serial=await withSerial(function(t,n){var d={name:iv.name,phone:iv.phone,createdAt:iv.createdAt,used:false,plan:plan,days:iv.days,serial:n};if(iv.tcode){d.tcode=iv.tcode;t.set(FS.doc("invites/"+iv.tcode),{name:iv.name,phone:iv.phone,createdAt:iv.createdAt,used:false,kind:"tawkil",for:iv.code})}t.set(FS.doc("invites/"+iv.code),d)})}
+  if(kk)iv.app="kashkol";
+  else if($("#nTw")&&$("#nTw").checked)iv.tcode=newCode();
+  try{iv.serial=await withSerial(function(t,n){var d={name:iv.name,phone:iv.phone,createdAt:iv.createdAt,used:false,plan:plan,days:iv.days,serial:n};if(iv.app)d.app=iv.app;if(iv.tcode){d.tcode=iv.tcode;t.set(FS.doc("invites/"+iv.tcode),{name:iv.name,phone:iv.phone,createdAt:iv.createdAt,used:false,kind:"tawkil",for:iv.code})}t.set(FS.doc("invites/"+iv.code),d)})}
   catch(e){btn.disabled=false;$("#nErr").textContent=/permission/.test(code(e))?"مش مسموح، اتأكد إن القواعد متركّبة وإنك داخل بحساب الأدمن":"تعذر الحفظ، جرّب تاني";return}
-  openSheet(head("الدعوة جاهزة ✔")+'<div class="card" style="text-align:center"><div class="sub">كود الدعوة لـ '+esc(name)+'</div><div class="code" style="font-size:30px;margin:6px 0">'+iv.code+'</div><div class="sub">السيريال: <span class="code" style="letter-spacing:1px">'+serialStr(iv.serial)+'</span> · '+planName(plan)+'</div><div class="sub" dir="ltr" style="overflow-wrap:anywhere;margin-top:6px">'+esc(inviteLink(iv.code))+'</div></div>'+
-    '<a class="btn" target="_blank" rel="noopener" href="'+esc(waHref(phone,inviteMsg(iv)))+'">💬 ابعتها على واتساب</a>'+
+  openSheet(head(kk?"دعوة الكشكول جاهزة ✔":"الدعوة جاهزة ✔")+'<div class="card" style="text-align:center"><div class="sub">كود الدعوة لـ '+esc(name)+'</div><div class="code" style="font-size:30px;margin:6px 0">'+iv.code+'</div><div class="sub">السيريال: <span class="code" style="letter-spacing:1px">'+serialStr(iv.serial)+'</span> · '+planName(plan)+'</div><div class="sub" dir="ltr" style="overflow-wrap:anywhere;margin-top:6px">'+esc(kk?kashkolLink(iv.code):inviteLink(iv.code))+'</div></div>'+
+    '<a class="btn" target="_blank" rel="noopener" href="'+esc(waHref(phone,anyMsg(iv)))+'">💬 ابعتها على واتساب</a>'+
     '<button class="btn sec" style="margin-top:10px" data-act="copyMsg" data-id="'+iv.code+'">📋 نسخ الرسالة</button>'+
     '<div class="sub" style="margin-top:12px">العميل يفتح اللينك ويعمل حسابه، والكود بيتقفل بعد أول استخدام.</div>');
   S.lastInv=iv;
