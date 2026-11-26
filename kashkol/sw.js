@@ -1,5 +1,5 @@
 // الكشكول (kashkol) — offline support for the app page only (not admin)
-var CACHE = "kashkol-v14";
+var CACHE = "kashkol-v15";
 var CORE = [
   "./",
   "./index.html",

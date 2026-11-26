@@ -5140,6 +5140,22 @@ function kcCalc(c){
   var me={n:"أنا",p:100-pp,paid:buy-paid,exp:exp};me.share=profit*me.p/100;me.due=me.paid+exp+me.share;
   return {buy:buy,sell:sell,exp:exp,cost:cost,sold:sold,profit:profit,pp:pp,paid:paid,rows:rows,me:me};
 }
+/* تاريخ يدوي: يكتب 3/7/2027 (يوم/شهر/سنة) — يقبل / . - ٫ ومسافة وأرقام عربي */
+function kcDIn(n,v){var t=v?String(v).split("-").reverse().map(function(x){return String(+x)}).join("/"):"";return '<input name="'+n+'" class="kcdt" inputmode="decimal" autocomplete="off" placeholder="مثال: 3/7/2027" value="'+esc(t)+'"><div class="sub kcdh" data-for="'+n+'"></div>'}
+function kcDParse(t){
+  t=String(t||"").replace(/[٠-٩]/g,function(d){return "٠١٢٣٤٥٦٧٨٩".indexOf(d)}).replace(/[۰-۹]/g,function(d){return "۰۱۲۳۴۵۶۷۸۹".indexOf(d)}).trim();
+  if(!t)return "";
+  var p=t.split(/[\/\.\-\s٫،,]+/).filter(Boolean);
+  if(p.length===1&&/^\d{8}$/.test(p[0]))p=[p[0].slice(0,2),p[0].slice(2,4),p[0].slice(4)];
+  if(p.length===2)p.push(String(new Date().getFullYear()));
+  if(p.length!==3||p.some(function(x){return !/^\d+$/.test(x)}))return null;
+  var d=+p[0],mo=+p[1],y=+p[2];if(p[2].length<=2)y+=2000;
+  var dt=new Date(y,mo-1,d);if(y<1990||y>2100||dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d)return null;
+  return y+"-"+String(mo).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+}
+var KC_MON=["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+function kcDHint(){document.querySelectorAll("#sheet .kcdh").forEach(function(h){var i=$("#sheet [name='"+h.dataset.for+"']"),r=kcDParse(i&&i.value);
+  if(r===""){h.textContent="";h.className="sub kcdh"}else if(r===null){h.textContent="⚠️ اكتبه كده: يوم/شهر/سنة";h.className="sub kcdh bad"}else{var q=r.split("-");h.textContent="✔ "+(+q[2])+" "+KC_MON[+q[1]-1]+" "+q[0];h.className="sub kcdh good"}})}
 function kcSorted(){return S.kc.slice().sort(function(a,b){var sa=+a.sell>0?1:0,sb=+b.sell>0?1:0;return (sa-sb)||((b.sellDate||b.buyDate||"").localeCompare(a.sellDate||a.buyDate||""))||((b.at||0)-(a.at||0))})}
 function kcMoney(n){return (n<0?"−":"")+fmt(Math.abs(n))}
 
@@ -5169,8 +5185,8 @@ function kcForm(c){
   modal={type:"kcar",id:c?c.id:null};
   openSheet(sheetHead(c?"✏️ "+esc(c.name||"عربية"):"🚗 عربية جديدة")+
     fld("اسم العربية",'<input name="kcname" autocomplete="off" placeholder="مثال: كيا سيراتو 2020 أبيض" value="'+esc(c?c.name||"":"")+'">')+
-    '<div class="two">'+fld("اشترينا بكام",minp("kcbuy",c?c.buy:""))+fld("تاريخ الشراء",dinp("kcbd",c?c.buyDate:""))+'</div>'+
-    '<div class="two">'+fld("بعنا بكام",minp("kcsell",c&&+c.sell>0?c.sell:"","سيبه فاضي لو لسه"))+fld("تاريخ البيع",dinp("kcsd",c?c.sellDate:""))+'</div>'+
+    '<div class="two">'+fld("اشترينا بكام",minp("kcbuy",c?c.buy:""))+fld("تاريخ الشراء",kcDIn("kcbd",c?c.buyDate:todayStr()))+'</div>'+
+    '<div class="two">'+fld("بعنا بكام",minp("kcsell",c&&+c.sell>0?c.sell:"","سيبه فاضي لو لسه"))+fld("تاريخ البيع",kcDIn("kcsd",c&&+c.sell>0?c.sellDate:""))+'</div>'+
     '<div class="kcsec"><span>🧾 المصاريف</span><button type="button" class="btn sec small" data-k="kcaddx">＋ مصروف</button></div>'+
     '<div id="kcxs">'+((c&&c.exps&&c.exps.length?c.exps:[{}]).map(kcExpRow).join(""))+'</div>'+
     '<div class="sub" style="margin:-2px 2px 6px">المصاريف عليّا وبتتخصم من الربح قبل ما يتقسم، وبترجعلي في التقفيلة.</div>'+
@@ -5180,8 +5196,7 @@ function kcForm(c){
     fld("ملاحظات (اختياري)",'<input name="kcnote" autocomplete="off" value="'+esc(c?c.note||"":"")+'">')+
     '<div class="preview" id="kcpv"></div>'+
     '<button class="btn" data-k="kcsave">حفظ</button>');
-  if(!c||!(+c.sell>0)){var sd=$("#sheet [name='kcsd']");if(sd)sd.value=""}
-  kcPv();
+  kcPv();kcDHint();
   setTimeout(function(){var a=$("#sheet [name='kcname']");if(a&&!c)a.focus()},60);
 }
 function kcRead(){
@@ -5189,7 +5204,8 @@ function kcRead(){
   document.querySelectorAll("#kcxs .kcx").forEach(function(r){var d=r.querySelector(".kced").value.trim(),a=parseNum(r.querySelector(".kcea").value);if(a||d)exps.push({d:d,a:a})});
   document.querySelectorAll("#kcps .kcq").forEach(function(r){var n=r.querySelector(".kcpn").value.trim(),p=parseNum(r.querySelector(".kcpp").value),m=parseNum(r.querySelector(".kcpm").value);if(n||p||m)parts.push({n:n,p:p,paid:m})});
   var sell=parseNum(val("kcsell"));
-  return {name:val("kcname").trim(),buy:parseNum(val("kcbuy")),sell:sell>0?sell:0,buyDate:val("kcbd")||"",sellDate:sell>0?(val("kcsd")||todayStr()):"",exps:exps,parts:parts,note:val("kcnote").trim()};
+  var bd=kcDParse(val("kcbd")),sd=kcDParse(val("kcsd"));
+  return {name:val("kcname").trim(),buy:parseNum(val("kcbuy")),sell:sell>0?sell:0,buyDate:bd||"",sellDate:sell>0?(sd||todayStr()):"",badB:bd===null,badS:sell>0&&sd===null,exps:exps,parts:parts,note:val("kcnote").trim()};
 }
 function kcResHtml(x){
   var h='<div class="kv"><span>اشترينا</span><b class="num">'+fmt(x.buy)+'</b></div><div class="kv"><span>المصاريف</span><b class="num">'+fmt(x.exp)+'</b></div><div class="kv"><span>التكلفة الكلية</span><b class="num">'+fmt(x.cost)+'</b></div>';
@@ -5215,6 +5231,9 @@ async function kcSave(){
   if(x.paid>c.buy)return toast("اللي دفعه الشركاء أكتر من تمن الشراء");
   if(c.parts.some(function(p){return !p.n}))return toast("اكتب اسم كل شريك");
   if(c.exps.some(function(e){return !(e.a>0)}))return toast("اكتب مبلغ كل مصروف");
+  if(c.badB)return toast("تاريخ الشراء مش مظبوط · اكتبه زي 3/7/2027");
+  if(c.badS)return toast("تاريخ البيع مش مظبوط · اكتبه زي 3/7/2027");
+  delete c.badB;delete c.badS;
   var id=modal&&modal.id,old=id?S.kc.find(function(q){return q.id===id}):null;
   c.at=old?(old.at||Date.now()):Date.now();c.upd=Date.now();
   kcSave.busy=true;var ok=await kPut("kcars",id||kRid(),c);kcSave.busy=false;
@@ -5259,7 +5278,7 @@ document.addEventListener("click",function(ev){
   else if(k==="kcwa"){var cw=S.kc.find(function(q){return q.id===t.dataset.id});if(cw)window.open("https://wa.me/?text="+encodeURIComponent(kcText(cw)),"_blank")}
   else if(k==="kcdel"){var id=t.dataset.id,cd=S.kc.find(function(q){return q.id===id});confirmBox("حذف <b>"+esc(cd?cd.name:"العربية")+"</b> وتقفيلتها؟ مش هينفع ترجع.",async function(){if(await kDel("kcars",id)){closeSheet();toast("اتحذفت");render()}})}
 });
-document.addEventListener("input",function(){if(modal&&modal.type==="kcar")kcPv()});
+document.addEventListener("input",function(){if(modal&&modal.type==="kcar"){kcPv();kcDHint()}});
 document.addEventListener("click",async function(ev){
   var t=ev.target.closest("[data-k]");if(!t)return;
   var k=t.dataset.k,P=kPagesSorted(),cur=kCurPage(),i=cur?P.indexOf(cur):-1;
