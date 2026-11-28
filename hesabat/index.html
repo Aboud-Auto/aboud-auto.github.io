@@ -1137,7 +1137,7 @@ function renderHome(){
   if(!S.settings){var fo=featOn("fund");h+='<div class="card"><div class="sect" style="margin-top:0">ابدأ من هنا 👋</div><div class="sub" style="margin-bottom:12px">حدّد رأس المال'+(fo?' والعهدة':'')+' الأول عشان الحسابات تظبط.</div><button class="btn" data-act="form" data-kind="settings">تحديد رأس المال'+(fo?' والعهدة':'')+'</button></div>'}
   h+=heroHtml(T);
   h+='<div class="qio"><button class="qin" data-act="qio" data-dir="in"><span class="ic">⬇️</span>داخل</button><button class="qout" data-act="qio" data-dir="out"><span class="ic">⬆️</span>خارج</button></div>';
-  if(!NF())h+='<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف</button>';
+  h+='<button class="btn" style="margin-bottom:12px" data-act="form" data-kind="expense">💸 تسجيل مصروف'+(NF()?' (من الخزنة)':'')+'</button>';
   h+='<div class="card row" data-act="tab" data-tab="day" style="cursor:pointer"><div><div class="tl">النهاردة</div><div style="font-weight:700">مصاريف '+m(D.expT)+' · تحصيل '+m(D.cashT+D.instaT)+'</div></div><span class="sub">تقفيل اليوم ‹</span></div>';
   h+='<div class="grid2">'+
     tapTile(tile("🚗 عربيات في المعرض",'<span class="num">'+T.stockN+'</span>',"تكلفتها "+m(T.stockCost)),"stock")+
@@ -2683,7 +2683,7 @@ function renderDetail(){
       h+='<div class="sect">🔖 العربون</div><div class="card"><div class="kv"><span>العربية محجوزة بعربون</span><b class="warn">'+m(c.dep)+'</b></div>'+(dn.length?'<div class="kv"><span>المشتري</span><b>'+esc(dn.join("، "))+'</b></div>':'')+'<div class="sub" style="margin:6px 0 10px">هيتخصم من سعر البيع لما تبيعها.</div><div class="two"><button class="btn sec" data-act="form" data-kind="dep" data-car="'+c.id+'">+ زيادة عربون</button><button class="btn danger" data-act="form" data-kind="depx" data-car="'+c.id+'">إلغاء العربون</button></div></div>';
     }else if(featOn("deposit"))h+='<button class="btn sec" style="margin-bottom:10px" data-act="form" data-kind="dep" data-car="'+c.id+'">🔖 تسجيل عربون على العربية</button>';
   }
-  h+='<div class="two" style="margin-bottom:10px">'+(NF()&&!c.sold?'<div class="sub" style="align-self:center;text-align:center">💸 مصاريف العربية دي بتتسجل من برنامج العهدة</div>':'<button class="btn sec" data-act="form" data-kind="expense" data-car="'+c.id+'">+ مصروف'+(NF()?' (من الخزنة)':'')+'</button>')+
+  h+='<div class="two" style="margin-bottom:10px">'+('<button class="btn sec" data-act="form" data-kind="expense" data-car="'+c.id+'">+ مصروف'+(NF()?' (من الخزنة)':'')+'</button>')+
      (c.sold?'<button class="btn sec" data-act="form" data-kind="collect" data-car="'+c.id+'">+ تحصيل</button>':'<button class="btn" data-act="form" data-kind="sell" data-car="'+c.id+'">بيع العربية</button>')+'</div>';
   if(!NF()&&rbTot(c)>0.5){var rbt=rbTot(c),rbp=rbPaid(c),rbl=rbLeft(c),rbs=rbList(c);
     h+='<div class="sect">💼 رد مصاريف العهدة من الخزنة</div><div class="card">'+

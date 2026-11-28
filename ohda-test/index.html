@@ -258,9 +258,9 @@ function toast(t){var el=$("#toast");el.textContent=t;el.classList.add("show");c
 
 /* ---------- state ---------- */
 var db=null,FS=null,FBA=null;
-var S={cars:[],expenses:[],cols:[],cap:[],pay:[],transfers:[],ledger:[],ext:[],inv:[],invmov:[],settings:null,loaded:{},tab:"home",filter:"stock",q:"",day:todayStr(),noDb:false,err:null,auth:"checking"};
+var S={ocars:[],oexp:[],omoves:[],ohmeta:null,cars:[],expenses:[],cols:[],cap:[],pay:[],transfers:[],ledger:[],ext:[],inv:[],invmov:[],settings:null,loaded:{},tab:"home",filter:"stock",q:"",day:todayStr(),noDb:false,err:null,auth:"checking"};
 var modal=null;
-function allLoaded(){var l=S.loaded;return l.cars&&l.expenses&&l.cols&&l.cap&&l.pay&&l.transfers&&l.ledger&&l.ext&&l.inv&&l.invmov&&l.settings}
+function allLoaded(){var l=S.loaded;if(APP_MODE==="ohda"&&!(l.ocars&&l.oexp&&l.omoves&&l.ohmeta))return false;return l.cars&&l.expenses&&l.cols&&l.cap&&l.pay&&l.transfers&&l.ledger&&l.ext&&l.inv&&l.invmov&&l.settings}
 
 /* ---------- calculations ---------- */
 function paidNow(c){var b=+c.buyPrice||0;return typeof c.buyPaid==="number"?Math.max(0,Math.min(c.buyPaid,b)):b}
@@ -407,7 +407,7 @@ function srcVal(){var v=val("src");return v==="insta"?"insta":v==="fund"?"fund":
    المفتاح نفسه محفوظ متشفر مرتين: مرة بالباسورد، ومرة بكود الاسترجاع اللي مع العميل.
    مفيش نسخة من المفتاح مقروءة على السيرفر، فصاحب البرنامج مايقدرش يقرا البيانات من لوحة Firebase. */
 var ENC={key:null,on:false,doc:null,uid:null};
-var ENC_COLLS={cars:1,expenses:1,collections:1,capital:1,payouts:1,transfers:1,ledger:1,external:1,investors:1,invmoves:1};
+var ENC_COLLS={ocars:1,oexp:1,omoves:1,cars:1,expenses:1,collections:1,capital:1,payouts:1,transfers:1,ledger:1,external:1,investors:1,invmoves:1};
 function encPath(p){var a=String(p).split("/");return !!((a.length===2&&ENC_COLLS[a[0]])||p==="settings/main"||p==="settings/safecount")}
 var PLAIN={},NEEDENC={},COMPACT={};
 /* كل تعديل بيتحفظ كحقل متشفر لوحده جوه المستند (_p…) من غير ما يعيد كتابة المستند كله،
@@ -1216,6 +1216,141 @@ function renderOhda(){
   h+='<button class="btn danger" style="margin:16px 0 24px" data-act="logout">'+(DEMO?"خروج من التجربة":"تسجيل خروج")+'</button>';
   return h;
 }
+/* ===== برنامج العهدة المستقل: الموظف هو اللي بيدخّل العربيات والمصاريف ويزوّد وينقّص العهدة، ومالوش علاقة بحسابات المعرض ===== */
+var OHF=null,OHMIG=false;
+function ohAmt(x){return +x.amount||0}
+function ohCalc(){
+  var inn=0,out=0,open={},sp=0;
+  S.omoves.forEach(function(x){if(x.kind==="out")out+=ohAmt(x);else inn+=ohAmt(x)});
+  S.ocars.forEach(function(c){if(!c.closed)open[c.id]=1});
+  S.oexp.forEach(function(e){if(e.other||open[e.carId])sp+=ohAmt(e)});
+  return {cust:inn-out,left:inn-out-sp,sp:sp};
+}
+function ohSort(a,b){return String(b.date||"").localeCompare(String(a.date||""))||(+b.createdAt||0)-(+a.createdAt||0)}
+function ohCarExp(id){return S.oexp.filter(function(e){return !e.other&&e.carId===id}).sort(ohSort)}
+function ohTot(l){return l.reduce(function(t,e){return t+ohAmt(e)},0)}
+function ohCar(id){for(var i=0;i<S.ocars.length;i++)if(S.ocars[i].id===id)return S.ocars[i];return null}
+function ohBtns(coll,id){return '<button class="del" data-act="oh_ed" data-coll="'+coll+'" data-id="'+esc(id)+'" aria-label="تعديل">✏️</button><button class="del" data-act="oh_del" data-coll="'+coll+'" data-id="'+esc(id)+'" aria-label="حذف">🗑</button>'}
+function ohExpItem(e){return '<div class="item"><div style="flex:1"><div class="t">'+esc(e.type||"مصروف")+(e.refCar?' · 🚗 '+esc(e.refCar):'')+'</div><div class="d">'+dline(fdate(e.date),esc(e.note||""))+'</div></div><span class="num" style="font-weight:700">'+fmt(e.amount)+'</span>'+ohBtns("oexp",e.id)+'</div>'}
+async function ohSet(p,o){await db.doc(p).set(await toStore(p,o))}
+/* أول مرة يتفتح بعد الفصل: اللي كان ظاهر في برنامج العهدة (العربيات اللي في المعرض ومصاريفها ورقم العهدة) بيتنقل زي ما هو، وبعد كده مفيش ربط */
+async function ohMigrate(){
+  if(OHMIG||DEMO||!S.ohmeta||S.ohmeta.mig||S.expired)return;OHMIG=true;
+  try{
+    var T=calc(),now=Date.now(),stock={};
+    var had=ohdaFixed();
+    for(var i=0;i<T.cars.length;i++){var c=T.cars[i];if(c.sold)continue;stock[c.id]=1;
+      await ohSet("ocars/m_"+c.id,{name:c.name||"عربية",date:c.buyDate||todayStr(),closed:false,createdAt:+c.createdAt||now})}
+    for(var j=0;j<S.expenses.length;j++){var e=S.expenses[j];if(expSrc(e)!=="fund")continue;
+      if(e.other)await ohSet("oexp/m_"+e.id,{carId:"",other:true,refCar:e.refCar||"",type:e.type||"مصروف",amount:ohAmt(e),date:e.date||todayStr(),note:e.note||"",createdAt:+e.createdAt||now});
+      else if(stock[e.carId])await ohSet("oexp/m_"+e.id,{carId:"m_"+e.carId,type:e.type||"مصروف",amount:ohAmt(e),date:e.date||todayStr(),note:e.note||"",createdAt:+e.createdAt||now})}
+    if(Math.abs(had)>=0.5)await ohSet("omoves/m_open",{kind:had<0?"out":"in",amount:Math.abs(had),date:todayStr(),note:"رصيد العهدة وقت الفصل",createdAt:now});
+    await db.doc("settings/ohda").set({mig:true,at:now},{merge:true});
+  }catch(err){OHMIG=false}
+}
+function renderOhda2(){
+  var R=ohCalc(),open=S.ocars.filter(function(c){return !c.closed}).sort(ohSort),closed=S.ocars.filter(function(c){return c.closed}).sort(function(a,b){return String(b.closedAt||"").localeCompare(String(a.closedAt||""))});
+  var oth=S.oexp.filter(function(e){return e.other}).sort(ohSort);
+  var h='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div><h1>🧾 العهدة</h1><div class="sub">'+esc(brandName())+' · '+fdate(todayStr())+'</div></div></div>'+
+    '<div class="hero"><div class="l">العهدة اللي معاك</div><div class="v">'+m(R.cust)+'</div>'+
+      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,.15)"><div class="l">باقي معاك بعد المصاريف</div><div class="v">'+m(R.left,R.left<0?"bad":"")+'</div></div></div>'+
+    '<div class="actions">'+
+      '<button class="abtn" data-act="oh_f" data-k="move" data-sub="in"><span class="ic">➕</span>زوّد العهدة</button>'+
+      '<button class="abtn" data-act="oh_f" data-k="move" data-sub="out"><span class="ic">➖</span>نقّص العهدة</button>'+
+      '<button class="abtn" data-act="oh_f" data-k="car"><span class="ic">🚗</span>دخّل عربية</button>'+
+      '<button class="abtn" data-act="oh_f" data-k="oexp"><span class="ic">🧾</span>مصروفات أخرى</button></div>'+
+    '<button class="btn" style="margin-bottom:12px" data-act="oh_f" data-k="exp">💸 مصروف على عربية</button>';
+  h+='<div class="sect">العربيات اللي في المعرض ('+open.length+')</div>';
+  h+=open.length?open.map(function(c){var l=ohCarExp(c.id);
+    return '<div class="card"><div class="kv"><span><b>🚗 '+esc(c.name)+'</b></span><b>'+m(ohTot(l))+'</b></div>'+
+      '<div class="item" style="border:0;padding-top:0"><div style="flex:1"><div class="d">دخلت '+fdate(c.date)+(c.note?' · '+esc(c.note):'')+'</div></div>'+ohBtns("ocars",c.id)+'</div>'+
+      (l.length?l.map(ohExpItem).join(""):'<div class="sub">لسه مفيش مصاريف عليها</div>')+
+      '<div class="two" style="margin-top:8px"><button class="btn sec" data-act="oh_f" data-k="exp" data-car="'+esc(c.id)+'">+ مصروف</button><button class="btn sec" data-act="oh_close" data-id="'+esc(c.id)+'">✅ اتباعت · اقفلها</button></div></div>';
+  }).join(""):'<div class="card"><div class="empty">مفيش عربيات. دوس «🚗 دخّل عربية» أول ما عربية تيجي المعرض.</div></div>';
+  if(oth.length)h+='<div class="sect">🧾 مصروفات أخرى</div><div class="card"><div class="kv"><span><b>الإجمالي</b></span><b>'+m(ohTot(oth))+'</b></div>'+oth.map(ohExpItem).join("")+'</div>';
+  if(closed.length){
+    h+='<button class="btn sec" style="margin-top:12px" data-act="oh_tg" data-k="cl">'+(S.ohCl?"▲":"▼")+' العربيات اللي اتقفلت ('+closed.length+')</button>';
+    if(S.ohCl)h+=closed.map(function(c){var l=ohCarExp(c.id);
+      return '<div class="card"><div class="kv"><span><b>🚗 '+esc(c.name)+'</b></span><b>'+m(ohTot(l))+'</b></div><div class="sub">دخلت '+fdate(c.date)+(c.closedAt?' · اتقفلت '+fdate(c.closedAt):'')+'</div>'+l.map(ohExpItem).join("")+
+        '<button class="btn sec small" style="margin-top:8px" data-act="oh_reopen" data-id="'+esc(c.id)+'">↩️ رجّعها للمعرض</button></div>'}).join("");
+  }
+  var mv=S.omoves.slice().sort(ohSort);
+  h+='<button class="btn sec" style="margin-top:12px" data-act="oh_tg" data-k="mv">'+(S.ohMv?"▲":"▼")+' سجل العهدة (زيادة ونقص)</button>';
+  if(S.ohMv)h+='<div class="card">'+(mv.length?mv.map(function(x){var o=x.kind==="out";
+    return '<div class="item"><div style="flex:1"><div class="t">'+(o?"➖ نقّصت العهدة":"➕ زوّدت العهدة")+'</div><div class="d">'+dline(fdate(x.date),esc(x.note||""))+'</div></div><span class="num '+(o?"bad":"good")+'" style="font-weight:700">'+fmt(x.amount)+'</span>'+ohBtns("omoves",x.id)+'</div>'}).join(""):'<div class="empty">لسه مفيش حركة</div>')+'</div>';
+  h+='<button class="btn danger" style="margin:16px 0 24px" data-act="logout">'+(DEMO?"خروج من التجربة":"تسجيل خروج")+'</button>';
+  return h;
+}
+function ohForm(k,o){
+  o=o||{};OHF={k:k,sub:o.sub,id:o.id};modal={type:"ohform"};var h="",R=ohCalc(),x=null;
+  if(k==="move"){x=o.id?S.omoves.find(function(y){return y.id===o.id}):null;var sub=x?x.kind:o.sub;OHF.sub=sub;
+    h=sheetHead(sub==="out"?"➖ نقّص العهدة":"➕ زوّد العهدة")+'<div class="sub" style="margin:0 2px 10px">'+(sub==="out"?"فلوس رجّعتها لصاحب المعرض أو اتشالت من العهدة.":"فلوس استلمتها وبقت معاك في العهدة.")+' العهدة دلوقتي: <b>'+m(R.cust)+'</b></div>'+
+      '<div class="two">'+fld("المبلغ",minp("amount",x?x.amount:""))+fld("التاريخ",dinp("date",x&&x.date))+'</div>'+fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off" value="'+esc(x?x.note||"":"")+'">');
+  }else if(k==="car"){x=o.id?ohCar(o.id):null;
+    h=sheetHead(x?"تعديل العربية":"🚗 دخّل عربية")+fld("اسم العربية / الموديل / اللوحة",'<input name="name" autocomplete="off" placeholder="مثال: كورولا 2018 - أ ب ج 1234" value="'+esc(x?x.name:"")+'">')+
+      fld("تاريخ ما دخلت",dinp("date",x&&x.date))+fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off" placeholder="مثلاً: عملنا لها فحص ورخصة" value="'+esc(x?x.note||"":"")+'">');
+  }else if(k==="exp"){x=o.id?S.oexp.find(function(y){return y.id===o.id}):null;
+    var cars=S.ocars.filter(function(c){return !c.closed||(x&&c.id===x.carId)}).sort(ohSort);
+    if(!cars.length){modal=null;OHF=null;return toast("دخّل العربية الأول")}
+    var sel=x?x.carId:(o.carId||cars[0].id),tp=x?x.type:"";
+    h=sheetHead(x?"تعديل المصروف":"💸 مصروف على عربية")+'<div class="sub" style="margin:0 2px 10px">باقي معاك: <b>'+m(R.left)+'</b></div>'+
+      fld("العربية",'<select name="carId">'+cars.map(function(c){return '<option value="'+esc(c.id)+'"'+(c.id===sel?" selected":"")+'>'+esc(c.name)+'</option>'}).join("")+'</select>')+
+      '<div class="two">'+fld("المبلغ",minp("amount",x?x.amount:""))+fld("التاريخ",dinp("date",x&&x.date))+'</div>'+
+      fld("النوع",'<input name="type" list="ohT" autocomplete="off" placeholder="مثلاً: سمكرة، كهربا، غسيل" value="'+esc(tp)+'"><datalist id="ohT">'+EXP_TYPES.map(function(t){return '<option value="'+esc(t)+'">'}).join("")+'</datalist>')+
+      fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off" value="'+esc(x?x.note||"":"")+'">');
+  }else if(k==="oexp"){x=o.id?S.oexp.find(function(y){return y.id===o.id}):null;
+    var cl=S.ocars.filter(function(c){return c.closed});
+    h=sheetHead(x?"تعديل المصروف":"🧾 مصروفات أخرى")+'<div class="sub" style="margin:0 2px 10px">مصروف مش على عربية في المعرض (إيجار، كهربا، بوفيه، أو مصاريف طلعت على عربية اتقفلت). بيتخصم من اللي معاك. باقي معاك: <b>'+m(R.left)+'</b></div>'+
+      fld("المصروف ده إيه؟",'<input name="type" list="ohO" autocomplete="off" placeholder="مثلاً: إيجار، كهربا، بوفيه" value="'+esc(x?x.type||"":"")+'"><datalist id="ohO">'+["إيجار","كهربا","مية","بوفيه","نت وتليفون","نضافة المعرض","مصاريف عربية اتباعت"].map(function(t){return '<option value="'+t+'">'}).join("")+'</datalist>')+
+      '<div class="two">'+fld("المبلغ",minp("amount",x?x.amount:""))+fld("التاريخ",dinp("date",x&&x.date))+'</div>'+
+      (cl.length?fld("على عربية اتقفلت؟ (اختياري)",'<select name="refCar"><option value="">لا، مصروف عام</option>'+cl.map(function(c){return '<option value="'+esc(c.name)+'"'+(x&&x.refCar===c.name?" selected":"")+'>'+esc(c.name)+'</option>'}).join("")+'</select>'):'')+
+      fld("ملاحظة (اختياري)",'<input name="note" autocomplete="off" value="'+esc(x?x.note||"":"")+'">');
+  }
+  if(o.id&&!x){modal=null;OHF=null;return}
+  openSheet(h+'<button class="btn" data-act="oh_save">'+(x?"حفظ التعديل":"حفظ")+'</button>');
+}
+var OHBUSY=false;
+async function ohSave(){
+  if(!OHF||OHBUSY)return;var F=OHF,R=ohCalc(),d=val("date")||todayStr(),note=val("note").trim(),a=parseNum(val("amount")),ok=false;
+  OHBUSY=true;
+  try{
+    if(F.k==="move"){
+      if(a<=0)return toast("اكتب المبلغ");
+      var data={kind:F.sub==="out"?"out":"in",amount:a,date:d,note:note};
+      ok=F.id?await patch("omoves/"+F.id,data):!!(await create("omoves",data));
+    }else if(F.k==="car"){
+      var nm=val("name").trim();if(!nm)return toast("اكتب اسم العربية");
+      ok=F.id?await patch("ocars/"+F.id,{name:nm,date:d,note:note}):!!(await create("ocars",{name:nm,date:d,note:note,closed:false}));
+    }else if(F.k==="exp"||F.k==="oexp"){
+      var tp=val("type").trim();if(F.k==="oexp"&&!tp)return toast("اكتب المصروف ده إيه");
+      if(a<=0)return toast("اكتب المبلغ");
+      var old=F.id?S.oexp.find(function(y){return y.id===F.id}):null,room=R.left+(old?ohAmt(old):0);
+      if(a>room+0.5)return toast("العهدة مش مكفية (باقي معاك "+fmt(room)+")، زوّدها الأول");
+      var ed=F.k==="oexp"?{carId:"",other:true,refCar:document.querySelector('#sheet select[name="refCar"]')?val("refCar"):"",type:tp,amount:a,date:d,note:note}:{carId:val("carId"),type:tp||"مصروف",amount:a,date:d,note:note};
+      ok=F.id?await patch("oexp/"+F.id,ed):!!(await create("oexp",ed));
+    }
+  }finally{OHBUSY=false}
+  if(ok){closeSheet();render();toast("اتسجّل ✔ — باقي معاك "+fmt(ohCalc().left))}
+}
+async function ohAct(a,t){
+  var id=t.dataset.id;
+  if(a==="oh_f")ohForm(t.dataset.k,{sub:t.dataset.sub,carId:t.dataset.car});
+  else if(a==="oh_save")ohSave();
+  else if(a==="oh_tg"){if(t.dataset.k==="cl")S.ohCl=!S.ohCl;else S.ohMv=!S.ohMv;render()}
+  else if(a==="oh_ed"){var c=t.dataset.coll;
+    if(c==="omoves")ohForm("move",{id:id});else if(c==="ocars")ohForm("car",{id:id});
+    else{var e=S.oexp.find(function(y){return y.id===id});if(e)ohForm(e.other?"oexp":"exp",{id:id})}}
+  else if(a==="oh_del"){var cl=t.dataset.coll;
+    if(cl==="ocars"){var car=ohCar(id),ex=ohCarExp(id);if(!car)return;
+      if(!confirm("تمسح «"+car.name+"»"+(ex.length?" ومصاريفها ("+fmt(ohTot(ex))+")":"")+"؟"))return;
+      for(var i=0;i<ex.length;i++)if(!(await removeDoc("oexp/"+ex[i].id)))return;
+      if(await removeDoc("ocars/"+id))toast("اتمسحت")}
+    else{if(!confirm("تمسح الحركة دي؟"))return;if(await removeDoc(cl+"/"+id))toast("اتمسحت")}}
+  else if(a==="oh_close"){var c2=ohCar(id);if(!c2)return;var tt=ohTot(ohCarExp(id));
+    if(!confirm("«"+c2.name+"» اتباعت؟\nهتتقفل"+(tt>0.5?" ومصاريفها ("+fmt(tt)+") هترجع للي باقي معاك.":".")))return;
+    if(await patch("ocars/"+id,{closed:true,closedAt:todayStr()}))toast("اتقفلت ✔")}
+  else if(a==="oh_reopen"){if(await patch("ocars/"+id,{closed:false,closedAt:""}))toast("رجعت للمعرض")}
+}
 function openFund(){if(APP_MODE==="ohda"){closeSheet();render();return}modal={type:"fund"};renderFund();$("#sheet").scrollTop=0}
 function renderFund(){
   var T=calc(),mv=fundMoves(),emp=esc(T.fundEmp||"الموظف");
@@ -1601,7 +1736,7 @@ function render(){
   if(!allLoaded()){app.innerHTML='<div class="empty">جاري تحميل بياناتك…</div>';return}
   var h="";
   if(APP_MODE!=="ohda"&&needOnboard()){app.innerHTML=(DEMO?demoBar():"")+renderOnboard();$("#nav").innerHTML="";return}
-  if(APP_MODE==="ohda"){app.innerHTML=(DEMO?demoBar():"")+renderOhda();$("#nav").innerHTML="";$("#nav").className="";return}
+  if(APP_MODE==="ohda"){ohMigrate();app.innerHTML=(DEMO?demoBar():"")+renderOhda2();$("#nav").innerHTML="";$("#nav").className="";return}
   if((S.tab==="inv"&&!featOn("investors"))||(S.tab==="led"&&!featOn("loans")))S.tab="more";
   if(S.tab==="home")h='<div class="brand"><img src="'+esc(brandLogo())+'" alt=""><div><h1>'+esc(brandName())+'</h1><div class="sub">'+fdate(todayStr())+'</div></div></div>'+renderHome();
   else if(S.tab==="cars")h=renderCars();
@@ -4159,6 +4294,7 @@ document.addEventListener("click",async function(e){
   if(ov.id==="ovc"){closeConfirm();return}
   var t=e.target.closest("[data-act]");if(!t)return;
   var a=t.dataset.act;
+  if(APP_MODE==="ohda"&&a.indexOf("oh_")===0){ohAct(a,t);return}
   if(a==="tab"){S.tab=t.dataset.tab;render();window.scrollTo(0,0)}
   else if(a==="featTg")featToggle(t.dataset.id);
   else if(a==="obA"){S.ob=S.ob||{};S.ob[t.dataset.id]=t.dataset.v==="1";render()}
@@ -4564,6 +4700,7 @@ async function boot(){
     },function(err){S.err=err;refresh()});
   }
   sub("cars","cars");sub("expenses","expenses");sub("collections","cols");sub("capital","cap");sub("payouts","pay");sub("transfers","transfers");sub("ledger","ledger");sub("external","ext");sub("investors","inv");sub("invmoves","invmov");
+  if(APP_MODE==="ohda"){sub("ocars","ocars");sub("oexp","oexp");sub("omoves","omoves");db.doc("settings/ohda").onSnapshot(function(sn){S.ohmeta=sn.exists?sn.data():{};S.loaded.ohmeta=true;refresh()},function(err){S.err=err;refresh()})}
   db.doc("settings/brand").onSnapshot(function(snap){
     S.brand=snap.exists?snap.data():null;S.brandLoaded=true;lsSet("hb_name",S.brand&&S.brand.name);
     if(mem&&S.brand&&S.brand.name&&mem.shop!==S.brand.name){mem.shop=S.brand.name;memRef.update({shop:S.brand.name}).catch(function(){})}lsSet("hb_logo",S.brand&&S.brand.logo);applyBrand();refresh();
